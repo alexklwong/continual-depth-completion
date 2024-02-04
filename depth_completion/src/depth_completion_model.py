@@ -247,6 +247,21 @@ class DepthCompletionModel(object):
 
         self.model.data_parallel()
 
+    def distributed_data_parallel(self, rank):
+        '''
+        Allows multi-gpu split along batch with 'torch.nn.parallel.DistributedDataParallel'
+        '''
+
+        self.model.distributed_data_parallel(rank)
+
+    def convert_syncbn(self):
+        '''
+        Convert BN layers to SyncBN layers.
+        SyncBN merge the BN layer weights in every backward step.
+        '''
+
+        self.model.convert_syncbn()
+
     def restore_model(self,
                       restore_paths,
                       optimizer_depth=None,

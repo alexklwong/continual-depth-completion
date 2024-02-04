@@ -332,6 +332,52 @@ class KBNetModel(object):
         # KBNet and PoseNet already call data_parallel() in constructor
         self.model_depth.data_parallel()
 
+    def distributed_data_parallel(self, rank):
+        '''
+        Allows multi-gpu split along batch with 'torch.nn.parallel.DistributedDataParallel'
+        '''
+
+        self.model_depth.sparse_to_dense_pool = torch.nn.parallel.DistributedDataParallel(
+            self.model_depth.sparse_to_dense_pool,
+            device_ids=[rank],
+            find_unused_parameters=True)
+
+        self.model_depth.encoder = torch.nn.parallel.DistributedDataParallel(
+            self.model_depth.encoder,
+            device_ids=[rank],
+            find_unused_parameters=True)
+
+        self.model_depth.decoder = torch.nn.parallel.DistributedDataParallel(
+            self.model_depth.decoder,
+            device_ids=[rank],
+            find_unused_parameters=True)
+
+        if 'pose' in self.network_modules:
+            self.model_pose.encoder = torch.nn.parallel.DistributedDataParallel(
+                self.model_pose.encoder,
+                device_ids=[rank],
+                find_unused_parameters=True)
+
+            self.model_pose.decoder = torch.nn.parallel.DistributedDataParallel(
+                self.model_pose.decoder,
+                device_ids=[rank],
+                find_unused_parameters=True)
+
+    def convert_syncbn(self):
+        '''
+        Convert BN layers to SyncBN layers.
+        SyncBN merge the BN layer weights in every backward step.
+        '''
+
+        from torch.nn import SyncBatchNorm
+        SyncBatchNorm.convert_sync_batchnorm(self.model_depth.sparse_to_dense_pool)
+        SyncBatchNorm.convert_sync_batchnorm(self.model_depth.encoder)
+        SyncBatchNorm.convert_sync_batchnorm(self.model_depth.decoder)
+
+        if 'pose' in self.network_modules:
+            SyncBatchNorm.convert_sync_batchnorm(self.model_pose.encoder)
+            SyncBatchNorm.convert_sync_batchnorm(self.model_pose.decoder)
+
     def restore_model(self,
                       model_depth_restore_path,
                       model_pose_restore_path=None,

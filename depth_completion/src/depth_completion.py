@@ -140,32 +140,46 @@ def train(rank,
     Read input paths and assert paths
     '''
     assert len(train_image_paths) == len(train_sparse_depth_paths)
-    assert len(train_image_paths) == len(train_ground_truth_paths)
 
     # Read training input paths
     train_image_paths_arr = [
         data_utils.read_paths(train_image_path)
         for train_image_path in train_image_paths
     ]
-    train_sparse_depth_paths_arr = [
-        data_utils.read_paths(train_sparse_depth_path)
-        for train_sparse_depth_path in train_sparse_depth_paths
-    ]
-    train_ground_truth_paths_arr = [
-        data_utils.read_paths(train_ground_truth_path)
-        for train_ground_truth_path in train_ground_truth_paths
-    ]
 
     n_train_samples = [
         len(paths) for paths in train_image_paths_arr
     ]
 
-    # Make sure each set of paths have same number of samples
-    input_paths = zip(n_train_samples, train_sparse_depth_paths_arr, train_ground_truth_paths_arr)
+    train_sparse_depth_paths_arr = [
+        data_utils.read_paths(train_sparse_depth_path)
+        for train_sparse_depth_path in train_sparse_depth_paths
+    ]
 
-    for n_train_sample, sparse_depth_paths, ground_truth_paths in input_paths:
+    # Make sure each set of paths have same number of samples
+    for n_train_sample, sparse_depth_paths in zip(n_train_samples, train_sparse_depth_paths_arr):
         assert n_train_sample == len(sparse_depth_paths)
-        assert n_train_sample == len(ground_truth_paths)
+
+    # Read optional ground truth paths
+    if train_ground_truth_paths is not None and len(train_ground_truth_paths) > 0:
+        assert len(train_image_paths) == len(train_ground_truth_paths)
+
+        train_ground_truth_paths_arr = [
+            data_utils.read_paths(train_ground_truth_path)
+            for train_ground_truth_path in train_ground_truth_paths
+        ]
+
+        for n_train_sample, ground_truth_paths in zip(n_train_samples, train_ground_truth_paths_arr):
+            assert n_train_sample == len(ground_truth_paths)
+
+        is_available_ground_truth = True
+    else:
+        train_ground_truth_paths_arr = [
+            [None] * n_train_sample
+            for n_train_sample in n_train_samples
+        ]
+
+        is_available_ground_truth = False
 
     # Read optional intrinsics input paths
     if train_intrinsics_paths is not None and len(train_intrinsics_paths) > 0:
@@ -179,7 +193,7 @@ def train(rank,
         for n_train_sample, intrinsics_paths in zip(n_train_samples, train_intrinsics_paths_arr):
             assert n_train_sample == len(intrinsics_paths)
     else:
-        train_intrinsics_paths = [
+        train_intrinsics_paths_arr = [
             [None] * n_train_sample
             for n_train_sample in n_train_samples
         ]
@@ -290,8 +304,10 @@ def train(rank,
         train_input_paths = \
             train_image_paths + \
             train_sparse_depth_paths + \
-            train_intrinsics_paths + \
-            train_ground_truth_paths
+            train_intrinsics_paths
+
+        if is_available_ground_truth:
+            train_input_paths.append(train_ground_truth_paths)
 
         for path in train_input_paths:
             if path is not None:
@@ -433,7 +449,6 @@ def train(rank,
         optimizer_pose = None
 
     # Start training
-
     depth_completion_model.convert_syncbn()
     depth_completion_model.distributed_data_parallel(rank)
     depth_completion_model.train()
@@ -497,17 +512,17 @@ def train(rank,
 
         if supervision_type == 'supervised':
             train_dataset = datasets.DepthCompletionSupervisedTrainingDataset(
-                image_paths=train_image_paths,
-                sparse_depth_paths=train_sparse_depth_paths,
-                intrinsics_paths=train_intrinsics_paths,
-                ground_truth_paths=train_ground_truth_paths,
+                image_paths=train_image_paths_epoch,
+                sparse_depth_paths=train_sparse_depth_paths_epoch,
+                intrinsics_paths=train_intrinsics_paths_epoch,
+                ground_truth_paths=train_ground_truth_paths_epoch,
                 random_crop_shape=(n_height, n_width),
                 random_crop_type=augmentation_random_crop_type)
         elif supervision_type == 'unsupervised':
             train_dataset = datasets.DepthCompletionMonocularTrainingDataset(
-                images_paths=train_image_paths,
-                sparse_depth_paths=train_sparse_depth_paths,
-                intrinsics_paths=train_intrinsics_paths,
+                images_paths=train_image_paths_epoch,
+                sparse_depth_paths=train_sparse_depth_paths_epoch,
+                intrinsics_paths=train_intrinsics_paths_epoch,
                 random_crop_shape=(n_height, n_width),
                 random_crop_type=augmentation_random_crop_type)
         else:
@@ -769,6 +784,7 @@ def train(rank,
                                 best_results=best_results,
                                 min_evaluate_depth=min_evaluate_depth,
                                 max_evaluate_depth=max_evaluate_depth,
+                                evaluation_protocol=evaluation_protocol,
                                 device=device,
                                 summary_writer=val_summary_writer,
                                 n_image_per_summary=n_image_per_summary,
@@ -796,6 +812,7 @@ def train(rank,
                 best_results=best_results,
                 min_evaluate_depth=min_evaluate_depth,
                 max_evaluate_depth=max_evaluate_depth,
+                evaluation_protcol=evaluation_protocol,
                 device=device,
                 summary_writer=val_summary_writer,
                 n_image_per_summary=n_image_per_summary,
@@ -1476,8 +1493,7 @@ def log_loss_func_settings(log_path,
                            supervision_type,
                            w_losses,
                            w_weight_decay_depth,
-                           w_weight_decay_pose,
-                           use_validity_map_image):
+                           w_weight_decay_pose):
 
     w_losses_text = ''
     for idx, (key, value) in enumerate(w_losses.items()):
@@ -1492,8 +1508,6 @@ def log_loss_func_settings(log_path,
     log(w_losses_text, log_path)
     log('w_weight_decay_depth={:.1e}  w_weight_decay_pose={:.1e}'.format(
         w_weight_decay_depth, w_weight_decay_pose),
-        log_path)
-    log('use_validity_map_image={}'.format(use_validity_map_image),
         log_path)
     log('', log_path)
 
