@@ -1,0 +1,16 @@
+.vscode
+data
+external_models
+plots
+pretrained_models
+setup/*/__pycache__
+depth_completion/src/__pycache__
+utils/src/__pycache__
+tools/_jupyter/.ipynb_checkpoints
+trained_monocular
+training
+validation
+testing
+*__pycache__*
+*.out
+trained_model
