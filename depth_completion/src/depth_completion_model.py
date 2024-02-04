@@ -45,7 +45,8 @@ class DepthCompletionModel(object):
             dataset_name = 'nyu_v2'
         else:
             dataset_name = 'kitti'
-
+        
+        # Unsupervised
         if 'kbnet' in model_name:
             from kbnet_models import KBNetModel
 
@@ -81,6 +82,29 @@ class DepthCompletionModel(object):
                 min_predict_depth=min_predict_depth,
                 max_predict_depth=max_predict_depth,
                 device=device)
+        # Supervised
+        elif 'msg_chn' in model_name:
+            from msg_chn_model import MsgChnModel
+            self.model = MsgChnModel(
+                max_predict_depth=max_predict_depth,
+                device=device
+            )
+            
+        elif 'nlspn' in model_name:
+            from nlspn_model import NLSPNModel
+            self.model = NLSPNModel(
+                max_predict_depth=max_predict_depth,
+                use_pretrained=True,
+                device=device
+            )
+            
+        elif 'costdcnet' in model_name:
+            from costdcnet_model import CostDCNetModel
+            self.model = CostDCNetModel(
+                device=device,
+                max_predict_depth=max_predict_depth
+            )
+        
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(model_name))
 
