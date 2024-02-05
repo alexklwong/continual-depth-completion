@@ -474,13 +474,14 @@ def train(rank,
 
     time_start = time.time()
 
-    amp_grad_scaler = amp.GradScaler()
+    # amp_grad_scaler = amp.GradScaler()
 
     if rank == 0:
         log('Begin training...', log_path)
 
     for epoch in range(1, learning_schedule[-1] + 1):
-
+        
+        depth_completion_model.train()
         # Create dataloader for current epoch
         train_input_paths_arr = zip(
             n_train_samples,
@@ -519,6 +520,7 @@ def train(rank,
                 ground_truth_paths=train_ground_truth_paths_epoch,
                 random_crop_shape=(n_height, n_width),
                 random_crop_type=augmentation_random_crop_type)
+            
         elif supervision_type == 'unsupervised':
             train_dataset = datasets.DepthCompletionMonocularTrainingDataset(
                 images_paths=train_image_paths_epoch,
@@ -673,21 +675,18 @@ def train(rank,
                 else:
                     pose0to1 = None
                     pose0to2 = None
+                
+                # print(torch.is_nan(output_depth0).unique())
+                
+                output_depth0, validity_map_image0 = train_transforms_geometric.reverse_transform(
+                    images_arr=output_depth0,
+                    transform_performed=transform_performed_geometric,
+                    return_all_outputs=True,
+                    padding_modes=[padding_modes[0]])
 
-            # For visualization
-            if (train_step % n_step_per_summary) == 0:
-                output_depth0_initial = output_depth0[0].detach().clone()
+                validity_map_depth0 = validity_map0
 
-            output_depth0, validity_map_image0 = train_transforms_geometric.reverse_transform(
-                images_arr=output_depth0,
-                transform_performed=transform_performed_geometric,
-                return_all_outputs=True,
-                padding_modes=[padding_modes[0]])
-
-            # Compute loss function
-            validity_map_depth0 = validity_map0
-
-            with amp.autocast():
+                # Compute loss function
                 loss, loss_info = depth_completion_model.compute_loss(
                     image0=image0,
                     image1=image1,
@@ -702,23 +701,29 @@ def train(rank,
                     pose0to2=pose0to2,
                     supervision_type=supervision_type,
                     w_losses=w_losses)
-
-            # Compute gradient and backpropagate
+                
             loss = loss / n_step_grad_acc
-
-            amp_grad_scaler.scale(loss).backward()
-
+            loss.backward()
+            # amp_grad_scaler.scale(loss).backward()
+            
+            # Compute gradient and backpropagate
             if (train_step + 1) % n_step_grad_acc == 0:
-                amp_grad_scaler.unscale_(optimizer_depth)
-                amp_grad_scaler.step(optimizer_depth)
+                # amp_grad_scaler.unscale_(optimizer_depth)
+                # amp_grad_scaler.step(optimizer_depth)
+                optimizer_depth.step()
                 optimizer_depth.zero_grad()
 
                 if supervision_type == 'unsupervised':
-                    amp_grad_scaler.unscale_(optimizer_pose)
-                    amp_grad_scaler.step(optimizer_pose)
+                    # amp_grad_scaler.unscale_(optimizer_pose)
+                    # amp_grad_scaler.step(optimizer_pose)
+                    optimizer_pose.step()
                     optimizer_pose.zero_grad()
 
-                amp_grad_scaler.update()
+                # amp_grad_scaler.update()
+
+            # For visualization
+            if (train_step % n_step_per_summary) == 0:
+                output_depth0_initial = output_depth0[0].detach().clone()
 
             if (train_step % n_step_per_summary) == 0 and rank == 0:
 
@@ -1103,7 +1108,6 @@ def run(image_path,
 
     # Restore model and set to evaluation mode
     depth_model.restore_model(restore_paths)
-    depth_model.eval()
 
     parameters_depth_model = depth_model.parameters_depth()
 
@@ -1161,8 +1165,9 @@ def run(image_path,
     imae = np.zeros(n_sample)
     irmse = np.zeros(n_sample)
 
+    depth_model.train()
     time_elapse = 0.0
-
+    
     for idx, inputs in enumerate(dataloader):
 
         # Move inputs to device

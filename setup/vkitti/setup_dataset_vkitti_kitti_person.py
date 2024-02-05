@@ -237,7 +237,9 @@ for dirpath in [TRAIN_SUPERVISED_REF_DIRPATH, TRAIN_UNSUPERVISED_REF_DIRPATH, TE
         os.makedirs(dirpath)
 
 # Obtain KITTI paths for person sequence to acquire stationary sparse depth point. (scene index: 2011_09_28_drive_0053 to 2011_09_28_drive_0222)
-kitti_sparse_depth_paths = glob.glob(os.path.join(KITTI_TRAIN_SPARSE_DEPTH_DIRPATH, '2011_09_28_drive_01*', KITTI_SPARSE_DEPTH_REFPATH, '*', '*.png')) + glob.glob(os.path.join(KITTI_TRAIN_SPARSE_DEPTH_DIRPATH, '2011_09_28_drive_02*', KITTI_SPARSE_DEPTH_REFPATH, '*', '*.png'))
+kitti_sparse_depth_paths = \
+    glob.glob(os.path.join(KITTI_TRAIN_SPARSE_DEPTH_DIRPATH, '2011_09_28_drive_01*', KITTI_SPARSE_DEPTH_REFPATH, '*', '*.png')) + \
+    glob.glob(os.path.join(KITTI_TRAIN_SPARSE_DEPTH_DIRPATH, '2011_09_28_drive_02*', KITTI_SPARSE_DEPTH_REFPATH, '*', '*.png'))
 
 for n in range(5, 9):
     kitti_sparse_depth_paths += glob.glob(
