@@ -2064,7 +2064,7 @@ class Transforms(object):
         '''
 
         n_images_arr = len(images_arr)
-
+        images_arr_after = [1 for _ in range(n_images_arr)]
         if len(padding_modes) < n_images_arr:
             padding_modes = \
                 padding_modes + [padding_modes[-1]] * (n_images_arr - len(padding_modes))
@@ -2075,7 +2075,7 @@ class Transforms(object):
 
         for i, (images, interpolation_mode, padding_mode) in enumerate(zip(images_arr, interpolation_modes, padding_modes)):
 
-            # images_temp = torch.zeros_like(images)
+            images_temp = torch.zeros_like(images)
             for b, _ in enumerate(images):
                 image = images[b, ...]
                 if do_resize_and_pad[b]:
@@ -2124,9 +2124,9 @@ class Transforms(object):
                             fill=padding_value,
                             padding_mode=padding_mode)
 
-                    images[b, ...] = image
+                    images_temp[b, ...] = image
 
-            images_arr[i] = images
+            images_arr_after[i] = images
 
         return images_arr
 
