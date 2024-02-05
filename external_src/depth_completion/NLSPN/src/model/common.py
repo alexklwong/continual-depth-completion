@@ -19,8 +19,8 @@ import torchvision
 
 
 model_path = {
-    'resnet18': 'pretrained/resnet18.pth',
-    'resnet34': 'pretrained/resnet34.pth'
+    'resnet18': 'external_src/depth_completion/NLSPN/src/pretrained/resnet18.pth',
+    'resnet34': 'external_src/depth_completion/NLSPN/src/pretrained/resnet34.pth'
 }
 
 

@@ -652,3 +652,34 @@ def resize(T, shape, interp_type='lanczos', data_format='HWC', lib_type='cv2'):
         raise ValueError('Unsupport data format: {}'.format(data_format))
 
     return R
+
+def inpainting(depth_map):
+    '''
+    Fill in almost dense depth_map with mask using Scikit Learn Image's inpaint_biharmonic
+    Used for post processing depth maps
+
+    Arg(s):
+        depth_map : numpy[float32]
+            N x 1 x H x W almost dense depth map
+    Returns:
+        numpy[float32] : N x 1 x H x W inpainted depth map
+    '''
+
+    # Create a mask from the depth map (1 represents holes, 0 represents background)
+    n_batch = depth_map.shape[0]
+    mask = np.where(depth_map == 0, 1, 0)
+
+    if (mask == np.zeros_like(mask)).all():
+        return depth_map
+
+    # Perform inpainting with biharmonic interpolation
+    for i in range(n_batch):
+        depth = depth_map[i, ...]
+        mask = np.where(depth == 0, 1, 0)
+        if (mask == np.zeros_like(mask)).all():
+            pass
+        depth_map[i] = inpaint.inpaint_biharmonic(depth, mask)
+
+    return depth_map
+
+

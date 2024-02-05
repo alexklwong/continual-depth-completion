@@ -2075,6 +2075,7 @@ class Transforms(object):
 
         for i, (images, interpolation_mode, padding_mode) in enumerate(zip(images_arr, interpolation_modes, padding_modes)):
 
+            # images_temp = torch.zeros_like(images)
             for b, _ in enumerate(images):
                 image = images[b, ...]
                 if do_resize_and_pad[b]:

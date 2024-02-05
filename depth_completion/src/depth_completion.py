@@ -659,48 +659,48 @@ def train(rank,
                 images_arr=[input_image0],
                 random_transform_probability=augmentation_probability)
 
-            with amp.autocast():
-                # Forward through the network
-                # Inputs: augmented image, augmented sparse depth map, original (but aligned) validity map
-                output_depth0 = depth_completion_model.forward_depth(
-                    image=input_image0,
-                    sparse_depth=input_sparse_depth0,
-                    validity_map=input_validity_map0,
-                    intrinsics=input_intrinsics,
-                    return_all_outputs=True)
 
-                if supervision_type == 'unsupervised':
-                    pose0to1 = depth_completion_model.forward_pose(image0, image1)
-                    pose0to2 = depth_completion_model.forward_pose(image0, image2)
-                else:
-                    pose0to1 = None
-                    pose0to2 = None
-                
-                # print(torch.is_nan(output_depth0).unique())
-                
-                output_depth0, validity_map_image0 = train_transforms_geometric.reverse_transform(
-                    images_arr=output_depth0,
-                    transform_performed=transform_performed_geometric,
-                    return_all_outputs=True,
-                    padding_modes=[padding_modes[0]])
+            # Forward through the network
+            # Inputs: augmented image, augmented sparse depth map, original (but aligned) validity map
+            output_depth0 = depth_completion_model.forward_depth(
+                image=input_image0,
+                sparse_depth=input_sparse_depth0,
+                validity_map=input_validity_map0,
+                intrinsics=input_intrinsics,
+                return_all_outputs=True)
 
-                validity_map_depth0 = validity_map0
+            if supervision_type == 'unsupervised':
+                pose0to1 = depth_completion_model.forward_pose(image0, image1)
+                pose0to2 = depth_completion_model.forward_pose(image0, image2)
+            else:
+                pose0to1 = None
+                pose0to2 = None
+            
+            # print(torch.is_nan(output_depth0).unique())
+            
+            output_depth0, validity_map_image0 = train_transforms_geometric.reverse_transform(
+                images_arr=output_depth0,
+                transform_performed=transform_performed_geometric,
+                return_all_outputs=True,
+                padding_modes=[padding_modes[0]])
 
-                # Compute loss function
-                loss, loss_info = depth_completion_model.compute_loss(
-                    image0=image0,
-                    image1=image1,
-                    image2=image2,
-                    output_depth0=output_depth0,
-                    sparse_depth0=sparse_depth0,
-                    validity_map_depth0=validity_map_depth0,
-                    validity_map_image0=validity_map_image0,
-                    ground_truth0=ground_truth0,
-                    intrinsics=intrinsics,
-                    pose0to1=pose0to1,
-                    pose0to2=pose0to2,
-                    supervision_type=supervision_type,
-                    w_losses=w_losses)
+            validity_map_depth0 = validity_map0
+
+            # Compute loss function
+            loss, loss_info = depth_completion_model.compute_loss(
+                image0=image0,
+                image1=image1,
+                image2=image2,
+                output_depth0=output_depth0,
+                sparse_depth0=sparse_depth0,
+                validity_map_depth0=validity_map_depth0,
+                validity_map_image0=validity_map_image0,
+                ground_truth0=ground_truth0,
+                intrinsics=intrinsics,
+                pose0to1=pose0to1,
+                pose0to2=pose0to2,
+                supervision_type=supervision_type,
+                w_losses=w_losses)
                 
             loss = loss / n_step_grad_acc
             loss.backward()

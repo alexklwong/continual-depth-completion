@@ -2,8 +2,8 @@ import os, sys, argparse
 import torch, torchvision
 import utils.src.loss_utils as loss_utils
 from utils.src.data_utils import inpainting
-sys.path.insert(0, os.path.join('external_src', 'NLSPN', 'src'))
-sys.path.insert(0, os.path.join('external_src', 'NLSPN', 'src', 'model'))
+sys.path.insert(0, os.path.join('external_src', 'depth_completion', 'NLSPN', 'src'))
+sys.path.insert(0, os.path.join('external_src', 'depth_completion', 'NLSPN', 'src', 'model'))
 from nlspnmodel import NLSPNModel as NLSPNBaseModel
 
 
@@ -27,8 +27,8 @@ class NLSPNModel(object):
             affinity='TGASS',
             affinity_gamma=0.5,
             conf_prop=True,
-            from_scratch=True,
-            legacy=use_pretrained,
+            from_scratch=False,
+            legacy=False,
             lr=0.001,
             max_depth=max_predict_depth,
             network='resnet34',
@@ -51,7 +51,7 @@ class NLSPNModel(object):
         #     test_only=True)
 
         # Instantiate depth completion model
-        self.model = NLSPNBaseModel(args)
+        self.model_depth = NLSPNBaseModel(args)
         self.use_pretrained = use_pretrained
         self.max_predict_depth = max_predict_depth
 
@@ -59,7 +59,7 @@ class NLSPNModel(object):
         self.device = device
         self.to(self.device)
 
-    def forward_depth(self, image, sparse_depth, intrinsics, return_all_outputs=False):
+    def forward_depth(self, image, sparse_depth, validity_map, intrinsics, return_all_outputs=False):
         '''
         Forwards inputs through the network
 
@@ -77,7 +77,7 @@ class NLSPNModel(object):
         '''
 
         # Transform inputs
-        image, sparse_depth, = self.transform_inputs(image, sparse_depth)
+        image, sparse_depth, = self.transform_inputs(image, sparse_depth, intrinsics)
 
         # Forward through the model
         sample = {
@@ -85,12 +85,12 @@ class NLSPNModel(object):
             'dep': sparse_depth
         }
 
-        output = self.model.forward(sample)
+        output = self.model_depth.forward(sample)
 
         output_depth = output['pred']
 
         # Fill in any holes with inpainting
-        if not self.model.training:
+        if not self.model_depth.training:
             output_depth = output_depth.detach().cpu().numpy()
             output_depth = inpainting(output_depth)
             output_depth = torch.from_numpy(output_depth).to(self.device)
@@ -100,7 +100,7 @@ class NLSPNModel(object):
         else:
             return output_depth
 
-    def transform_inputs(self, image, sparse_depth):
+    def transform_inputs(self, image, sparse_depth, instrinsics):
         '''
         Transforms the input based on any required preprocessing step
 
@@ -206,7 +206,7 @@ class NLSPNModel(object):
         '''
 
         parameters = []
-        for name, param in self.model.named_parameters():
+        for name, param in self.model_depth.named_parameters():
             if param.requires_grad:
                 parameters.append(param)
 
@@ -214,19 +214,29 @@ class NLSPNModel(object):
 
         return parameters
 
+    def parameters_depth(self):
+        '''
+        Fetches model parameters for depth network modules
+
+        Returns:
+            list[torch.Tensor[float32]] : list of model parameters for depth network modules
+        '''
+
+        return self.model_depth.parameters()
+
     def train(self):
         '''
         Sets model to training mode
         '''
 
-        self.model.train()
+        self.model_depth.train()
 
     def eval(self):
         '''
         Sets model to evaluation mode
         '''
 
-        self.model.eval()
+        self.model_depth.eval()
 
     def to(self, device):
         '''
@@ -237,14 +247,14 @@ class NLSPNModel(object):
                 device to use
         '''
 
-        self.model.to(device)
+        self.model_depth.to(device)
 
     def data_parallel(self):
         '''
         Allows multi-gpu split along batch
         '''
 
-        self.model = torch.nn.DataParallel(self.model)
+        self.model_depth = torch.nn.DataParallel(self.model_depth)
 
     def restore_model(self, restore_paths, optimizer=None):
         '''
@@ -265,10 +275,10 @@ class NLSPNModel(object):
 
         checkpoint = torch.load(restore_paths, map_location=self.device)
 
-        if isinstance(self.model, torch.nn.DataParallel):
-            self.model.module.load_state_dict(checkpoint['net'])
+        if isinstance(self.model_depth, torch.nn.DataParallel):
+            self.model_depth.module.load_state_dict(checkpoint['net'])
         else:
-            self.model.load_state_dict(checkpoint['net'])
+            self.model_depth.load_state_dict(checkpoint['net'])
 
         if optimizer is not None and 'optimizer' in checkpoint.keys():
             optimizer.load_state_dict(checkpoint['optimizer'])
@@ -293,17 +303,35 @@ class NLSPNModel(object):
                 optimizer
         '''
 
-        if isinstance(self.model, torch.nn.DataParallel):
+        if isinstance(self.model_depth, torch.nn.DataParallel):
             checkpoint = {
-                'net': self.model.module.state_dict(),
+                'net': self.model_depth.module.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'train_step': step
             }
         else:
             checkpoint = {
-                'net': self.model.state_dict(),
+                'net': self.model_depth.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'train_step': step
             }
 
         torch.save(checkpoint, checkpoint_path)
+
+    def distributed_data_parallel(self, rank):
+        '''
+        Allows multi-gpu split along batch with 'torch.nn.parallel.DistributedDataParallel'
+        '''
+
+        self.model_depth = torch.nn.parallel.DistributedDataParallel(
+            self.model_depth,
+            device_ids=[rank],
+            find_unused_parameters=True)
+
+    def convert_syncbn(self):
+        '''
+        Convert BN layers to SyncBN layers.
+        SyncBN merge the BN layer weights in every backward step.
+        '''
+
+        pass
