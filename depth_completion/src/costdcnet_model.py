@@ -41,7 +41,7 @@ class CostDCNetModel(object):
         self.device = device
         self.to(self.device)
 
-    def forward(self,
+    def forward_depth(self,
                 image,
                 sparse_depth,
                 intrinsics=None):
@@ -210,12 +210,10 @@ class CostDCNetModel(object):
             self.model.get_offset()
 
     def compute_loss(self,
-                     input_rgb=None,
                      output_depth=None,
-                     validity_map=None,
-                     ground_truth=None,
-                     dataset_name='void',
-                     loss_type='pretrain'):
+                     target_depth=None,
+                     image=None,
+                     w_losses=None):
         '''
 
         Arg(s):
@@ -231,21 +229,22 @@ class CostDCNetModel(object):
             torch.Tensor[float32] : loss
             dict[str, torch.Tensor[float32]] : dictionary of loss related tensors
         '''
-        if dataset_name == 'void':
+        if self.dataset_name == 'void':
             l1_weight=1.0
             l2_weight=0.0
-        elif dataset_name == 'kitti':
+        elif self.dataset_name == 'kitti':
             l1_weight=1.0
             l2_weight=1.0
 
-        m = validity_map
+        m = torch.where(target_depth>0, torch.ones_like(target_depth), torch.zeros_like(target_depth))
+        
         num_valid = torch.sum(m)
-        d = torch.abs(ground_truth - output_depth) * m
+        d = torch.abs(target_depth - output_depth) * m
         d = torch.sum(d, dim=[1, 2, 3])
         loss_l1 = d / (num_valid + 1e-8)
         loss_l1 = loss_l1.sum()
 
-        d2 = torch.pow(ground_truth - output_depth, 2) * m
+        d2 = torch.pow(target_depth - output_depth, 2) * m
         d2 = torch.sum(d2, dim=[1, 2, 3])
         loss_l2 = d2 / (num_valid + 1e-8)
         loss_l2 = loss_l2.sum()

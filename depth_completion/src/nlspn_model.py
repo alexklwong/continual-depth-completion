@@ -59,7 +59,7 @@ class NLSPNModel(object):
         self.device = device
         self.to(self.device)
 
-    def forward(self, image, sparse_depth, intrinsics, return_all_outputs=False):
+    def forward_depth(self, image, sparse_depth, intrinsics, return_all_outputs=False):
         '''
         Forwards inputs through the network
 
@@ -131,7 +131,7 @@ class NLSPNModel(object):
 
         return image, sparse_depth
 
-    def compute_loss(self, output_depth, ground_truth, image=None, w_losses={}):
+    def compute_loss(self, output_depth, target_depth, image=None, w_losses={}):
         '''
         Call the model's compute loss function
 
@@ -161,23 +161,23 @@ class NLSPNModel(object):
 
         # NLSPN clamps predictions during loss computation
         output_depth = torch.clamp(output_depth, min=0, max=self.max_predict_depth)
-        ground_truth = torch.clamp(ground_truth, min=0, max=self.max_predict_depth)
+        target_depth = torch.clamp(target_depth, min=0, max=self.max_predict_depth)
 
         # Obtain valid values
         validity_map = torch.where(
-            ground_truth > 0,
-            torch.ones_like(ground_truth),
-            ground_truth)
+            target_depth > 0,
+            torch.ones_like(target_depth),
+            target_depth)
 
         # Compute individual losses
         l1_loss = w_l1 * loss_utils.l1_loss(
             src=output_depth,
-            tgt=ground_truth,
+            tgt=target_depth,
             w=validity_map)
 
         l2_loss = w_l2 * loss_utils.l2_loss(
             src=output_depth,
-            tgt=ground_truth,
+            tgt=target_depth,
             w=validity_map)
 
         loss = l1_loss + l2_loss

@@ -201,7 +201,9 @@ class DepthCompletionModel(object):
         if supervision_type == 'supervised':
             return self.model.compute_loss(
                 target_depth=ground_truth0,
-                output_depth=output_depth0)
+                output_depth=output_depth0,
+                image=image0,
+                w_losses=w_losses)
         elif supervision_type == 'unsupervised':
             return self.model.compute_loss(
                 image0=image0,

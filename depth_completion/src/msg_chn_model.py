@@ -29,7 +29,7 @@ class MsgChnModel(object):
         self.device = device
         self.to(self.device)
 
-    def forward(self, image, sparse_depth, intrinsics, return_all_outputs=False):
+    def forward_depth(self, image, sparse_depth, intrinsics, return_all_outputs=False):
         '''
         Forwards inputs through the network
 
@@ -161,7 +161,7 @@ class MsgChnModel(object):
 
         return image, sparse_depth, intrinsics
 
-    def compute_loss(self, output_depth, ground_truth, image=None, w_losses={}):
+    def compute_loss(self, output_depth, target_depth, image=None, w_losses={}):
         '''
         Call the model's compute loss function
 
@@ -188,16 +188,16 @@ class MsgChnModel(object):
         loss_info = {}
 
         # Clamping ground truth values
-        ground_truth = torch.clamp(
-            ground_truth,
+        target_depth = torch.clamp(
+            target_depth,
             min=0.0,
             max=self.max_predict_depth)
 
         # Obtain valid values
         validity_map = torch.where(
-            ground_truth > 0,
-            torch.ones_like(ground_truth),
-            ground_truth)
+            target_depth > 0,
+            torch.ones_like(target_depth),
+            target_depth)
 
         w = [w_scale0, w_scale1, w_scale2]
         loss = 0.0
@@ -207,7 +207,7 @@ class MsgChnModel(object):
 
             loss_scale = w[i] * loss_utils.l2_loss(
                 src=output_depth[i],
-                tgt=ground_truth,
+                tgt=target_depth,
                 w=validity_map)
 
             loss = loss + loss_scale
