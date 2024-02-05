@@ -1,7 +1,7 @@
 import torch
 import os, sys
 import utils.src.loss_utils as loss_utils
-sys.path.insert(0, os.path.join('external_src', 'MSG_CHN', 'workspace', 'exp_msg_chn'))
+sys.path.insert(0, os.path.join('external_src', 'depth_completion', 'MSG_CHN', 'workspace', 'exp_msg_chn'))
 from network_exp_msg_chn import network
 
 
@@ -21,7 +21,7 @@ class MsgChnModel(object):
                  device=torch.device('cuda')):
 
         # Initialize model
-        self.model = network()
+        self.model_depth = network()
 
         self.max_predict_depth = max_predict_depth
 
@@ -29,7 +29,7 @@ class MsgChnModel(object):
         self.device = device
         self.to(self.device)
 
-    def forward_depth(self, image, sparse_depth, intrinsics, return_all_outputs=False):
+    def forward_depth(self, image, sparse_depth, validity_map, intrinsics, return_all_outputs=False):
         '''
         Forwards inputs through the network
 
@@ -99,7 +99,7 @@ class MsgChnModel(object):
             image = torch.cat([image0, image1], dim=0)
             sparse_depth = torch.cat([sparse_depth0, sparse_depth1], dim=0)
 
-        outputs = self.model.forward(sparse_depth, image)
+        outputs = self.model_depth.forward(sparse_depth, image)
 
         output_depths = []
 
@@ -124,7 +124,7 @@ class MsgChnModel(object):
                     dim=1)
                 output = torch.mean(output, dim=1, keepdim=False)
 
-            if not self.model.training:
+            if not self.model_depth.training:
                 output = torch.clamp(output, min=0.0, max=self.max_predict_depth)
 
             output_depths.append(output)
@@ -236,22 +236,32 @@ class MsgChnModel(object):
             list[torch.tensor[float32]] : list of parameters
         '''
 
-        parameters = list(self.model.parameters())
+        parameters = list(self.model_depth.parameters())
         return parameters
+
+    def parameters_depth(self):
+        '''
+        Fetches model parameters for depth network modules
+
+        Returns:
+            list[torch.Tensor[float32]] : list of model parameters for depth network modules
+        '''
+
+        return self.model_depth.parameters()
 
     def train(self):
         '''
         Sets model to training mode
         '''
 
-        self.model.train()
+        self.model_depth.train()
 
     def eval(self):
         '''
         Sets model to evaluation mode
         '''
 
-        self.model.eval()
+        self.model_depth.eval()
 
     def to(self, device):
         '''
@@ -263,14 +273,14 @@ class MsgChnModel(object):
         '''
 
         self.device = device
-        self.model.to(device)
+        self.model_depth.to(device)
 
     def data_parallel(self):
         '''
         Allows multi-gpu split along batch
         '''
 
-        self.model = torch.nn.DataParallel(self.model)
+        self.model_depth = torch.nn.DataParallel(self.model_depth)
 
     def restore_model(self, restore_paths, optimizer=None):
         '''
@@ -291,10 +301,10 @@ class MsgChnModel(object):
 
         checkpoint = torch.load(restore_paths, map_location=self.device)
 
-        if isinstance(self.model, torch.nn.DataParallel):
-            self.model.module.load_state_dict(checkpoint['net'])
+        if isinstance(self.model_depth, torch.nn.DataParallel):
+            self.model_depth.module.load_state_dict(checkpoint['net'])
         else:
-            self.model.load_state_dict(checkpoint['net'])
+            self.model_depth.load_state_dict(checkpoint['net'])
 
         if optimizer is not None and 'optimizer' in checkpoint.keys():
             optimizer.load_state_dict(checkpoint['optimizer'])
@@ -319,17 +329,36 @@ class MsgChnModel(object):
                 optimizer
         '''
 
-        if isinstance(self.model, torch.nn.DataParallel):
+        if isinstance(self.model_depth, torch.nn.DataParallel):
             checkpoint = {
-                'net': self.model.module.state_dict(),
+                'net': self.model_depth.module.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'train_step': step
             }
         else:
             checkpoint = {
-                'net': self.model.state_dict(),
+                'net': self.model_depth.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'train_step': step
             }
 
         torch.save(checkpoint, checkpoint_path)
+
+    def distributed_data_parallel(self, rank):
+        '''
+        Allows multi-gpu split along batch with 'torch.nn.parallel.DistributedDataParallel'
+        '''
+
+        self.model_depth = torch.nn.parallel.DistributedDataParallel(
+            self.model_depth,
+            device_ids=[rank],
+            find_unused_parameters=True)
+
+        
+    def convert_syncbn(self):
+        '''
+        Convert BN layers to SyncBN layers.
+        SyncBN merge the BN layer weights in every backward step.
+        '''
+
+        pass

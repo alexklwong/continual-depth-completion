@@ -306,8 +306,9 @@ def train(rank,
             train_sparse_depth_paths + \
             train_intrinsics_paths
 
+        
         if is_available_ground_truth:
-            train_input_paths.append(train_ground_truth_paths)
+            train_input_paths += train_ground_truth_paths
 
         for path in train_input_paths:
             if path is not None:
@@ -497,7 +498,7 @@ def train(rank,
 
             # Randomly elect training samples up to size of smallest dataset
             idx_selected = np.random.permutation(range(n))[0:min_train_sample]
-
+            
             train_image_paths_epoch.extend(
                 (np.array(image_paths)[idx_selected]).tolist())
 
