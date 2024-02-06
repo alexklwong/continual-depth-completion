@@ -1,5 +1,6 @@
-import os, torch, torchvision
-from utils.src import log_utils
+import sys, os, torch, torchvision
+sys.path.insert(0, os.path.join('utils', 'src'))
+import log_utils
 
 
 class DepthCompletionModel(object):
@@ -93,6 +94,7 @@ class DepthCompletionModel(object):
         elif 'nlspn' in model_name:
             from nlspn_model import NLSPNModel
             self.model = NLSPNModel(
+                dataset_name=dataset_name,
                 max_predict_depth=max_predict_depth,
                 use_pretrained=True,
                 device=device
@@ -101,6 +103,7 @@ class DepthCompletionModel(object):
         elif 'costdcnet' in model_name:
             from costdcnet_model import CostDCNetModel
             self.model = CostDCNetModel(
+                dataset_name=dataset_name,
                 device=device,
                 max_predict_depth=max_predict_depth
             )

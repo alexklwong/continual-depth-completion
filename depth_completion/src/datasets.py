@@ -1,6 +1,8 @@
 import torch
 import numpy as np
-from utils.src import data_utils
+import os, sys
+sys.path.insert(0, os.path.join('utils', 'src'))
+import data_utils
 
 
 def load_image_triplet(path, normalize=True, data_format='CHW'):

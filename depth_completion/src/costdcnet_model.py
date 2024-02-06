@@ -1,5 +1,5 @@
 import os, sys, argparse
-sys.path.insert(0, os.path.join('external_src', 'depth_completion', 'costdcnet'))
+import utils.src.loss_utils as loss_utils
 sys.path.insert(0, os.path.join('external_src', 'depth_completion', 'costdcnet', 'models'))
 from CostDCNet import CostDCNet as CostDCNetBaseModel
 import torch
@@ -21,6 +21,7 @@ class CostDCNetModel(object):
             if set, then configure using legacy settings
     '''
     def __init__(self,
+                 dataset_name=None,
                  device=torch.device('cuda'),
                  max_predict_depth=10.0,
                  ):
@@ -35,8 +36,11 @@ class CostDCNetModel(object):
         self.args = args
 
         # Instantiate depth completion model
-        self.model = CostDCNetBaseModel(args)
+        self.model_depth = CostDCNetBaseModel(args)
 
+        self.max_predict_depth = max_predict_depth
+
+        self.dataset_name = dataset_name
         # Move to device
         self.device = device
         self.to(self.device)
@@ -44,7 +48,9 @@ class CostDCNetModel(object):
     def forward_depth(self,
                 image,
                 sparse_depth,
-                intrinsics=None):
+                validity_map,
+                intrinsics=None,
+                return_all_outputs=False):
         '''
         Forwards inputs through the network
 
@@ -70,19 +76,24 @@ class CostDCNetModel(object):
         '''
         batch_size, _, og_height, og_width = image.shape
         
-        image, sparse_depth = self.transform_inputs(image, sparse_depth)
+        image, sparse_depth, intrinsics = self.transform_inputs(image, 
+            sparse_depth, 
+            intrinsics)
+
         image, sparse_depth, intrinsics = \
             self.pad_inputs(image, sparse_depth, intrinsics)
 
-        output_depth = self.model(
+        output_depth = self.model_depth(
             image=image,
             sparse_depth=sparse_depth)
 
         output_depth = self.recover_inputs(output_depth, og_height, og_width)
+        if return_all_outputs:
+            return [output_depth]
+        else:
+            return output_depth
 
-        return output_depth
-
-    def transform_inputs(self, image, sparse_depth):
+    def transform_inputs(self, image, sparse_depth, intrinsics):
         '''
         Transforms the input based on any required preprocessing step
 
@@ -114,7 +125,7 @@ class CostDCNetModel(object):
                 (0.485, 0.456, 0.406),
                 (0.229, 0.224, 0.225))
             
-        return image, sparse_depth
+        return image, sparse_depth, intrinsics
 
     def pad_inputs(self, image, sparse_depth, intrinsics):
 
@@ -198,22 +209,22 @@ class CostDCNetModel(object):
         '''
         Initialize the self-supervised MLP heads
         '''
-        return self.model._prepare_head(mode=mode)
+        return self.model_depth._prepare_head(mode=mode)
 
     def get_offset(self):
         '''
         Get offset values
         '''
-        if isinstance(self.model, torch.nn.parallel.DataParallel):
-            self.model.module.get_offset()
+        if isinstance(self.model_depth, torch.nn.parallel.DataParallel):
+            self.model_depth.module.get_offset()
         else:
-            self.model.get_offset()
+            self.model_depth.get_offset()
 
     def compute_loss(self,
                      output_depth=None,
                      target_depth=None,
                      image=None,
-                     w_losses=None):
+                     w_losses={}):
         '''
 
         Arg(s):
@@ -229,33 +240,52 @@ class CostDCNetModel(object):
             torch.Tensor[float32] : loss
             dict[str, torch.Tensor[float32]] : dictionary of loss related tensors
         '''
-        if self.dataset_name == 'void':
-            l1_weight=1.0
-            l2_weight=0.0
-        elif self.dataset_name == 'kitti':
-            l1_weight=1.0
-            l2_weight=1.0
-
-        m = torch.where(target_depth>0, torch.ones_like(target_depth), torch.zeros_like(target_depth))
         
-        num_valid = torch.sum(m)
-        d = torch.abs(target_depth - output_depth) * m
-        d = torch.sum(d, dim=[1, 2, 3])
-        loss_l1 = d / (num_valid + 1e-8)
-        loss_l1 = loss_l1.sum()
+        # Check if loss weighting was passed in, if not then use default weighting
+        w_l1 = w_losses['w_l1'] if 'w_l1' in w_losses else 1.0
+        w_l2 = w_losses['w_l2'] if 'w_l2' in w_losses else (0.0 if self.dataset_name in ['kitti', 'vkitti', 'waymo', 'synthia'] else 1.0)
+        w_smoothness = w_losses['w_smoothness'] if 'w_smoothness' in w_losses else 0.0
 
-        d2 = torch.pow(target_depth - output_depth, 2) * m
-        d2 = torch.sum(d2, dim=[1, 2, 3])
-        loss_l2 = d2 / (num_valid + 1e-8)
-        loss_l2 = loss_l2.sum()
-        loss = l1_weight * loss_l1 + l2_weight * loss_l2
+        loss_info = {}
+
+        if isinstance(output_depth, list):
+            output_depth = output_depth[0]
+
+        # NLSPN clamps predictions during loss computation
+        output_depth = torch.clamp(output_depth, min=0, max=self.max_predict_depth)
+        target_depth = torch.clamp(target_depth, min=0, max=self.max_predict_depth)
+
+        # Obtain valid values
+        validity_map = torch.where(
+            target_depth > 0,
+            torch.ones_like(target_depth),
+            target_depth)
+
+        # Compute individual losses
+        l1_loss = w_l1 * loss_utils.l1_loss(
+            src=output_depth,
+            tgt=target_depth,
+            w=validity_map)
+
+        l2_loss = w_l2 * loss_utils.l2_loss(
+            src=output_depth,
+            tgt=target_depth,
+            w=validity_map)
+
+        loss = l1_loss + l2_loss
 
         # Store loss info
-        loss_info = {
-            'loss_l1': loss_l1.detach().item(),
-            'loss_l2': loss_l2.detach().item(),
-            'loss': loss.detach().item()
-        }
+        loss_info['l1_loss'] = l1_loss
+        loss_info['l2_loss'] = l2_loss
+
+        if w_smoothness > 0 and image is not None:
+            loss_smoothness = w_smoothness * loss_utils.smoothness_loss_func(output_depth, image)
+            loss_info['loss_smoothness'] = loss_smoothness
+
+            loss = loss + loss_smoothness
+
+        # Store loss info
+        loss_info['loss'] = loss
 
         return loss, loss_info
 
@@ -268,23 +298,33 @@ class CostDCNetModel(object):
         '''
 
         parameters = []
-        parameters = torch.nn.ParameterList(self.model.parameters())
+        parameters = torch.nn.ParameterList(self.model_depth.parameters())
 
         return parameters
+
+    def parameters_depth(self):
+        '''
+        Fetches model parameters for depth network modules
+
+        Returns:
+            list[torch.Tensor[float32]] : list of model parameters for depth network modules
+        '''
+
+        return self.model_depth.parameters()
 
     def train(self):
         '''
         Sets model to training mode
         '''
 
-        self.model.train()
+        self.model_depth.train()
 
     def eval(self):
         '''
         Sets model to evaluation mode
         '''
 
-        self.model.eval()
+        self.model_depth.eval()
 
     def to(self, device):
         '''
@@ -295,23 +335,23 @@ class CostDCNetModel(object):
                 device to use
         '''
 
-        self.model.to(device)
+        self.model_depth.to(device)
 
     def data_parallel(self):
         '''
         Allows multi-gpu split along batch
         '''
 
-        self.model = torch.nn.DataParallel(self.model)
+        self.model_depth = torch.nn.DataParallel(self.model_depth)
 
     def set_device(self, rank):
-        self.model.module.set_device(rank)
+        self.model_depth.module.set_device(rank)
 
     def distributed_data_parallel(self, rank):
         '''
         Allows multi-gpu split along batch
         '''
-        self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids=[rank], find_unused_parameters=True)
+        self.model_depth = torch.nn.parallel.DistributedDataParallel(self.model_depth, device_ids=[rank], find_unused_parameters=True)
 
     def restore_model(self, restore_path, optimizer=None, learning_schedule=None, learning_rates=None, n_step_per_epoch=None):
         '''
@@ -326,18 +366,18 @@ class CostDCNetModel(object):
             torch.optimizer if optimizer is passed in
         '''
         checkpoint_dict = torch.load(restore_path, map_location=self.device)
-        if isinstance(self.model, torch.nn.DataParallel):
-            self.model.module.load_state_dict(checkpoint_dict['net'])
-        elif isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
-            self.model.load_state_dict(checkpoint_dict['net'])
+        if isinstance(self.model_depth, torch.nn.DataParallel):
+            self.model_depth.module.load_state_dict(checkpoint_dict['net'])
+        elif isinstance(self.model_depth, torch.nn.parallel.DistributedDataParallel):
+            self.model_depth.load_state_dict(checkpoint_dict['net'])
         else:
-            self.model.load_state_dict(checkpoint_dict['net'])
+            self.model_depth.load_state_dict(checkpoint_dict['net'])
 
         if 'meanvar' in checkpoint_dict.keys():
             for k in checkpoint_dict['meanvar'].keys():
                 if k != 'length':
                     checkpoint_dict['meanvar'][k] = checkpoint_dict['meanvar'][k].cuda()
-            self.model.glob_mean = checkpoint_dict['meanvar']
+            self.model_depth.glob_mean = checkpoint_dict['meanvar']
 
             self.mean_var_dict = checkpoint_dict['meanvar']
 
@@ -358,21 +398,21 @@ class CostDCNetModel(object):
                 optimizer
         '''
 
-        if isinstance(self.model, torch.nn.DataParallel):
+        if isinstance(self.model_depth, torch.nn.DataParallel):
             checkpoint = {
-                'net': self.model.module.state_dict(),
+                'net': self.model_depth.module.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'train_step': step
             }
-        elif isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
+        elif isinstance(self.model_depth, torch.nn.parallel.DistributedDataParallel):
             checkpoint = {
-                'net': self.model.module.state_dict(),
+                'net': self.model_depth.module.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'train_step': step
             }
         else:
             checkpoint = {
-                'net': self.model.state_dict(),
+                'net': self.model_depth.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'train_step': step
             }
@@ -380,13 +420,13 @@ class CostDCNetModel(object):
             checkpoint['meanvar'] = meanvar
         torch.save(checkpoint, checkpoint_path)
 
-    def convert_syncbn(self, apex):
+    def convert_syncbn(self, apex=False):
         '''
         Convert BN layers to SyncBN layers.
         SyncBN merge the BN layer weights in every backward step.
         '''
         if apex:
-            apex.parallel.convert_syncbn_model(self.model)
+            apex.parallel.convert_syncbn_model(self.model_depth)
         else:
             from torch.nn import SyncBatchNorm
-            SyncBatchNorm.convert_sync_batchnorm(self.model)
+            SyncBatchNorm.convert_sync_batchnorm(self.model_depth)

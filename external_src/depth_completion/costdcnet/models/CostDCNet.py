@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from models.encoder2d import Encoder2D
-from models.encoder3d import Encoder3D
-from models.unet3d import UNet3D
+from encoder2d import Encoder2D
+from encoder3d import Encoder3D
+from unet3d import UNet3D
 import MinkowskiEngine as ME
 import numpy as np
 import torch.nn.functional as F
@@ -54,7 +54,7 @@ class CostDCNet(nn.Module):
 
         return output
 
-    def _forward(self, image, sparse_depth, mode):
+    def _forward(self, image, sparse_depth, mode=None):
 
         ###############################################################
 

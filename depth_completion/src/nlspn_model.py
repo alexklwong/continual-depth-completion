@@ -20,7 +20,11 @@ class NLSPNModel(object):
             device to run model on
     '''
 
-    def __init__(self, max_predict_depth=100.0, use_pretrained=False, device=torch.device('cuda')):
+    def __init__(self, 
+                    dataset_name=None, 
+                    max_predict_depth=100.0, 
+                    use_pretrained=False, 
+                    device=torch.device('cuda')):
 
         # Settings to reproduce NLSPN numbers on KITTI
         args = argparse.Namespace(
@@ -54,7 +58,7 @@ class NLSPNModel(object):
         self.model_depth = NLSPNBaseModel(args)
         self.use_pretrained = use_pretrained
         self.max_predict_depth = max_predict_depth
-
+        self.dataset_name = dataset_name
         # Move to device
         self.device = device
         self.to(self.device)
@@ -151,7 +155,7 @@ class NLSPNModel(object):
 
         # Check if loss weighting was passed in, if not then use default weighting
         w_l1 = w_losses['w_l1'] if 'w_l1' in w_losses else 1.0
-        w_l2 = w_losses['w_l2'] if 'w_l2' in w_losses else 1.0
+        w_l2 = w_losses['w_l2'] if 'w_l2' in w_losses else (0.0 if self.dataset_name in ['kitti', 'vkitti', 'waymo', 'synthia'] else 1.0)
         w_smoothness = w_losses['w_smoothness'] if 'w_smoothness' in w_losses else 0.0
 
         loss_info = {}

@@ -6,10 +6,11 @@ import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 sys.path.insert(0, os.getcwd())
 import datasets
-from utils.src import data_utils, eval_utils
-from utils.src.log_utils import log
+sys.path.insert(0, os.path.join('utils', 'src'))
+import data_utils, eval_utils
+from log_utils import log
+from transforms import Transforms
 from depth_completion_model import DepthCompletionModel
-from utils.src.transforms import Transforms
 from PIL import Image
 
 
