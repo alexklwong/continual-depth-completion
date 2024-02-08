@@ -17,7 +17,7 @@ python depth_completion/src/train_depth_completion.py \
 --model_name costdcnet_synthia \
 --min_predict_depth 0.0 \
 --max_predict_depth 90.0 \
---learning_rates 5e-4 2.5e-4 1.25e-4 6.25e-5 3.125e-5 1.5e-5 \
+--learning_rates 5e-5 2.5e-5 1.25e-5 6.25e-6 3.125e-6 1.5625e-6 \
 --learning_schedule 1 2 3 4 5 6 \
 --n_step_grad_acc 1 \
 --augmentation_probabilities 1.0 \
