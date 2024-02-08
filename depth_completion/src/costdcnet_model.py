@@ -243,7 +243,7 @@ class CostDCNetModel(object):
         
         # Check if loss weighting was passed in, if not then use default weighting
         w_l1 = w_losses['w_l1'] if 'w_l1' in w_losses else 1.0
-        w_l2 = w_losses['w_l2'] if 'w_l2' in w_losses else (0.0 if self.dataset_name in ['kitti', 'vkitti', 'waymo', 'synthia'] else 1.0)
+        w_l2 = w_losses['w_l2'] if 'w_l2' in w_losses else (1.0 if self.dataset_name in ['kitti', 'vkitti', 'waymo', 'synthia'] else 0.0)
         w_smoothness = w_losses['w_smoothness'] if 'w_smoothness' in w_losses else 0.0
 
         loss_info = {}
@@ -385,7 +385,7 @@ class CostDCNetModel(object):
             optimizer.load_state_dict(checkpoint_dict['optimizer'])
             return optimizer
 
-    def save_model(self, checkpoint_path, step, optimizer, meanvar=None):
+    def save_model(self, checkpoint_path, step, optimizer):
         '''
         Save weights of the model to checkpoint path
 
@@ -416,8 +416,6 @@ class CostDCNetModel(object):
                 'optimizer': optimizer.state_dict(),
                 'train_step': step
             }
-        if meanvar is not None:
-            checkpoint['meanvar'] = meanvar
         torch.save(checkpoint, checkpoint_path)
 
     def convert_syncbn(self, apex=False):

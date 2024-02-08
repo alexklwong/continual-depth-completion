@@ -4,7 +4,7 @@ from PIL import Image
 import os
 from collections import Counter
 from torchvision import transforms
-
+from skimage.restoration import inpaint
 
 def read_paths(filepath):
     '''

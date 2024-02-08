@@ -30,7 +30,7 @@ python depth_completion/src/train_depth_completion.py \
 --augmentation_random_noise_type none \
 --augmentation_random_noise_spread -1 \
 --augmentation_padding_mode edge \
---augmentation_random_crop_type horizontal vertical \
+--augmentation_random_crop_type horizontal bottom \
 --augmentation_random_flip_type horizontal vertical \
 --augmentation_random_rotate_max 25 \
 --augmentation_random_crop_and_pad 0.90 1.00 \

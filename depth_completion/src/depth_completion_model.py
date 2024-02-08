@@ -44,6 +44,8 @@ class DepthCompletionModel(object):
             dataset_name = 'scenenet'
         elif 'nyu_v2' in model_name:
             dataset_name = 'nyu_v2'
+        elif 'synthia' in model_name:
+            dataset_name = 'synthia'
         else:
             dataset_name = 'kitti'
         
@@ -385,6 +387,22 @@ class DepthCompletionModel(object):
                 optimizer_depth,
                 model_pose_checkpoint_path=os.path.join(checkpoint_dirpath, 'posenet-{}.pth'.format(step)),
                 optimizer_pose=optimizer_pose)
+        elif 'costdcnet' in self.model_name:
+            self.model.save_model(
+                os.path.join(checkpoint_dirpath, 'costdcnet-{}.pth'.format(step)),    
+                step,
+                optimizer_depth)
+        elif 'nlspn' in self.model_name:
+            self.model.save_model(
+                os.path.join(checkpoint_dirpath, 'nlspn-{}.pth'.format(step)),    
+                step,
+                optimizer_depth)
+        elif 'msg_chn' in self.model_name:
+            self.model.save_model(
+                os.path.join(checkpoint_dirpath, 'msg_chn-{}.pth'.format(step)),    
+                step,
+                optimizer_depth)
+        
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
 
@@ -446,6 +464,8 @@ class DepthCompletionModel(object):
             display_summary_depth_text = tag
 
             if image0 is not None:
+                if image0.mean()>1:
+                    image0 /= 255.0
                 image0_summary = image0[0:n_image_per_summary, ...]
 
                 display_summary_image_text += '_image0'

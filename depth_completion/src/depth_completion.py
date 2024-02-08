@@ -12,7 +12,7 @@ from log_utils import log
 from transforms import Transforms
 from depth_completion_model import DepthCompletionModel
 from PIL import Image
-
+import cv2
 
 def get_sampler(dataset, ngpus_per_node, rank, seed=42):
     generator = torch.Generator()
@@ -585,9 +585,12 @@ def train(rank,
                     sparse_depth0, \
                     intrinsics, \
                     ground_truth0 = inputs
-
+                # print(image0.size())
+                # print(image0[0])
                 image1 = image0.detach().clone()
                 image2 = image0.detach().clone()
+                # cv2.imwrite("test.jpg", image1.cpu().numpy())
+                # exit()
             elif supervision_type == 'unsupervised':
                 image0, \
                     image1, \
@@ -765,10 +768,12 @@ def train(rank,
             if rank == 0:
                 time_elapse = (time.time() - time_start) / 3600
                 time_remain = (n_train_step - train_step) * time_elapse / train_step
-
+                loss_desc = ''
+                for k in  loss_info.keys():
+                    loss_desc += "{}: {:.3f} ".format(k, loss_info[k])
                 pbar.set_description(
-                    'Step={:6}/{}  Loss={:.5f}  Time Elapsed={:.2f}h  Time Remaining={:.2f}h'.format(
-                        train_step, n_train_step, loss.item(), time_elapse, time_remain))
+                    'Step={:6}/{}  Loss={}  Time Elapsed={:.2f}h  Time Remaining={:.2f}h'.format(
+                        train_step, n_train_step, loss_desc, time_elapse, time_remain))
                 pbar.update(1)
 
                 # Log results and save checkpoints
@@ -867,7 +872,6 @@ def validate(depth_model,
         ]
 
         image, sparse_depth, intrinsics, ground_truth = inputs
-
         with torch.no_grad():
             # Validity map is where sparse depth is available
             validity_map = torch.where(
@@ -917,14 +921,15 @@ def validate(depth_model,
             start_y = end_y - crop_height
             output_depth = output_depth[..., start_y:end_y, start_x:end_x]
             ground_truth = ground_truth[..., start_y:end_y, start_x:end_x]
+            validity_map = validity_map[..., start_y:end_y, start_x:end_x]
 
         # Select valid regions to evaluate
-        validity_mask = np.where(validity_map > 0, 1, 0)
+        validity_mask = np.squeeze(np.where(validity_map.detach().cpu().numpy() > 0, 1, 0))
 
         min_max_mask = np.logical_and(
             ground_truth > min_evaluate_depth,
             ground_truth < max_evaluate_depth)
-
+        
         mask = np.where(np.logical_and(validity_mask, min_max_mask) > 0)
 
         output_depth = output_depth[mask]
