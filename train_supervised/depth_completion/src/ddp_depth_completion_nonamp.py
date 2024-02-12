@@ -727,6 +727,23 @@ def train(rank,
 
     time_start = time.time()
 
+    with torch.no_grad():
+        if rank == 0:
+            model.eval()
+            best_results = validate(
+                model=model,
+                dataloader=val_dataloader,
+                step=train_step,
+                best_results=best_results,
+                min_evaluate_depth=min_evaluate_depth,
+                max_evaluate_depth=max_evaluate_depth,
+                evaluation_protocol=evaluation_protocol,
+                device=device,
+                summary_writer=val_summary_writer,
+                n_image_per_summary=n_image_per_summary,
+                log_path=log_path)
+            model.train()
+
     if rank == 0:
         log('Begin training...', log_path)
 
@@ -1031,6 +1048,11 @@ def validate(model,
             crop_height = 540
             crop_width = 1600
             crop_mask = [crop_height, crop_width]
+        elif evaluation_protocol == 'synthia':
+            # Crop output_depth and ground_truth
+            crop_height = 320
+            crop_width = 640
+            crop_mask = [crop_height, crop_width]    
         else:
             crop_mask = None
 

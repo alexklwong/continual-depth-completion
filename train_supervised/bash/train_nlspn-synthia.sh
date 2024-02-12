@@ -19,7 +19,7 @@ python depth_completion/src/ddp_train_depth_completion.py \
 --model_name nlspn \
 --min_predict_depth 0.0 \
 --max_predict_depth 90.0 \
---learning_rates 1e-3 \
+--learning_rates 2e-4 \
 --learning_schedule 10 \
 --lr_warmup_iter -1 \
 --augmentation_probabilities 1.00 \
@@ -48,12 +48,12 @@ python depth_completion/src/ddp_train_depth_completion.py \
 --max_evaluate_depth 90.0 \
 --evaluation_protocol synthia \
 --checkpoint_path \
-    model_save/nlspn_synthia/ \
+    model_save/nlspn_synthia_1e-3_170000_2e-4/ \
 --n_step_per_checkpoint 5000 \
 --n_step_per_summary 1000 \
 --n_image_per_summary 4 \
 --validation_start_step 5000 \
---restore_paths_model train_supervised/model_save/nlspn_synthia/nlspn-<step>.pth \
+--restore_paths_model model_save/nlspn_synthia/nlspn-170000-new.pth \
 --device gpu \
 --n_thread 8
 

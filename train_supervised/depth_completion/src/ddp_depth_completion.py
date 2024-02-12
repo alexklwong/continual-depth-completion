@@ -1037,6 +1037,11 @@ def validate(model,
             crop_height = 540
             crop_width = 1600
             crop_mask = [crop_height, crop_width]
+        elif evaluation_protocol == 'synthia':
+            # Crop output_depth and ground_truth
+            crop_height = 320
+            crop_width = 640
+            crop_mask = [crop_height, crop_width]  
         else:
             crop_mask = None
 
