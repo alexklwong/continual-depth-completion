@@ -44,8 +44,8 @@ python depth_completion/src/ddp_train_depth_completion.py \
 --augmentation_random_remove_patch_size_depth -1 -1 \
 --w_losses w_l1=1.0 w_l2=1.0 w_smoothness=0.00 \
 --w_weight_decay 0.0 \
---min_evaluate_depth 1e-3 \
---max_evaluate_depth 100.0 \
+--min_evaluate_depth 0.0 \
+--max_evaluate_depth 90.0 \
 --evaluation_protocol default \
 --checkpoint_path \
     model_save/msg_chn_synthia/ \

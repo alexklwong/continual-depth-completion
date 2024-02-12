@@ -46,7 +46,7 @@ python depth_completion/src/ddp_train_depth_completion.py \
 --w_weight_decay 0.0 \
 --min_evaluate_depth 0.0 \
 --max_evaluate_depth 90.0 \
---evaluation_protocol default \
+--evaluation_protocol synthia \
 --checkpoint_path \
     model_save/nlspn_synthia/ \
 --n_step_per_checkpoint 5000 \

@@ -293,7 +293,7 @@ class NLSPNModel(object):
                 optimizer
         '''
 
-        if isinstance(self.model, torch.nn.DataParallel):
+        if isinstance(self.model, torch.nn.DataParallel) or isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
             checkpoint = {
                 'net': self.model.module.state_dict(),
                 'optimizer': optimizer.state_dict(),

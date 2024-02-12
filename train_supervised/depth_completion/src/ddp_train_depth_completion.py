@@ -1,5 +1,6 @@
 import argparse, torch
 from ddp_depth_completion import train
+from ddp_depth_completion_nonamp import train as train_nonamp
 import torch.multiprocessing as mp
 
 
@@ -161,7 +162,10 @@ if __name__ == '__main__':
     args.model_name = [
         name.lower() for name in args.model_name
     ]
-
+    if 'nlspn' in args.model_name[0]:
+        spawn_func = train_nonamp
+    else:
+        spawn_func = train
     # Training settings
     assert len(args.learning_rates) == len(args.learning_schedule)
 
@@ -181,7 +185,7 @@ if __name__ == '__main__':
     args.device = 'cuda' if args.device == 'gpu' else args.device
     mp.set_start_method('fork')
 
-    mp.spawn(train, nprocs=torch.cuda.device_count(), join=True, args=(
+    mp.spawn(spawn_func, nprocs=torch.cuda.device_count(), join=True, args=(
         torch.cuda.device_count(),
         args.train_image_paths,
         args.train_sparse_depth_paths,

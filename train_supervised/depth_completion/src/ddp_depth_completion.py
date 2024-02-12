@@ -245,6 +245,10 @@ def run(image_path,
                 crop_height = 540
                 crop_width = 1600
                 crop_mask = [crop_height, crop_width]
+            elif evaluation_protocol == 'synthia':
+                crop_height = 320
+                crop_width = 640
+                crop_mask = [crop_height, crop_width]
             else:
                 crop_mask = None
 
