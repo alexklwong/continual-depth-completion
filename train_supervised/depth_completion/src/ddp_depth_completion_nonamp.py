@@ -235,7 +235,7 @@ def run(image_path,
 
         if is_available_ground_truth:
 
-            if evaluation_protocol == 'vkitti':
+            if evaluation_protocol in ['vkitti', 'kitti']:
                 # Crop output_depth and ground_truth
                 crop_height = 240
                 crop_width = 1216
@@ -1038,7 +1038,7 @@ def validate(model,
         output_depth = np.squeeze(output_depth.cpu().numpy())
         ground_truth = np.squeeze(ground_truth.cpu().numpy())
 
-        if evaluation_protocol == 'vkitti':
+        if evaluation_protocol in ['vkitti', 'kitti']:
             # Crop output_depth and ground_truth
             crop_height = 240
             crop_width = 1216
