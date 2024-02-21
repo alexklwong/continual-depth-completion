@@ -396,9 +396,7 @@ def train(rank,
           n_thread=8):
 
     # DDP-related argument
-    torch.manual_seed(1234)
-    torch.cuda.manual_seed(1234)
-    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
     torch.cuda.set_device(rank)  # set the cuda device
 
@@ -712,6 +710,8 @@ def train(rank,
     if restore_paths_model is not None:
         start_step, optimizer = model.restore_model(restore_paths_model,
                                                     optimizer)
+        for g in optimizer.param_groups:
+            g['lr'] = learning_rate
     else:
         start_step = 0
 
