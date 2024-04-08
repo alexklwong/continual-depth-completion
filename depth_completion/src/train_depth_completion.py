@@ -1,6 +1,5 @@
 import argparse
 import torch
-import torch.multiprocessing as mp
 from depth_completion import train
 
 
@@ -29,6 +28,8 @@ parser.add_argument('--train_intrinsics_paths',
 parser.add_argument('--train_ground_truth_paths',
     nargs='+', type=str, default=None, help='Paths to list of training ground_truth paths')
 
+# TODO: Add replay filepaths
+
 # Validation filepaths
 parser.add_argument('--val_image_path',
     type=str, default=None, help='Path to list of validation image paths')
@@ -38,14 +39,6 @@ parser.add_argument('--val_intrinsics_path',
     type=str, default=None, help='Path to list of validation camera intrinsics paths')
 parser.add_argument('--val_ground_truth_path',
     type=str, default=None, help='Path to list of validation ground truth depth paths')
-
-# Batch parameters
-parser.add_argument('--n_batch',
-    type=int, default=8, help='Number of samples per batch')
-parser.add_argument('--n_height',
-    type=int, default=480, help='Height of of sample')
-parser.add_argument('--n_width',
-    type=int, default=640, help='Width of each sample')
 
 # Depth network settings
 parser.add_argument('--model_name',
@@ -58,12 +51,14 @@ parser.add_argument('--max_predict_depth',
     type=float, default=10.00, help='Maximum value of predicted depth')
 
 # Training settings
+parser.add_argument('--train_batch_size',
+    type=int, default=8, help='Number of samples per batch (divisible by number of datasets)')
+parser.add_argument('--train_crop_shapes',
+    nargs='+', type=int, default=[480, 640], help='List of (height, width) crop shapes for training data')
 parser.add_argument('--learning_rates',
     nargs='+', type=float, default=[1e-4, 5e-5], help='Space delimited list of learning rates')
 parser.add_argument('--learning_schedule',
     nargs='+', type=int, default=[5, 10], help='Space delimited list to change learning rate')
-parser.add_argument('--n_step_grad_acc',
-    type=int, default=1, help='Number of steps for gradient accumulation')
 
 # Augmentation settings
 parser.add_argument('--augmentation_probabilities',
@@ -124,10 +119,8 @@ parser.add_argument('--supervision_type',
     type=str, default='unsupervised', help='Supervision type for training')
 parser.add_argument('--w_losses',
     nargs='+', type=str, action=ParseStrFloatKeyValueAction, help='Weight of each loss term as key-value pairs: w_color=0.90 w_smoothness=2.00')
-parser.add_argument('--w_weight_decay_depth',
-    type=float, default=0.00, help='Weight of weight decay regularization for depth')
-parser.add_argument('--w_weight_decay_pose',
-    type=float, default=0.00, help='Weight of weight decay regularization for pose')
+
+# TODO: Add frozen model path(s)
 
 # Evaluation settings
 parser.add_argument('--min_evaluate_depth',
@@ -156,8 +149,6 @@ parser.add_argument('--device',
     type=str, default='gpu', help='Device to use: gpu, cpu')
 parser.add_argument('--n_thread',
     type=int, default=8, help='Number of threads for fetching')
-parser.add_argument('--port',
-    type=int, default=5678, help='Port number to use for distributed data parallel')
 
 
 args = parser.parse_args()
@@ -172,8 +163,6 @@ if __name__ == '__main__':
 
     # Training settings
     assert len(args.learning_rates) == len(args.learning_schedule)
-
-    args.n_step_grad_acc = max(1, args.n_step_grad_acc)
 
     args.augmentation_random_crop_type = [
         crop_type.lower() for crop_type in args.augmentation_random_crop_type
@@ -190,77 +179,67 @@ if __name__ == '__main__':
 
     args.device = 'cuda' if args.device == 'gpu' else args.device
 
-    multiprocess_args = [
-        torch.cuda.device_count(),
+    train(
         # Training filepaths
-        args.train_image_paths,
-        args.train_sparse_depth_paths,
-        args.train_intrinsics_paths,
-        args.train_ground_truth_paths,
+        train_image_paths=args.train_image_paths,
+        train_sparse_depth_paths=args.train_sparse_depth_paths,
+        train_intrinsics_paths=args.train_intrinsics_paths,
+        train_ground_truth_paths=args.train_ground_truth_paths,
         # Validation filepaths
-        args.val_image_path,
-        args.val_sparse_depth_path,
-        args.val_intrinsics_path,
-        args.val_ground_truth_path,
-        # Batch settings
-        args.n_batch,
-        args.n_height,
-        args.n_width,
+        val_image_path=args.val_image_path,
+        val_sparse_depth_path=args.val_sparse_depth_path,
+        val_intrinsics_path=args.val_intrinsics_path,
+        val_ground_truth_path=args.val_ground_truth_path,
         # Depth network settings
-        args.model_name,
-        args.network_modules,
-        args.min_predict_depth,
-        args.max_predict_depth,
+        model_name=args.model_name,
+        network_modules=args.network_modules,
+        min_predict_depth=args.min_predict_depth,
+        max_predict_depth=args.max_predict_depth,
         # Training settings
-        args.learning_rates,
-        args.learning_schedule,
-        args.n_step_grad_acc,
-        args.augmentation_probabilities,
-        args.augmentation_schedule,
+        train_batch_size=args.train_batch_size,
+        train_crop_shapes=args.train_crop_shapes,
+        learning_rates=args.learning_rates,
+        learning_schedule=args.learning_schedule,
+        augmentation_probabilities=args.augmentation_probabilities,
+        augmentation_schedule=args.augmentation_schedule,
         # Photometric data augmentations
-        args.augmentation_random_brightness,
-        args.augmentation_random_contrast,
-        args.augmentation_random_gamma,
-        args.augmentation_random_hue,
-        args.augmentation_random_saturation,
-        args.augmentation_random_gaussian_blur_kernel_size,
-        args.augmentation_random_gaussian_blur_sigma_range,
-        args.augmentation_random_noise_type,
-        args.augmentation_random_noise_spread,
+        augmentation_random_brightness=args.augmentation_random_brightness,
+        augmentation_random_contrast=args.augmentation_random_contrast,
+        augmentation_random_gamma=args.augmentation_random_gamma,
+        augmentation_random_hue=args.augmentation_random_hue,
+        augmentation_random_saturation=args.augmentation_random_saturation,
+        augmentation_random_gaussian_blur_kernel_size=args.augmentation_random_gaussian_blur_kernel_size,
+        augmentation_random_gaussian_blur_sigma_range=args.augmentation_random_gaussian_blur_sigma_range,
+        augmentation_random_noise_type=args.augmentation_random_noise_type,
+        augmentation_random_noise_spread=args.augmentation_random_noise_spread,
         # Geometric data augmentations
-        args.augmentation_padding_mode,
-        args.augmentation_random_crop_type,
-        args.augmentation_random_flip_type,
-        args.augmentation_random_rotate_max,
-        args.augmentation_random_crop_and_pad,
-        args.augmentation_random_resize_to_shape,
-        args.augmentation_random_resize_and_pad,
-        args.augmentation_random_resize_and_crop,
+        augmentation_padding_mode=args.augmentation_padding_mode,
+        augmentation_random_crop_type=args.augmentation_random_crop_type,
+        augmentation_random_flip_type=args.augmentation_random_flip_type,
+        augmentation_random_rotate_max=args.augmentation_random_rotate_max,
+        augmentation_random_crop_and_pad=args.augmentation_random_crop_and_pad,
+        augmentation_random_resize_to_shape=args.augmentation_random_resize_to_shape,
+        augmentation_random_resize_and_pad=args.augmentation_random_resize_and_pad,
+        augmentation_random_resize_and_crop=args.augmentation_random_resize_and_crop,
         # Occlusion data augmentations
-        args.augmentation_random_remove_patch_percent_range_image,
-        args.augmentation_random_remove_patch_size_image,
-        args.augmentation_random_remove_patch_percent_range_depth,
-        args.augmentation_random_remove_patch_size_depth,
+        augmentation_random_remove_patch_percent_range_image=args.augmentation_random_remove_patch_percent_range_image,
+        augmentation_random_remove_patch_size_image=args.augmentation_random_remove_patch_size_image,
+        augmentation_random_remove_patch_percent_range_depth=args.augmentation_random_remove_patch_percent_range_depth,
+        augmentation_random_remove_patch_size_depth=args.augmentation_random_remove_patch_size_depth,
         # Loss function settings
-        args.supervision_type,
-        args.w_losses,
-        args.w_weight_decay_depth,
-        args.w_weight_decay_pose,
+        supervision_type=args.supervision_type,
+        w_losses=args.w_losses,
         # Evaluation settings
-        args.min_evaluate_depth,
-        args.max_evaluate_depth,
-        args.evaluation_protocol,
+        min_evaluate_dept=args.min_evaluate_depth,
+        max_evaluate_depth=args.max_evaluate_depth,
+        evaluation_protocol=args.evaluation_protocol,
         # Checkpoint settings
-        args.checkpoint_path,
-        args.n_step_per_checkpoint,
-        args.n_step_per_summary,
-        args.n_image_per_summary,
-        args.start_step_validation,
-        args.restore_paths,
+        checkpoint_path=args.checkpoint_path,
+        n_step_per_checkpoint=args.n_step_per_checkpoint,
+        n_step_per_summary=args.n_step_per_summary,
+        n_image_per_summary=args.n_image_per_summary,
+        start_step_validation=args.start_step_validation,
+        restore_paths=args.restore_paths,
         # Hardware settings
-        args.device,
-        args.n_thread,
-        args.port
-    ]
-
-    mp.spawn(train, nprocs=torch.cuda.device_count(), args=multiprocess_args)
+        device=args.device,
+        n_thread=args.n_thread)

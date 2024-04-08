@@ -1,8 +1,6 @@
 import os, time, sys, tqdm
 import numpy as np
 import torch
-import torch.cuda.amp as amp
-import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 sys.path.insert(0, os.getcwd())
 import datasets
@@ -13,37 +11,34 @@ from utils.src.transforms import Transforms
 from PIL import Image
 
 
-def get_sampler(dataset, ngpus_per_node, rank, seed=42):
-    generator = torch.Generator()
-    generator.manual_seed(seed)
-    sampler = torch.utils.data.DistributedSampler(dataset, num_replicas=ngpus_per_node, rank=rank, seed=seed)
-    return sampler
-
-def train(rank,
-          ngpus_per_node,
-          # Training filepaths
-          train_image_paths,
+def train(train_image_paths,
           train_sparse_depth_paths,
           train_intrinsics_paths,
           train_ground_truth_paths,
+          # Replay filepaths
+          # TODO: Uncomment filepaths to use
+          # replay_image_paths,
+          # replay_sparse_depth_paths,
+          # replay_intrinsics_path,
+          # replay_ground_truth_paths,
           # Validation filepaths
           val_image_path,
           val_sparse_depth_path,
           val_intrinsics_path,
           val_ground_truth_path,
-          # Batch settings
-          n_batch,
-          n_height,
-          n_width,
+          # TODO: Uncomment to use
+          # replay_batch_size,
+          # replay_crop_shapes,
           # Depth network settings
           model_name,
           network_modules,
           min_predict_depth,
           max_predict_depth,
           # Training settings
+          train_batch_size,
+          train_crop_shapes,
           learning_rates,
           learning_schedule,
-          n_step_grad_acc,
           augmentation_probabilities,
           augmentation_schedule,
           # Photometric data augmentations
@@ -73,8 +68,8 @@ def train(rank,
           # Loss function settings
           supervision_type,
           w_losses,
-          w_weight_decay_depth,
-          w_weight_decay_pose,
+          # TODO: Uncomment to use frozen model for loss
+          # frozen_model_paths,
           # Evaluation settings
           min_evaluate_depth,
           max_evaluate_depth,
@@ -88,23 +83,7 @@ def train(rank,
           restore_paths,
           # Hardware settings
           device='cuda',
-          n_thread=8,
-          port=-1):
-
-    # DDP-related argument
-    torch.manual_seed(1234)
-    torch.cuda.manual_seed(1234)
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cudnn.deterministic = True
-    torch.cuda.set_device(rank)
-
-    init_method = 'tcp://localhost:{}'.format(port)
-
-    dist.init_process_group(
-        backend='nccl',
-        init_method=init_method,
-        world_size=torch.cuda.device_count(),
-        rank=rank)
+          n_thread=8):
 
     # Select device to run on
     if device == 'cuda' or device == 'gpu':
@@ -115,18 +94,14 @@ def train(rank,
         raise ValueError('Unsupported device: {}'.format(device))
 
     # Set up checkpoint and event paths
-    if rank == 0:
-        os.makedirs(checkpoint_path, exist_ok=True)
-
-    torch.distributed.barrier(device_ids=[rank])
+    os.makedirs(checkpoint_path, exist_ok=True)
 
     checkpoint_dirpath = os.path.join(checkpoint_path, 'checkpoints_{}'.format(model_name) + '-{}')
     log_path = os.path.join(checkpoint_path, 'results.txt')
     event_path = os.path.join(checkpoint_path, 'tensorboard')
 
-    if rank == 0:
-        os.makedirs(os.path.join(event_path, 'events-train'), exist_ok=True)
-        os.makedirs(os.path.join(event_path, 'events-test'), exist_ok=True)
+    os.makedirs(os.path.join(event_path, 'events-train'), exist_ok=True)
+    os.makedirs(os.path.join(event_path, 'events-val'), exist_ok=True)
 
     best_results = {
         'step': -1,
@@ -198,12 +173,80 @@ def train(rank,
             for n_train_sample in n_train_samples
         ]
 
-    # Setup training dataloader
+    '''
+    Setup training dataloader
+    '''
+    train_dataloaders = []
+
+    # Make sure batch size is divisible by datasets
+    n_dataset = len(train_image_paths_arr)
+    assert train_batch_size % n_dataset == 0
+
+    # Crop shapes are defined for each dataset
+    assert len(train_crop_shapes) % 2 == 0 and len(train_crop_shapes) // 2 == n_dataset
+
+    # Set up batch size and crop shape for each dataset
+    batch_size = train_batch_size // n_dataset
+    train_batch_sizes_arr = [batch_size] * n_dataset
+
+    train_crop_shapes_arr = [
+        (height, width)
+        for height, width in zip(train_crop_shapes[::2], train_crop_shapes[1::2])
+    ]
+
+    train_input_paths_arr = zip(
+        train_image_paths_arr,
+        train_sparse_depth_paths_arr,
+        train_intrinsics_paths_arr,
+        train_ground_truth_paths_arr,
+        train_batch_sizes_arr,
+        train_crop_shapes_arr)
+
+    for inputs in train_input_paths_arr:
+
+        # Unpack for each dataset
+        image_paths, \
+            sparse_depth_paths, \
+            intrinsics_paths, \
+            ground_truth_paths, \
+            batch_size, \
+            crop_shape = inputs
+
+        if supervision_type == 'supervised':
+            train_dataset = datasets.DepthCompletionSupervisedTrainingDataset(
+                image_paths=image_paths,
+                sparse_depth_paths=sparse_depth_paths,
+                intrinsics_paths=intrinsics_paths,
+                ground_truth_paths=ground_truth_paths,
+                random_crop_shape=crop_shape,
+                random_crop_type=augmentation_random_crop_type)
+        elif supervision_type == 'unsupervised':
+            train_dataset = datasets.DepthCompletionMonocularTrainingDataset(
+                images_paths=train_image_paths,
+                sparse_depth_paths=train_sparse_depth_paths,
+                intrinsics_paths=train_intrinsics_paths,
+                random_crop_shape=crop_shape,
+                random_crop_type=augmentation_random_crop_type)
+        else:
+            raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
+
+        train_dataloader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=n_thread,
+            pin_memory=False,
+            drop_last=True)
+
+        train_dataloaders.append(train_dataloader)
+
+    # Get number of train samples and training step
+    # Note: zipping up iterators will truncate based on shortest one
     min_train_sample = min(n_train_samples)
     n_train_sample = min_train_sample * len(n_train_samples)
 
     n_train_step = \
-        learning_schedule[-1] * np.floor(n_train_sample / n_batch).astype(np.int32)
+        learning_schedule[-1] * np.floor(n_train_sample / train_batch_size).astype(np.int32)
 
     # Set up data augmentations
     train_transforms_geometric = Transforms(
@@ -239,6 +282,12 @@ def train(rank,
 
     padding_modes = ['edge', 'constant', 'constant', 'constant']
 
+    # TODO: Load replay data if it is available
+    is_available_replay = False
+
+    if is_available_replay:
+        pass
+
     # Load validation data if it is available
     is_available_validation = \
         val_image_path is not None and \
@@ -246,6 +295,13 @@ def train(rank,
         val_ground_truth_path is not None
 
     if is_available_validation:
+
+        # TODO: Extend validation setup to handle multiple datasets (similar to training above)
+        # This is so that we can gauge performance on current and previous datasets
+        # We will keep the validation dataloaders in a list and
+        # iterate through them during validation setp
+        validation_dataloaders = []
+
         val_image_paths = data_utils.read_paths(val_image_path)
         val_sparse_depth_paths = data_utils.read_paths(val_sparse_depth_path)
         val_ground_truth_paths = data_utils.read_paths(val_ground_truth_path)
@@ -292,6 +348,9 @@ def train(rank,
 
     depth_completion_model.train()
 
+    # TODO: If using loss based (e.g. EWC or LWF) then create another instance of the model
+    # Also will need to introduce an argument for restoring weights from previous dataset
+
     # Set up tensorboard summary writers
     train_summary_writer = SummaryWriter(event_path + '-train')
     val_summary_writer = SummaryWriter(event_path + '-val')
@@ -299,127 +358,116 @@ def train(rank,
     '''
     Log input paths
     '''
-    if rank == 0:
-        log('Training input paths:', log_path)
-        train_input_paths = \
-            train_image_paths + \
-            train_sparse_depth_paths + \
-            train_intrinsics_paths
+    log('Training input paths:', log_path)
+    train_input_paths = \
+        train_image_paths + \
+        train_sparse_depth_paths + \
+        train_intrinsics_paths
 
-        if is_available_ground_truth:
-            train_input_paths.append(train_ground_truth_paths)
+    if is_available_ground_truth:
+        train_input_paths.append(train_ground_truth_paths)
 
-        for path in train_input_paths:
+    for path in train_input_paths:
+        if path is not None:
+            log(path, log_path)
+    log('', log_path)
+
+    # TODO: if replay filepaths is available then log paths
+    if is_available_replay:
+        pass
+
+    if is_available_validation:
+        log('Validation input paths:', log_path)
+        val_input_paths = [
+            val_image_path,
+            val_sparse_depth_path,
+            val_intrinsics_path,
+            val_ground_truth_path
+        ]
+        for path in val_input_paths:
             if path is not None:
                 log(path, log_path)
         log('', log_path)
 
-        if is_available_validation:
-            log('Validation input paths:', log_path)
-            val_input_paths = [
-                val_image_path,
-                val_sparse_depth_path,
-                val_intrinsics_path,
-                val_ground_truth_path
-            ]
-            for path in val_input_paths:
-                if path is not None:
-                    log(path, log_path)
-            log('', log_path)
+    log_network_settings(
+        log_path,
+        # Depth network settings
+        model_name=model_name,
+        network_modules=network_modules,
+        min_predict_depth=min_predict_depth,
+        max_predict_depth=max_predict_depth,
+        # Weight settings
+        parameters_depth_model=parameters_depth_model,
+        parameters_pose_model=parameters_pose_model)
 
-        log_input_settings(
-            log_path,
-            # Batch settings
-            n_batch=n_batch,
-            n_height=n_height,
-            n_width=n_width)
+    log_training_settings(
+        log_path,
+        # Training settings
+        train_batch_sizes=train_batch_sizes_arr,
+        train_crop_shapes=train_crop_shapes_arr,
+        n_train_sample=n_train_sample,
+        n_train_step=n_train_step,
+        learning_rates=learning_rates,
+        learning_schedule=learning_schedule,
+        # Augmentation settings
+        augmentation_probabilities=augmentation_probabilities,
+        augmentation_schedule=augmentation_schedule,
+        # Photometric data augmentations
+        augmentation_random_brightness=augmentation_random_brightness,
+        augmentation_random_contrast=augmentation_random_contrast,
+        augmentation_random_gamma=augmentation_random_gamma,
+        augmentation_random_hue=augmentation_random_hue,
+        augmentation_random_saturation=augmentation_random_saturation,
+        augmentation_random_gaussian_blur_kernel_size=augmentation_random_gaussian_blur_kernel_size,
+        augmentation_random_gaussian_blur_sigma_range=augmentation_random_gaussian_blur_sigma_range,
+        augmentation_random_noise_type=augmentation_random_noise_type,
+        augmentation_random_noise_spread=augmentation_random_noise_spread,
+        # Geometric data augmentations
+        augmentation_padding_mode=augmentation_padding_mode,
+        augmentation_random_crop_type=augmentation_random_crop_type,
+        augmentation_random_crop_to_shape=None,
+        augmentation_reverse_crop_to_shape=None,
+        augmentation_random_flip_type=augmentation_random_flip_type,
+        augmentation_random_rotate_max=augmentation_random_rotate_max,
+        augmentation_random_crop_and_pad=augmentation_random_crop_and_pad,
+        augmentation_random_resize_to_shape=augmentation_random_resize_to_shape,
+        augmentation_random_resize_and_pad=augmentation_random_resize_and_pad,
+        augmentation_random_resize_and_crop=augmentation_random_resize_and_crop,
+        # Occlusion data augmentations
+        augmentation_random_remove_patch_percent_range_image=augmentation_random_remove_patch_percent_range_image,
+        augmentation_random_remove_patch_size_image=augmentation_random_remove_patch_size_image,
+        augmentation_random_remove_patch_percent_range_depth=augmentation_random_remove_patch_percent_range_depth,
+        augmentation_random_remove_patch_size_depth=augmentation_random_remove_patch_size_depth)
 
-        log_network_settings(
-            log_path,
-            # Depth network settings
-            model_name=model_name,
-            network_modules=network_modules,
-            min_predict_depth=min_predict_depth,
-            max_predict_depth=max_predict_depth,
-            # Weight settings
-            parameters_depth_model=parameters_depth_model,
-            parameters_pose_model=parameters_pose_model)
+    log_loss_func_settings(
+        log_path,
+        # Loss function settings
+        supervision_type=supervision_type,
+        w_losses=w_losses)
 
-        log_training_settings(
-            log_path,
-            # Training settings
-            n_batch=n_batch,
-            n_train_sample=n_train_sample,
-            n_train_step=n_train_step,
-            learning_rates=learning_rates,
-            learning_schedule=learning_schedule,
-            n_step_grad_acc=n_step_grad_acc,
-            # Augmentation settings
-            augmentation_probabilities=augmentation_probabilities,
-            augmentation_schedule=augmentation_schedule,
-            # Photometric data augmentations
-            augmentation_random_brightness=augmentation_random_brightness,
-            augmentation_random_contrast=augmentation_random_contrast,
-            augmentation_random_gamma=augmentation_random_gamma,
-            augmentation_random_hue=augmentation_random_hue,
-            augmentation_random_saturation=augmentation_random_saturation,
-            augmentation_random_gaussian_blur_kernel_size=augmentation_random_gaussian_blur_kernel_size,
-            augmentation_random_gaussian_blur_sigma_range=augmentation_random_gaussian_blur_sigma_range,
-            augmentation_random_noise_type=augmentation_random_noise_type,
-            augmentation_random_noise_spread=augmentation_random_noise_spread,
-            # Geometric data augmentations
-            augmentation_padding_mode=augmentation_padding_mode,
-            augmentation_random_crop_type=augmentation_random_crop_type,
-            augmentation_random_crop_to_shape=None,
-            augmentation_reverse_crop_to_shape=None,
-            augmentation_random_flip_type=augmentation_random_flip_type,
-            augmentation_random_rotate_max=augmentation_random_rotate_max,
-            augmentation_random_crop_and_pad=augmentation_random_crop_and_pad,
-            augmentation_random_resize_to_shape=augmentation_random_resize_to_shape,
-            augmentation_random_resize_and_pad=augmentation_random_resize_and_pad,
-            augmentation_random_resize_and_crop=augmentation_random_resize_and_crop,
-            # Occlusion data augmentations
-            augmentation_random_remove_patch_percent_range_image=augmentation_random_remove_patch_percent_range_image,
-            augmentation_random_remove_patch_size_image=augmentation_random_remove_patch_size_image,
-            augmentation_random_remove_patch_percent_range_depth=augmentation_random_remove_patch_percent_range_depth,
-            augmentation_random_remove_patch_size_depth=augmentation_random_remove_patch_size_depth)
+    log_evaluation_settings(
+        log_path,
+        min_evaluate_depth=min_evaluate_depth,
+        max_evaluate_depth=max_evaluate_depth,
+        evaluation_protocol=evaluation_protocol)
 
-        log_loss_func_settings(
-            log_path,
-            # Loss function settings
-            supervision_type=supervision_type,
-            w_losses=w_losses,
-            w_weight_decay_depth=w_weight_decay_depth,
-            w_weight_decay_pose=w_weight_decay_pose)
-
-        log_evaluation_settings(
-            log_path,
-            min_evaluate_depth=min_evaluate_depth,
-            max_evaluate_depth=max_evaluate_depth,
-            evaluation_protocol=evaluation_protocol)
-
-        log_system_settings(
-            log_path,
-            # Checkpoint settings
-            checkpoint_path=checkpoint_path,
-            n_step_per_checkpoint=n_step_per_checkpoint,
-            summary_event_path=event_path,
-            n_step_per_summary=n_step_per_summary,
-            n_image_per_summary=n_image_per_summary,
-            start_step_validation=start_step_validation,
-            restore_paths=restore_paths,
-            # Hardware settings
-            device=device,
-            n_thread=n_thread)
+    log_system_settings(
+        log_path,
+        # Checkpoint settings
+        checkpoint_path=checkpoint_path,
+        n_step_per_checkpoint=n_step_per_checkpoint,
+        summary_event_path=event_path,
+        n_step_per_summary=n_step_per_summary,
+        n_image_per_summary=n_image_per_summary,
+        start_step_validation=start_step_validation,
+        restore_paths=restore_paths,
+        # Hardware settings
+        device=device,
+        n_thread=n_thread)
 
     # Set up tensorboard summary writers
-    if rank == 0:
-        train_summary_writer = SummaryWriter(event_path + '-train')
-        val_summary_writer = SummaryWriter(event_path + '-val')
-    dist.barrier()
-    if rank != 0:
-        train_summary_writer = SummaryWriter(event_path + '-train')
-        val_summary_writer = SummaryWriter(event_path + '-val')
+    train_summary_writer = SummaryWriter(event_path + '-train')
+    val_summary_writer = SummaryWriter(event_path + '-val')
 
     '''
     Train model
@@ -431,6 +479,12 @@ def train(rank,
     augmentation_schedule_pos = 0
     augmentation_probability = augmentation_probabilities[0]
 
+    w_weight_decay_depth = \
+        w_losses['w_weight_decay_depth'] if 'w_weight_decay_depth' in w_losses else 0.0
+    w_weight_decay_pose = \
+         w_losses['w_weight_decay_pose'] if 'w_weight_decay_pose' in w_losses else 0.0
+
+    # TODO: Set allow depth completion model to specify optimizer as a pointer
     optimizer_depth = torch.optim.Adam([
         {
             'params' : parameters_depth_model,
@@ -450,7 +504,6 @@ def train(rank,
 
     # Start training
     depth_completion_model.convert_syncbn()
-    depth_completion_model.distributed_data_parallel(rank)
     depth_completion_model.train()
 
     train_step = 0
@@ -473,80 +526,9 @@ def train(rank,
 
     time_start = time.time()
 
-    amp_grad_scaler = amp.GradScaler()
-
-    if rank == 0:
-        log('Begin training...', log_path)
+    log('Begin training...', log_path)
 
     for epoch in range(1, learning_schedule[-1] + 1):
-
-        # Create dataloader for current epoch
-        train_input_paths_arr = zip(
-            n_train_samples,
-            train_image_paths_arr,
-            train_sparse_depth_paths_arr,
-            train_intrinsics_paths_arr,
-            train_ground_truth_paths_arr)
-
-        train_image_paths_epoch = []
-        train_sparse_depth_paths_epoch = []
-        train_intrinsics_paths_epoch = []
-        train_ground_truth_paths_epoch = []
-
-        for n, image_paths, sparse_depth_paths, intrinsics_paths, ground_truth_paths in train_input_paths_arr:
-
-            # Randomly elect training samples up to size of smallest dataset
-            idx_selected = np.random.permutation(range(n))[0:min_train_sample]
-
-            train_image_paths_epoch.extend(
-                (np.array(image_paths)[idx_selected]).tolist())
-
-            train_sparse_depth_paths_epoch.extend(
-                (np.array(sparse_depth_paths)[idx_selected]).tolist())
-
-            train_intrinsics_paths_epoch.extend(
-                (np.array(intrinsics_paths)[idx_selected]).tolist())
-
-            train_ground_truth_paths_epoch.extend(
-                (np.array(ground_truth_paths)[idx_selected]).tolist())
-
-        if supervision_type == 'supervised':
-            train_dataset = datasets.DepthCompletionSupervisedTrainingDataset(
-                image_paths=train_image_paths_epoch,
-                sparse_depth_paths=train_sparse_depth_paths_epoch,
-                intrinsics_paths=train_intrinsics_paths_epoch,
-                ground_truth_paths=train_ground_truth_paths_epoch,
-                random_crop_shape=(n_height, n_width),
-                random_crop_type=augmentation_random_crop_type)
-        elif supervision_type == 'unsupervised':
-            train_dataset = datasets.DepthCompletionMonocularTrainingDataset(
-                images_paths=train_image_paths_epoch,
-                sparse_depth_paths=train_sparse_depth_paths_epoch,
-                intrinsics_paths=train_intrinsics_paths_epoch,
-                random_crop_shape=(n_height, n_width),
-                random_crop_type=augmentation_random_crop_type)
-        else:
-            raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
-
-        train_sampler = get_sampler(
-            train_dataset,
-            ngpus_per_node=ngpus_per_node,
-            rank=rank,
-            seed=1234)
-
-        train_dataloader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=n_batch // ngpus_per_node,
-            shuffle=False,
-            sampler=train_sampler,
-            num_workers=n_thread,
-            pin_memory=False,
-            drop_last=True)
-
-        train_sampler.set_epoch(epoch)
-
-        if rank == 0:
-            pbar = tqdm.tqdm(total=len(train_dataloader), bar_format='{desc}{percentage:3.0f}%|{bar:10}{r_bar}')
 
         # Set learning rate schedule
         if epoch > learning_schedule[learning_schedule_pos]:
@@ -567,97 +549,117 @@ def train(rank,
             augmentation_schedule_pos = augmentation_schedule_pos + 1
             augmentation_probability = augmentation_probabilities[augmentation_schedule_pos]
 
-        for inputs in train_dataloader:
+        # TODO: If replay is available, incorporate it to training loop
+        if is_available_replay:
+            # TODO: One design is to add it to the list of train dataloaders at the setup stage
+            # Another is to have it in a separate loop to allow for separate logging
+            pass
+
+        # Zip all dataloaders together to get batches from each
+        train_dataloaders_epoch = tqdm.tqdm(
+            zip(*train_dataloaders),
+            desc='Epoch={}/{}'.format(epoch, learning_schedule[-1]))
+
+        for train_batches in train_dataloaders_epoch:
 
             train_step = train_step + 1
+            loss = 0.0
+            loss_info = {}
 
-            # Fetch data
-            inputs = [
-                in_.to(device) for in_ in inputs
-            ]
+            '''
+            Iterate over batches from different datasets
+            '''
+            for dataset_id, train_batch in enumerate(train_batches):
 
-            if supervision_type == 'supervised':
-                image0, \
-                    sparse_depth0, \
-                    intrinsics, \
-                    ground_truth0 = inputs
+                # Fetch data
+                train_batch = [
+                    in_.to(device) for in_ in train_batch
+                ]
 
-                image1 = image0.detach().clone()
-                image2 = image0.detach().clone()
-            elif supervision_type == 'unsupervised':
-                image0, \
-                    image1, \
-                    image2, \
-                    sparse_depth0, \
-                    intrinsics = inputs
+                if supervision_type == 'supervised':
+                    image0, \
+                        sparse_depth0, \
+                        intrinsics, \
+                        ground_truth0 = train_batch
 
-                ground_truth0 = None
-            else:
-                raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
+                    image1 = image0.detach().clone()
+                    image2 = image0.detach().clone()
+                elif supervision_type == 'unsupervised':
+                    image0, \
+                        image1, \
+                        image2, \
+                        sparse_depth0, \
+                        intrinsics = train_batch
 
-            # Validity map is where sparse depth is available
-            validity_map0 = torch.where(
-                sparse_depth0 > 0,
-                torch.ones_like(sparse_depth0),
-                sparse_depth0)
+                    ground_truth0 = None
+                else:
+                    raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
 
-            # Perform geometric augmentation i.e. crop, flip, etc. on the input image
-            [input_image0, input_sparse_depth0, input_validity_map0], \
-                [input_intrinsics], \
-                transform_performed_geometric = train_transforms_geometric.transform(
-                    images_arr=[image0, sparse_depth0, validity_map0],
-                    intrinsics_arr=[intrinsics],
-                    padding_modes=padding_modes,
-                    interpolation_modes=interpolation_modes,
+                # Validity map is where sparse depth is available
+                validity_map0 = torch.where(
+                    sparse_depth0 > 0,
+                    torch.ones_like(sparse_depth0),
+                    sparse_depth0)
+
+                # Perform geometric augmentation i.e. crop, flip, etc. on the input image
+                [input_image0, input_sparse_depth0, input_validity_map0], \
+                    [input_intrinsics], \
+                    transform_performed_geometric = train_transforms_geometric.transform(
+                        images_arr=[image0, sparse_depth0, validity_map0],
+                        intrinsics_arr=[intrinsics],
+                        padding_modes=padding_modes,
+                        interpolation_modes=interpolation_modes,
+                        random_transform_probability=augmentation_probability)
+
+                # TODO: Refactor this as a function inside transforms
+                # Erode to prevent block artifacts from resampling
+                if 'random_resize_to_shape' in transform_performed_geometric:
+                    _, factor = transform_performed_geometric['random_resize_to_shape']
+
+                    # Erode if factor greater than 1
+                    if factor > 1:
+                        erosion_kernel = torch.tensor([
+                            [1., 1., 1.],
+                            [1., 1., 1.],
+                            [1., 1., 1.]], device=device)
+
+                        erosion_map0 = torch.nn.functional.conv2d(
+                            input_validity_map0,
+                            erosion_kernel.view(1, 1, 3, 3),
+                            padding='same')
+
+                        # Keep single point
+                        single_point_map0 = torch.where(
+                            erosion_map0 == 1,
+                            torch.ones_like(erosion_map0),
+                            torch.zeros_like(erosion_map0))
+
+                        # Erode multiple points
+                        multi_point_map0 = torch.where(
+                            erosion_map0 > 9,
+                            torch.ones_like(erosion_map0),
+                            torch.zeros_like(erosion_map0))
+
+                        input_validity_map0 = torch.where(
+                            single_point_map0 + multi_point_map0 > 0,
+                            torch.ones_like(input_validity_map0),
+                            torch.zeros_like(input_validity_map0))
+
+                        input_sparse_depth0 = input_sparse_depth0 * input_validity_map0
+
+                # Perform point removal from sparse depth
+                [input_sparse_depth0], _ = train_transforms_point_cloud.transform(
+                    images_arr=[input_sparse_depth0],
                     random_transform_probability=augmentation_probability)
 
-            # Erode to prevent block artifacts from resampling
-            if 'random_resize_to_shape' in transform_performed_geometric:
-                _, factor = transform_performed_geometric['random_resize_to_shape']
+                # Perform photometric augmentation i.e. masking, brightness, contrast, etc. on the input image
+                [input_image0], _ = train_transforms_photometric.transform(
+                    images_arr=[input_image0],
+                    random_transform_probability=augmentation_probability)
 
-                # Erode if factor greater than 1
-                if factor > 1:
-                    erosion_kernel = torch.tensor([
-                        [1., 1., 1.],
-                        [1., 1., 1.],
-                        [1., 1., 1.]], device=device)
-
-                    erosion_map0 = torch.nn.functional.conv2d(
-                        input_validity_map0,
-                        erosion_kernel.view(1, 1, 3, 3),
-                        padding='same')
-
-                    # Keep single point
-                    single_point_map0 = torch.where(
-                        erosion_map0 == 1,
-                        torch.ones_like(erosion_map0),
-                        torch.zeros_like(erosion_map0))
-
-                    # Erode multiple points
-                    multi_point_map0 = torch.where(
-                        erosion_map0 > 9,
-                        torch.ones_like(erosion_map0),
-                        torch.zeros_like(erosion_map0))
-
-                    input_validity_map0 = torch.where(
-                        single_point_map0 + multi_point_map0 > 0,
-                        torch.ones_like(input_validity_map0),
-                        torch.zeros_like(input_validity_map0))
-
-                    input_sparse_depth0 = input_sparse_depth0 * input_validity_map0
-
-            # Perform point removal from sparse depth
-            [input_sparse_depth0], _ = train_transforms_point_cloud.transform(
-                images_arr=[input_sparse_depth0],
-                random_transform_probability=augmentation_probability)
-
-            # Perform photometric augmentation i.e. masking, brightness, contrast, etc. on the input image
-            [input_image0], _ = train_transforms_photometric.transform(
-                images_arr=[input_image0],
-                random_transform_probability=augmentation_probability)
-
-            with amp.autocast():
-                # Forward through the network
+                '''
+                Forward through the network and compute loss
+                '''
                 # Inputs: augmented image, augmented sparse depth map, original (but aligned) validity map
                 output_depth0 = depth_completion_model.forward_depth(
                     image=input_image0,
@@ -673,21 +675,21 @@ def train(rank,
                     pose0to1 = None
                     pose0to2 = None
 
-            # For visualization
-            if (train_step % n_step_per_summary) == 0:
-                output_depth0_initial = output_depth0[0].detach().clone()
+                # For visualization
+                if (train_step % n_step_per_summary) == 0:
+                    output_depth0_initial = output_depth0[0].detach().clone()
 
-            output_depth0, validity_map_image0 = train_transforms_geometric.reverse_transform(
-                images_arr=output_depth0,
-                transform_performed=transform_performed_geometric,
-                return_all_outputs=True,
-                padding_modes=[padding_modes[0]])
+                output_depth0, validity_map_image0 = train_transforms_geometric.reverse_transform(
+                    images_arr=output_depth0,
+                    transform_performed=transform_performed_geometric,
+                    return_all_outputs=True,
+                    padding_modes=[padding_modes[0]])
 
-            # Compute loss function
-            validity_map_depth0 = validity_map0
+                # Compute loss function
+                validity_map_depth0 = validity_map0
 
-            with amp.autocast():
-                loss, loss_info = depth_completion_model.compute_loss(
+                # TODO: Add argument to allow frozen model to be passed in
+                loss_batch, loss_info_batch = depth_completion_model.compute_loss(
                     image0=image0,
                     image1=image1,
                     image2=image2,
@@ -702,106 +704,118 @@ def train(rank,
                     supervision_type=supervision_type,
                     w_losses=w_losses)
 
-            # Compute gradient and backpropagate
-            loss = loss / n_step_grad_acc
+                # Accumulate loss over batches and update loss info
+                loss = loss + loss_batch
 
-            amp_grad_scaler.scale(loss).backward()
+                '''
+                Log training summary
+                '''
+                if (train_step % n_step_per_summary) == 0:
 
-            if (train_step + 1) % n_step_grad_acc == 0:
-                amp_grad_scaler.unscale_(optimizer_depth)
-                amp_grad_scaler.step(optimizer_depth)
-                optimizer_depth.zero_grad()
+                    if supervision_type == 'unsupervised':
+                        image1to0 = loss_info.pop('image1to0')
+                        image2to0 = loss_info.pop('image2to0')
+                    else:
+                        image1to0 = image0
+                        image2to0 = image0
 
-                if supervision_type == 'unsupervised':
-                    amp_grad_scaler.unscale_(optimizer_pose)
-                    amp_grad_scaler.step(optimizer_pose)
-                    optimizer_pose.zero_grad()
+                    for key, value in loss_info_batch.items():
+                        if key in loss_info:
+                            loss_info[key] = loss_info[key] + value
+                        else:
+                            loss_info[key] = value
 
-                amp_grad_scaler.update()
+                    # Log summary
+                    depth_completion_model.log_summary(
+                        summary_writer=train_summary_writer,
+                        tag='inputs' + '-{}'.format(dataset_id),
+                        step=train_step,
+                        image0=input_image0,
+                        output_depth0=output_depth0_initial.detach().clone(),
+                        sparse_depth0=input_sparse_depth0,
+                        validity_map0=input_validity_map0,
+                        n_image_per_summary=min(batch_size, n_image_per_summary))
 
-            if (train_step % n_step_per_summary) == 0 and rank == 0:
+                    depth_completion_model.log_summary(
+                        summary_writer=train_summary_writer,
+                        tag='train' + '-{}'.format(dataset_id),
+                        step=train_step,
+                        image0=image0,
+                        image1to0=image1to0.detach().clone(),
+                        image2to0=image2to0.detach().clone(),
+                        output_depth0=output_depth0[0].detach().clone(),
+                        sparse_depth0=sparse_depth0,
+                        validity_map0=validity_map0,
+                        ground_truth0=ground_truth0,
+                        pose0to1=pose0to1,
+                        pose0to2=pose0to2,
+                        scalars=loss_info_batch,
+                        n_image_per_summary=min(batch_size, n_image_per_summary))
 
-                if supervision_type == 'unsupervised':
-                    image1to0 = loss_info.pop('image1to0')
-                    image2to0 = loss_info.pop('image2to0')
-                else:
-                    image1to0 = image0
-                    image2to0 = image0
+            '''
+            Compute gradient and backpropagate
+            '''
+            loss.backward()
 
-                # Log summary
+            optimizer_depth.zero_grad()
+            optimizer_depth.step()
+
+            if supervision_type == 'unsupervised':
+                optimizer_pose.zero_grad()
+                optimizer_pose.step()
+
+            '''
+            Log results and save checkpoints
+            '''
+            if (train_step % n_step_per_summary) == 0:
+
                 depth_completion_model.log_summary(
                     summary_writer=train_summary_writer,
-                    tag='inputs',
+                    tag='train' ,
                     step=train_step,
-                    image0=input_image0,
-                    output_depth0=output_depth0_initial.detach().clone(),
-                    sparse_depth0=input_sparse_depth0,
-                    validity_map0=input_validity_map0,
-                    n_image_per_summary=min(n_batch, n_image_per_summary))
+                    scalars=loss_info_batch)
 
-                depth_completion_model.log_summary(
-                    summary_writer=train_summary_writer,
-                    tag='train',
-                    step=train_step,
-                    image0=image0,
-                    image1to0=image1to0.detach().clone(),
-                    image2to0=image2to0.detach().clone(),
-                    output_depth0=output_depth0[0].detach().clone(),
-                    sparse_depth0=sparse_depth0,
-                    validity_map0=validity_map0,
-                    ground_truth0=ground_truth0,
-                    pose0to1=pose0to1,
-                    pose0to2=pose0to2,
-                    scalars=loss_info,
-                    n_image_per_summary=min(n_batch, n_image_per_summary))
+            if (train_step % n_step_per_checkpoint) == 0:
 
-            if rank == 0:
                 time_elapse = (time.time() - time_start) / 3600
                 time_remain = (n_train_step - train_step) * time_elapse / train_step
 
-                pbar.set_description(
-                    'Step={:6}/{}  Loss={:.5f}  Time Elapsed={:.2f}h  Time Remaining={:.2f}h'.format(
-                        train_step, n_train_step, loss.item(), time_elapse, time_remain))
-                pbar.update(1)
+                log('Step={:6}/{}  Loss={:.5f}  Time Elapsed={:.2f}h  Time Remaining={:.2f}h'.format(
+                    train_step, n_train_step, loss.item(), time_elapse, time_remain),
+                    log_path)
 
-                # Log results and save checkpoints
-                if (train_step % n_step_per_checkpoint) == 0:
+                if train_step >= start_step_validation and is_available_validation:
+                    # Switch to validation mode
+                    depth_completion_model.eval()
 
-                    log('Step={:6}/{}  Loss={:.5f}  Time Elapsed={:.2f}h  Time Remaining={:.2f}h'.format(
-                        train_step, n_train_step, loss.item(), time_elapse, time_remain),
-                        log_path)
+                    with torch.no_grad():
+                        # Perform validation
+                        best_results = validate(
+                            depth_model=depth_completion_model,
+                            dataloader=val_dataloader,
+                            step=train_step,
+                            best_results=best_results,
+                            min_evaluate_depth=min_evaluate_depth,
+                            max_evaluate_depth=max_evaluate_depth,
+                            evaluation_protocol=evaluation_protocol,
+                            device=device,
+                            summary_writer=val_summary_writer,
+                            n_image_per_summary=n_image_per_summary,
+                            log_path=log_path)
 
-                    if train_step >= start_step_validation and is_available_validation:
-                        # Switch to validation mode
-                        depth_completion_model.eval()
+                    # Switch back to training
+                    depth_completion_model.train()
 
-                        with torch.no_grad():
-                            # Perform validation
-                            best_results = validate(
-                                depth_model=depth_completion_model,
-                                dataloader=val_dataloader,
-                                step=train_step,
-                                best_results=best_results,
-                                min_evaluate_depth=min_evaluate_depth,
-                                max_evaluate_depth=max_evaluate_depth,
-                                evaluation_protocol=evaluation_protocol,
-                                device=device,
-                                summary_writer=val_summary_writer,
-                                n_image_per_summary=n_image_per_summary,
-                                log_path=log_path)
+                # Save checkpoints
+                depth_completion_model.save_model(
+                    checkpoint_dirpath.format(train_step),
+                    train_step,
+                    optimizer_depth,
+                    optimizer_pose)
 
-                        # Switch back to training
-                        depth_completion_model.train()
-
-                    # Save checkpoints
-                    depth_completion_model.save_model(
-                        checkpoint_dirpath.format(train_step),
-                        train_step,
-                        optimizer_depth,
-                        optimizer_pose)
-
-    if rank == 0:
-        # Perform validation for final step
+        '''
+        Perform validation for final step and save checkpoint
+        '''
         depth_completion_model.eval()
 
         with torch.no_grad():
@@ -824,8 +838,6 @@ def train(rank,
             train_step,
             optimizer_depth,
             optimizer_pose)
-
-    dist.barrier()
 
 def validate(depth_model,
              dataloader,
@@ -1277,50 +1289,6 @@ def run(image_path,
 '''
 Helper functions for logging
 '''
-def log_input_settings(log_path,
-                       input_channels_image=None,
-                       input_channels_depth=None,
-                       normalized_image_range=None,
-                       n_batch=None,
-                       n_height=None,
-                       n_width=None):
-
-    batch_settings_text = ''
-    batch_settings_vars = []
-
-    if n_batch is not None:
-        batch_settings_text = batch_settings_text + 'n_batch={}'
-        batch_settings_vars.append(n_batch)
-
-    batch_settings_text = \
-        batch_settings_text + '  ' if len(batch_settings_text) > 0 else batch_settings_text
-
-    if n_height is not None:
-        batch_settings_text = batch_settings_text + 'n_height={}'
-        batch_settings_vars.append(n_height)
-
-    batch_settings_text = \
-        batch_settings_text + '  ' if len(batch_settings_text) > 0 else batch_settings_text
-
-    if n_width is not None:
-        batch_settings_text = batch_settings_text + 'n_width={}'
-        batch_settings_vars.append(n_width)
-
-    if input_channels_depth is not None and input_channels_image is not None and normalized_image_range is not None:
-        log('Input settings:', log_path)
-
-        if len(batch_settings_vars) > 0:
-            log(batch_settings_text.format(*batch_settings_vars),
-                log_path)
-
-        log('input_channels_image={}  input_channels_depth={}'.format(
-            input_channels_image, input_channels_depth),
-            log_path)
-        log('normalized_image_range={}'.format(normalized_image_range),
-            log_path)
-
-    log('', log_path)
-
 def log_network_settings(log_path,
                          # Depth network settings
                          model_name,
@@ -1383,13 +1351,13 @@ def log_network_settings(log_path,
 
 def log_training_settings(log_path,
                           # Training settings
-                          n_batch,
+                          train_batch_sizes,
+                          train_crop_shapes,
                           n_train_sample,
                           n_train_step,
                           # Learning rate settings
                           learning_rates,
                           learning_schedule,
-                          n_step_grad_acc,
                           # Augmentation settings
                           augmentation_probabilities,
                           augmentation_schedule,
@@ -1420,23 +1388,29 @@ def log_training_settings(log_path,
                           augmentation_random_remove_patch_percent_range_depth,
                           augmentation_random_remove_patch_size_depth):
 
+    log('Batch settings', log_path)
+    log('batch_size={}'.format(sum(train_batch_sizes)),
+        log_path)
+    for batch_size, crop_shape in zip(train_batch_sizes, train_crop_shapes):
+        log('n_batch={}  n_height={}  n_width={}'.format(batch_size, crop_shape[0], crop_shape[1]),
+            log_path)
+
     log('Training settings:', log_path)
     log('n_sample={}  n_epoch={}  n_step={}'.format(
         n_train_sample, learning_schedule[-1], n_train_step),
         log_path)
+
     log('learning_schedule=[%s]' %
         ', '.join('{}-{} : {}'.format(
-            ls * (n_train_sample // n_batch), le * (n_train_sample // n_batch), v)
+            ls * (n_train_sample // train_batch_sizes[0]), le * (n_train_sample // train_batch_sizes[0]), v)
             for ls, le, v in zip([0] + learning_schedule[:-1], learning_schedule, learning_rates)),
-        log_path)
-    log('n_step_grad_acc={}'.format(n_step_grad_acc),
         log_path)
     log('', log_path)
 
     log('Augmentation settings:', log_path)
     log('augmentation_schedule=[%s]' %
         ', '.join('{}-{} : {}'.format(
-            ls * (n_train_sample // n_batch), le * (n_train_sample // n_batch), v)
+            ls * (n_train_sample // train_batch_sizes[0]), le * (n_train_sample // train_batch_sizes[0]), v)
             for ls, le, v in zip([0] + augmentation_schedule[:-1], augmentation_schedule, augmentation_probabilities)),
         log_path)
     log('Photometric data augmentations:', log_path)
@@ -1491,9 +1465,7 @@ def log_training_settings(log_path,
 def log_loss_func_settings(log_path,
                            # Loss function settings
                            supervision_type,
-                           w_losses,
-                           w_weight_decay_depth,
-                           w_weight_decay_pose):
+                           w_losses):
 
     w_losses_text = ''
     for idx, (key, value) in enumerate(w_losses.items()):
@@ -1506,9 +1478,6 @@ def log_loss_func_settings(log_path,
     log('Loss function settings:', log_path)
     log('supervision_type={}'.format(supervision_type), log_path)
     log(w_losses_text, log_path)
-    log('w_weight_decay_depth={:.1e}  w_weight_decay_pose={:.1e}'.format(
-        w_weight_decay_depth, w_weight_decay_pose),
-        log_path)
     log('', log_path)
 
 def log_evaluation_settings(log_path,
