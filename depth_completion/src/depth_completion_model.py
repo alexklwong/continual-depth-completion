@@ -422,6 +422,10 @@ class DepthCompletionModel(object):
                 display_summary_image_text += '_image0'
                 display_summary_depth_text += '_image0'
 
+                # Normalize for display if necessary
+                if torch.max(image0_summary) > 1:
+                    image0_summary = image0_summary / 255.0
+
                 # Add to list of images to log
                 display_summary_image.append(
                     torch.cat([
@@ -435,6 +439,10 @@ class DepthCompletionModel(object):
                 image1to0_summary = image1to0[0:n_image_per_summary, ...]
 
                 display_summary_image_text += '_image1to0-error'
+
+                # Normalize for display if necessary
+                if torch.max(image1to0_summary) > 1:
+                    image1to0_summary = image1to0_summary / 255.0
 
                 # Compute reconstruction error w.r.t. image 0
                 image1to0_error_summary = torch.mean(
@@ -457,6 +465,10 @@ class DepthCompletionModel(object):
                 image2to0_summary = image2to0[0:n_image_per_summary, ...]
 
                 display_summary_image_text += '_image2to0-error'
+
+                # Normalize for display if necessary
+                if torch.max(image2to0_summary) > 1:
+                    image2to0_summary = image2to0_summary / 255.0
 
                 # Compute reconstruction error w.r.t. image 0
                 image2to0_error_summary = torch.mean(

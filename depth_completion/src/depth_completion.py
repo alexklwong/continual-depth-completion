@@ -222,9 +222,9 @@ def train(train_image_paths,
                 random_crop_type=augmentation_random_crop_type)
         elif supervision_type == 'unsupervised':
             train_dataset = datasets.DepthCompletionMonocularTrainingDataset(
-                images_paths=train_image_paths,
-                sparse_depth_paths=train_sparse_depth_paths,
-                intrinsics_paths=train_intrinsics_paths,
+                images_paths=image_paths,
+                sparse_depth_paths=sparse_depth_paths,
+                intrinsics_paths=intrinsics_paths,
                 random_crop_shape=crop_shape,
                 random_crop_type=augmentation_random_crop_type)
         else:
@@ -233,7 +233,7 @@ def train(train_image_paths,
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset,
             batch_size=batch_size,
-            shuffle=False,
+            shuffle=True,
             num_workers=n_thread,
             pin_memory=False,
             drop_last=True)
@@ -503,7 +503,6 @@ def train(train_image_paths,
         optimizer_pose = None
 
     # Start training
-    depth_completion_model.convert_syncbn()
     depth_completion_model.train()
 
     train_step = 0
@@ -558,10 +557,10 @@ def train(train_image_paths,
         # Zip all dataloaders together to get batches from each
         train_dataloaders_epoch = tqdm.tqdm(
             zip(*train_dataloaders),
-            desc='Epoch={}/{}'.format(epoch, learning_schedule[-1]))
+            desc='Epoch: {}/{}  Batch'.format(epoch, learning_schedule[-1]),
+            total=n_train_sample)
 
         for train_batches in train_dataloaders_epoch:
-
             train_step = train_step + 1
             loss = 0.0
             loss_info = {}
@@ -713,8 +712,8 @@ def train(train_image_paths,
                 if (train_step % n_step_per_summary) == 0:
 
                     if supervision_type == 'unsupervised':
-                        image1to0 = loss_info.pop('image1to0')
-                        image2to0 = loss_info.pop('image2to0')
+                        image1to0 = loss_info_batch.pop('image1to0')
+                        image2to0 = loss_info_batch.pop('image2to0')
                     else:
                         image1to0 = image0
                         image2to0 = image0
@@ -1391,8 +1390,9 @@ def log_training_settings(log_path,
     log('Batch settings', log_path)
     log('batch_size={}'.format(sum(train_batch_sizes)),
         log_path)
-    for batch_size, crop_shape in zip(train_batch_sizes, train_crop_shapes):
-        log('n_batch={}  n_height={}  n_width={}'.format(batch_size, crop_shape[0], crop_shape[1]),
+    for dataset_id, (batch_size, crop_shape) in enumerate(zip(train_batch_sizes, train_crop_shapes)):
+        log('dataset_id={}  n_batch={}  n_height={}  n_width={}'.format(
+            dataset_id, batch_size, crop_shape[0], crop_shape[1]),
             log_path)
 
     log('Training settings:', log_path)
