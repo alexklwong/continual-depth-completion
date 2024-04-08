@@ -244,6 +244,7 @@ def train(train_image_paths,
     # Note: zipping up iterators will truncate based on shortest one
     min_train_sample = min(n_train_samples)
     n_train_sample = min_train_sample * len(n_train_samples)
+    n_step_per_epoch = min([len(dataloader) for dataloader in train_dataloaders])
 
     n_train_step = \
         learning_schedule[-1] * np.floor(n_train_sample / train_batch_size).astype(np.int32)
@@ -566,7 +567,7 @@ def train(train_image_paths,
         train_dataloaders_epoch = tqdm.tqdm(
             zip(*train_dataloaders),
             desc='Epoch: {}/{}  Batch'.format(epoch, learning_schedule[-1]),
-            total=n_train_sample)
+            total=n_step_per_epoch)
 
         for train_batches in train_dataloaders_epoch:
             train_step = train_step + 1
@@ -762,13 +763,16 @@ def train(train_image_paths,
             '''
             Compute gradient and backpropagate
             '''
-            loss.backward()
-
             optimizer_depth.zero_grad()
-            optimizer_depth.step()
 
             if supervision_type == 'unsupervised':
                 optimizer_pose.zero_grad()
+
+            loss.backward()
+
+            optimizer_depth.step()
+
+            if supervision_type == 'unsupervised':
                 optimizer_pose.step()
 
             '''

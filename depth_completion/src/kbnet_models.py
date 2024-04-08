@@ -103,7 +103,8 @@ class KBNetModel(object):
                 validity_map=validity_map)
 
         # Normalize image between [0, 1]
-        image = image / 255.0
+        if torch.max(image) > 1.0:
+            image = image / 255.0
 
         return image, sparse_depth, filtered_validity_map
 
@@ -158,6 +159,11 @@ class KBNetModel(object):
         '''
 
         assert self.model_pose is not None
+
+        # Normalize image between [0, 1]
+        image0, image1 = [
+            image / 255.0 for image in [image0, image1] if torch.max(image) > 1.0
+        ]
 
         return self.model_pose.forward(image0, image1)
 
@@ -229,7 +235,7 @@ class KBNetModel(object):
 
         # Normalize images between [0, 1]
         image0, image1, image2 = [
-            image / 255.0 for image in [image0, image1, image2]
+            image / 255.0 for image in [image0, image1, image2] if torch.max(image) > 1.0
         ]
 
         loss, loss_info = self.model_depth.compute_loss(
