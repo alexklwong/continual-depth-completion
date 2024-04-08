@@ -933,11 +933,11 @@ def validate(depth_model,
             # bottom crop
             end_y = height
             start_y = end_y - crop_height
-            output_depth = output_depth[..., start_y:end_y, start_x:end_x]
-            ground_truth = ground_truth[..., start_y:end_y, start_x:end_x]
+            output_depth = output_depth[start_y:end_y, start_x:end_x]
+            ground_truth = ground_truth[start_y:end_y, start_x:end_x]
 
         # Select valid regions to evaluate
-        validity_mask = np.where(np.squeeze(validity_map.cpu().numpy()) > 0, 1, 0)
+        validity_mask = np.where(ground_truth > 0, 1, 0)
 
         min_max_mask = np.logical_and(
             ground_truth > min_evaluate_depth,

@@ -80,7 +80,8 @@ class VOICEDModel(object):
         '''
 
         # Normalize image between [0, 1]
-        image = image / 255.0
+        if torch.max(image) > 1.0:
+            image = image / 255.0
 
         return image, sparse_depth, validity_map
 
@@ -132,6 +133,11 @@ class VOICEDModel(object):
         '''
 
         assert self.model_pose is not None
+
+        # Normalize image between [0, 1]
+        image0, image1 = [
+            image / 255.0 for image in [image0, image1] if torch.max(image) > 1.0
+        ]
 
         return self.model_pose.forward(image0, image1)
 
@@ -206,7 +212,7 @@ class VOICEDModel(object):
 
         # Normalize images between [0, 1]
         image0, image1, image2 = [
-            image / 255.0 for image in [image0, image1, image2]
+            image / 255.0 for image in [image0, image1, image2] if torch.max(image) > 1.0
         ]
 
         # Compute pose from 1 to 0 and 2 to 0 for pose consistency loss

@@ -133,8 +133,9 @@ class FusionNetModel(object):
                 sparse_depth=sparse_depth,
                 validity_map=validity_map)
 
-        # Normalize images between [0, 1]
-        image = image / 255.0
+        # Normalize image between [0, 1]
+        if torch.max(image) > 1.0:
+            image = image / 255.0
 
         return image, filtered_sparse_depth, filtered_validity_map
 
@@ -201,6 +202,11 @@ class FusionNetModel(object):
         '''
 
         assert self.model_pose is not None
+
+        # Normalize image between [0, 1]
+        image0, image1 = [
+            image / 255.0 for image in [image0, image1] if torch.max(image) > 1.0
+        ]
 
         return self.model_pose.forward(image0, image1)
 
@@ -280,7 +286,7 @@ class FusionNetModel(object):
 
         # Normalize images between [0, 1]
         image0, image1, image2 = [
-            image / 255.0 for image in [image0, image1, image2]
+            image / 255.0 for image in [image0, image1, image2] if torch.max(image) > 1.0
         ]
 
         # Compute loss function
