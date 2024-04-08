@@ -230,7 +230,7 @@ if __name__ == '__main__':
         supervision_type=args.supervision_type,
         w_losses=args.w_losses,
         # Evaluation settings
-        min_evaluate_dept=args.min_evaluate_depth,
+        min_evaluate_depth=args.min_evaluate_depth,
         max_evaluate_depth=args.max_evaluate_depth,
         evaluation_protocol=args.evaluation_protocol,
         # Checkpoint settings

@@ -813,31 +813,31 @@ def train(train_image_paths,
                     optimizer_depth,
                     optimizer_pose)
 
-        '''
-        Perform validation for final step and save checkpoint
-        '''
-        depth_completion_model.eval()
+    '''
+    Perform validation for final step and save checkpoint
+    '''
+    depth_completion_model.eval()
 
-        with torch.no_grad():
-            best_results = validate(
-                depth_model=depth_completion_model,
-                dataloader=val_dataloader,
-                step=train_step,
-                best_results=best_results,
-                min_evaluate_depth=min_evaluate_depth,
-                max_evaluate_depth=max_evaluate_depth,
-                evaluation_protcol=evaluation_protocol,
-                device=device,
-                summary_writer=val_summary_writer,
-                n_image_per_summary=n_image_per_summary,
-                log_path=log_path)
+    with torch.no_grad():
+        best_results = validate(
+            depth_model=depth_completion_model,
+            dataloader=val_dataloader,
+            step=train_step,
+            best_results=best_results,
+            min_evaluate_depth=min_evaluate_depth,
+            max_evaluate_depth=max_evaluate_depth,
+            evaluation_protocol=evaluation_protocol,
+            device=device,
+            summary_writer=val_summary_writer,
+            n_image_per_summary=n_image_per_summary,
+            log_path=log_path)
 
-        # Save checkpoints
-        depth_completion_model.save_model(
-            checkpoint_dirpath.format(train_step),
-            train_step,
-            optimizer_depth,
-            optimizer_pose)
+    # Save checkpoints
+    depth_completion_model.save_model(
+        checkpoint_dirpath.format(train_step),
+        train_step,
+        optimizer_depth,
+        optimizer_pose)
 
 def validate(depth_model,
              dataloader,
@@ -924,7 +924,7 @@ def validate(depth_model,
             ground_truth = ground_truth[..., start_y:end_y, start_x:end_x]
 
         # Select valid regions to evaluate
-        validity_mask = np.where(validity_map > 0, 1, 0)
+        validity_mask = np.where(np.squeeze(validity_map.cpu().numpy()) > 0, 1, 0)
 
         min_max_mask = np.logical_and(
             ground_truth > min_evaluate_depth,
