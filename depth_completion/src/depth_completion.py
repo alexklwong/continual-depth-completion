@@ -359,17 +359,25 @@ def train(train_image_paths,
     Log input paths
     '''
     log('Training input paths:', log_path)
-    train_input_paths = \
-        train_image_paths + \
-        train_sparse_depth_paths + \
+
+    train_input_paths = [
+        train_image_paths,
+        train_sparse_depth_paths,
         train_intrinsics_paths
+    ]
 
     if is_available_ground_truth:
         train_input_paths.append(train_ground_truth_paths)
+    else:
+        train_input_paths.append([None] * len(train_image_paths))
 
-    for path in train_input_paths:
-        if path is not None:
-            log(path, log_path)
+    for dataset_id, paths in enumerate(zip(*train_input_paths)):
+
+        log('dataset_id={}'.format(dataset_id))
+        for path in paths:
+            if path is not None:
+                log(path, log_path)
+
     log('', log_path)
 
     # TODO: if replay filepaths is available then log paths
@@ -786,6 +794,8 @@ def train(train_image_paths,
                 if train_step >= start_step_validation and is_available_validation:
                     # Switch to validation mode
                     depth_completion_model.eval()
+
+                    # TODO: Support validating multiple datasets with a loop over validation dataloaders
 
                     with torch.no_grad():
                         # Perform validation

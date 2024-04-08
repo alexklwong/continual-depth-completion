@@ -138,7 +138,8 @@ class DepthCompletionModel(object):
                      pose0to2,
                      ground_truth0=None,
                      supervision_type='unsupervised',
-                     w_losses={}):
+                     w_losses={},
+                     frozen_model=None):
         '''
         Call model's compute loss function
 
@@ -169,10 +170,14 @@ class DepthCompletionModel(object):
                 type of supervision for training
             w_losses : dict[str, float]
                 dictionary of weights for each loss
+            frozen_model : object
+                instance of pretrained model frozen for loss computations
         Returns:
             float : loss averaged over the batch
             dict[str, float] : loss info
         '''
+
+        # TODO: Add frozen model as argument to loss computation (i.e. EWC, LWF)
 
         if supervision_type == 'supervised':
             return self.model.compute_loss(
