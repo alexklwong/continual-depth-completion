@@ -778,7 +778,7 @@ class Transforms(object):
                           transform_performed,
                           padding_modes=['edge'],
                           return_all_outputs=True,
-                          do_scale_reverse=True):
+                          do_scale_reverse=False):
         '''
         TODO: Docstring
         '''
