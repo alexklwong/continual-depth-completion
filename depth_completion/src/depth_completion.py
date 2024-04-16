@@ -10,6 +10,8 @@ from depth_completion_model import DepthCompletionModel
 from utils.src.transforms import Transforms
 from PIL import Image
 
+from losses import compute_fisher
+
 
 def train(train_image_paths,
           train_sparse_depth_paths,
@@ -69,7 +71,7 @@ def train(train_image_paths,
           supervision_type,
           w_losses,
           # TODO: Uncomment to use frozen model for loss
-          # frozen_model_paths,
+          frozen_model_paths,
           # Evaluation settings
           min_evaluate_depth,
           max_evaluate_depth,
@@ -352,6 +354,25 @@ def train(train_image_paths,
     # TODO: If using loss based (e.g. EWC or LWF) then create another instance of the model
     # Also will need to introduce an argument for restoring weights from previous dataset
 
+    if len(frozen_model_paths) > 0:
+        frozen_model =  DepthCompletionModel(
+            model_name=model_name,
+            network_modules=network_modules,
+            min_predict_depth=min_predict_depth,
+            max_predict_depth=max_predict_depth,
+            device=device)
+
+        frozen_model.restore_model(frozen_model_paths)
+        frozen_model.eval()
+    else:
+        frozen_model = None
+
+    if w_losses['w_ewc']:
+        fisher_info = []
+        for param in parameters_depth_model:
+            fisher_info.append(torch.zeros_like(param.data))
+
+
     # Set up tensorboard summary writers
     train_summary_writer = SummaryWriter(event_path + '-train')
     val_summary_writer = SummaryWriter(event_path + '-val')
@@ -563,6 +584,11 @@ def train(train_image_paths,
             # Another is to have it in a separate loop to allow for separate logging
             pass
 
+        if w_losses['w_ewc']:
+            fisher_info_epoch = []
+            for param in parameters_depth_model:
+                fisher_info_epoch.append(torch.zeros_like(param.data))
+
         # Zip all dataloaders together to get batches from each
         train_dataloaders_epoch = tqdm.tqdm(
             zip(*train_dataloaders),
@@ -710,7 +736,8 @@ def train(train_image_paths,
                     pose0to1=pose0to1,
                     pose0to2=pose0to2,
                     supervision_type=supervision_type,
-                    w_losses=w_losses)
+                    w_losses=w_losses,
+                    frozen_model=frozen_model)
 
                 # Accumulate loss over batches and update loss info
                 loss = loss + loss_batch
@@ -775,6 +802,13 @@ def train(train_image_paths,
             if supervision_type == 'unsupervised':
                 optimizer_pose.step()
 
+            # Compute fisher information for EWC
+            if w_losses["w_ewc"]:
+                fisher_info_epoch = compute_fisher(
+                    fisher_info=fisher_info_epoch,
+                    params=depth_completion_model.parameters_depth(),
+                    normalization=len(train_dataloaders[0].dataset))
+
             '''
             Log results and save checkpoints
             '''
@@ -825,6 +859,18 @@ def train(train_image_paths,
                     train_step,
                     optimizer_depth,
                     optimizer_pose)
+
+                # TODO: Save Fisher Info for checkpoint
+                if w_losses['w_ewc']:
+                    depth_completion_model.save_fisher(
+                        checkpoint_dirpath.format(train_step),
+                        train_step,
+                        fisher_info)
+
+        # Update fisher at end of epoch
+        if w_losses['w_ewc']:
+            fisher_info = fisher_info_epoch
+
 
     '''
     Perform validation for final step and save checkpoint

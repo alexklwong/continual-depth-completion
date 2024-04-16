@@ -121,6 +121,8 @@ parser.add_argument('--w_losses',
     nargs='+', type=str, action=ParseStrFloatKeyValueAction, help='Weight of each loss term as key-value pairs: w_color=0.90 w_smoothness=2.00')
 
 # TODO: Add frozen model path(s)
+parser.add_argument('--frozen_model_paths',
+    nargs='+', type=str, default=[], help='Path to frozen models from checkpoint')
 
 # Evaluation settings
 parser.add_argument('--min_evaluate_depth',
@@ -229,6 +231,8 @@ if __name__ == '__main__':
         # Loss function settings
         supervision_type=args.supervision_type,
         w_losses=args.w_losses,
+        # Frozen model paths
+        frozen_model_paths=args.frozen_model_paths,
         # Evaluation settings
         min_evaluate_depth=args.min_evaluate_depth,
         max_evaluate_depth=args.max_evaluate_depth,
