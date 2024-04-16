@@ -1,5 +1,6 @@
 import os, torch, torchvision
 from utils.src import log_utils
+from losses import ewc_loss
 
 
 class DepthCompletionModel(object):
@@ -180,11 +181,11 @@ class DepthCompletionModel(object):
         # TODO: Add frozen model as argument to loss computation (i.e. EWC, LWF)
 
         if supervision_type == 'supervised':
-            return self.model.compute_loss(
+            loss = self.model.compute_loss(
                 target_depth=ground_truth0,
                 output_depth=output_depth0)
         elif supervision_type == 'unsupervised':
-            return self.model.compute_loss(
+            loss = self.model.compute_loss(
                 image0=image0,
                 image1=image1,
                 image2=image2,
@@ -198,6 +199,25 @@ class DepthCompletionModel(object):
                 w_losses=w_losses)
         else:
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
+
+        if w_losses['w_ewc']:
+            loss += ewc_loss(
+                current_params=self.model.parameters_depth(),
+                old_params=frozen_model.parameters_depth(),
+                lambda_ewc=w_losses['w_ewc'],
+                fisher_info=fisher_info)
+
+        return loss
+
+    def parameters(self):
+        '''
+        Returns the list of parameters in the model
+
+        Returns:
+            list[torch.Tensor[float32]] : list of parameters
+        '''
+
+        return self.model.parameters()
 
     def parameters_depth(self):
         '''
@@ -363,6 +383,10 @@ class DepthCompletionModel(object):
                 optimizer_pose=optimizer_pose)
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
+
+    # TODO add fisher matrix to model save
+    def save_fisher(self):
+        pass
 
     def log_summary(self,
                     summary_writer,
