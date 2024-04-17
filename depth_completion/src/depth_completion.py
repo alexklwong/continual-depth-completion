@@ -4,13 +4,13 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 sys.path.insert(0, os.getcwd())
 import datasets
-from utils.src import data_utils, eval_utils
+from utils.src import data_utils, eval_utils, net_utils
 from utils.src.log_utils import log
 from depth_completion_model import DepthCompletionModel
 from utils.src.transforms import Transforms
 from PIL import Image
 
-from losses import compute_fisher
+
 
 
 def train(train_image_paths,
@@ -287,6 +287,10 @@ def train(train_image_paths,
     padding_modes = ['edge', 'constant', 'constant', 'constant']
 
     # TODO: Load replay data if it is available
+
+    is_available_ewc = 'ewc' in network_modules
+
+
     is_available_replay = False
 
     if is_available_replay:
@@ -426,12 +430,6 @@ def train(train_image_paths,
         frozen_model.eval()
     else:
         frozen_model = None
-
-    if w_losses['w_ewc']:
-        fisher_info = []
-        for param in parameters_depth_model:
-            fisher_info.append(torch.zeros_like(param.data))
-
 
     # Set up tensorboard summary writers
     train_summary_writer = SummaryWriter(event_path + '-train')
@@ -650,11 +648,6 @@ def train(train_image_paths,
             # Another is to have it in a separate loop to allow for separate logging
             pass
 
-        if w_losses['w_ewc']:
-            fisher_info_epoch = []
-            for param in parameters_depth_model:
-                fisher_info_epoch.append(torch.zeros_like(param.data))
-
         # Zip all dataloaders together to get batches from each
         train_dataloaders_epoch = tqdm.tqdm(
             zip(*train_dataloaders),
@@ -870,11 +863,8 @@ def train(train_image_paths,
                 optimizer_pose.step()
 
             # Compute fisher information for EWC
-            if w_losses["w_ewc"]:
-                fisher_info_epoch = compute_fisher(
-                    fisher_info=fisher_info_epoch,
-                    params=depth_completion_model.parameters_depth(),
-                    normalization=len(train_dataloaders[0].dataset))
+            if is_available_ewc:
+                depth_completion_model.calculate_fisher(normalization=len(train_dataloaders[0].dataset))
 
             '''
             Log results and save checkpoints
@@ -927,16 +917,9 @@ def train(train_image_paths,
                     optimizer_depth,
                     optimizer_pose)
 
-                # TODO: Save Fisher Info for checkpoint
-                if w_losses['w_ewc']:
-                    depth_completion_model.save_fisher(
-                        checkpoint_dirpath.format(train_step),
-                        train_step,
-                        fisher_info)
-
-        # Update fisher at end of epoch
-        if w_losses['w_ewc']:
-            fisher_info = fisher_info_epoch
+        # update fisher at the end of epoch
+        if is_available_ewc:
+            depth_completion_model.update_fisher()
 
 
     '''
