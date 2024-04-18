@@ -22,7 +22,7 @@ def train(train_image_paths,
           # replay_intrinsics_path,
           # replay_ground_truth_paths,
           # Validation filepaths
-          val_image_paths,
+          val_image_paths,  # Added support for multiple val datasets
           val_sparse_depth_paths,
           val_intrinsics_paths,
           val_ground_truth_paths,
@@ -202,6 +202,7 @@ def train(train_image_paths,
         train_batch_sizes_arr,
         train_crop_shapes_arr)
 
+    # For each dataset
     for inputs in train_input_paths_arr:
 
         # Unpack for each dataset
@@ -297,7 +298,7 @@ def train(train_image_paths,
 
     if is_available_validation:
 
-        # TODO: Extend validation setup to handle multiple datasets (similar to training above)
+        # Extended validation setup to handle multiple datasets (similar to training above)
         # This is so that we can gauge performance on current and previous datasets
         # We will keep the validation dataloaders in a list and
         # iterate through them during validation step
@@ -332,6 +333,7 @@ def train(train_image_paths,
             for val_ground_truth_path in val_ground_truth_paths
         ]
 
+        # Make sure each set of paths have same number of samples
         for n_val_sample, ground_truth_paths in zip(n_val_samples, val_ground_truth_paths_arr):
             assert n_val_sample == len(ground_truth_paths)
 
@@ -344,6 +346,7 @@ def train(train_image_paths,
                 for val_intrinsics_path in val_intrinsics_paths
             ]
 
+            # Make sure each set of paths have same number of samples
             for n_val_sample, intrinsics_paths in zip(n_val_samples, val_intrinsics_paths_arr):
                 assert n_val_sample == len(intrinsics_paths)
         else:
@@ -363,6 +366,7 @@ def train(train_image_paths,
             val_intrinsics_paths_arr,
             val_ground_truth_paths_arr)
         
+        # For each dataset
         for inputs in val_input_paths_arr:
             
             # Unpack for each dataset
@@ -443,17 +447,23 @@ def train(train_image_paths,
     if is_available_replay:
         pass
 
+    # Added multiple dataset support
     if is_available_validation:
         log('Validation input paths:', log_path)
         val_input_paths = [
-            val_image_path,
-            val_sparse_depth_path,
-            val_intrinsics_path,
-            val_ground_truth_path
+            val_image_paths,
+            val_sparse_depth_paths,
+            val_intrinsics_paths,
+            val_ground_truth_paths
         ]
-        for path in val_input_paths:
-            if path is not None:
-                log(path, log_path)
+
+        for dataset_id, paths in enumerate(zip(*val_input_paths)):
+
+            log('dataset_id={}'.format(dataset_id))
+            for path in paths:
+                if path is not None:
+                    log(path, log_path)
+
         log('', log_path)
 
     log_network_settings(
@@ -627,6 +637,7 @@ def train(train_image_paths,
             desc='Epoch: {}/{}  Batch'.format(epoch, learning_schedule[-1]),
             total=n_step_per_epoch)
 
+        # Each train_batches is a n_dataset-length tuple with one batch from each dataset
         for train_batches in train_dataloaders_epoch:
             train_step = train_step + 1
             loss = 0.0
@@ -857,13 +868,13 @@ def train(train_image_paths,
                     # Switch to validation mode
                     depth_completion_model.eval()
 
-                    # TODO: Support validating multiple datasets with a loop over validation dataloaders  # PQR
+                    # Added support for validating multiple datasets with a loop over validation dataloaders
 
                     with torch.no_grad():
                         # Perform validation
                         best_results = validate(
                             depth_model=depth_completion_model,
-                            dataloader=val_dataloader,
+                            dataloaders=val_dataloaders,  # multiple dataloaders
                             step=train_step,
                             best_results=best_results,
                             min_evaluate_depth=min_evaluate_depth,
@@ -911,7 +922,7 @@ def train(train_image_paths,
         optimizer_pose)
 
 def validate(depth_model,
-             dataloader,
+             dataloaders,  # multiple dataloaders
              step,
              best_results,
              min_evaluate_depth,
@@ -923,7 +934,8 @@ def validate(depth_model,
              n_interval_per_summary=250,
              log_path=None):
 
-    n_sample = len(dataloader)
+    n_sample = sum(len(dataloader) for dataloader in dataloaders)
+    # Could easily reconfigure to compute metrics for each dataset
     mae = np.zeros(n_sample)
     rmse = np.zeros(n_sample)
     imae = np.zeros(n_sample)
@@ -935,82 +947,86 @@ def validate(depth_model,
     validity_map_summary = []
     ground_truth_summary = []
 
-    for idx, inputs in enumerate(dataloader):
+    total_idx = 0
+    for dataloader in enumerate(dataloaders):
 
-        # Move inputs to device
-        inputs = [
-            in_.to(device) for in_ in inputs
-        ]
+        for idx, inputs in enumerate(dataloader):
 
-        image, sparse_depth, intrinsics, ground_truth = inputs
+            # Move inputs to device
+            inputs = [
+                in_.to(device) for in_ in inputs
+            ]
 
-        with torch.no_grad():
-            # Validity map is where sparse depth is available
-            validity_map = torch.where(
-                sparse_depth > 0,
-                torch.ones_like(sparse_depth),
-                sparse_depth)
+            image, sparse_depth, intrinsics, ground_truth = inputs
 
-            # Forward through network
-            output_depth = depth_model.forward_depth(
-                image=image,
-                sparse_depth=sparse_depth,
-                validity_map=validity_map,
-                intrinsics=intrinsics,
-                return_all_outputs=False)
+            with torch.no_grad():
+                # Validity map is where sparse depth is available
+                validity_map = torch.where(
+                    sparse_depth > 0,
+                    torch.ones_like(sparse_depth),
+                    sparse_depth)
 
-        if (idx % n_interval_per_summary) == 0 and summary_writer is not None:
-            image_summary.append(image)
-            output_depth_summary.append(output_depth)
-            sparse_depth_summary.append(sparse_depth)
-            validity_map_summary.append(validity_map)
-            ground_truth_summary.append(ground_truth)
+                # Forward through network
+                output_depth = depth_model.forward_depth(
+                    image=image,
+                    sparse_depth=sparse_depth,
+                    validity_map=validity_map,
+                    intrinsics=intrinsics,
+                    return_all_outputs=False)
 
-        # Convert to numpy to validate
-        output_depth = np.squeeze(output_depth.cpu().numpy())
-        ground_truth = np.squeeze(ground_truth.cpu().numpy())
+            if (idx % n_interval_per_summary) == 0 and summary_writer is not None:
+                image_summary.append(image)
+                output_depth_summary.append(output_depth)
+                sparse_depth_summary.append(sparse_depth)
+                validity_map_summary.append(validity_map)
+                ground_truth_summary.append(ground_truth)
 
-        if evaluation_protocol == 'vkitti':
-            # Crop output_depth and ground_truth
-            crop_height = 240
-            crop_width = 1216
-            crop_mask = [crop_height, crop_width]
-        elif evaluation_protocol == 'nuscenes':
-            # Crop output_depth and ground_truth
-            crop_height = 540
-            crop_width = 1600
-            crop_mask = [crop_height, crop_width]
-        else:
-            crop_mask = None
+            # Convert to numpy to validate
+            output_depth = np.squeeze(output_depth.cpu().numpy())
+            ground_truth = np.squeeze(ground_truth.cpu().numpy())
 
-        if crop_mask is not None:
-            height, width = ground_truth.shape[-2], ground_truth.shape[-1]
-            center = width // 2
-            start_x = center - crop_width // 2
-            end_x = center + crop_width // 2
-            # bottom crop
-            end_y = height
-            start_y = end_y - crop_height
-            output_depth = output_depth[start_y:end_y, start_x:end_x]
-            ground_truth = ground_truth[start_y:end_y, start_x:end_x]
+            if evaluation_protocol == 'vkitti':
+                # Crop output_depth and ground_truth
+                crop_height = 240
+                crop_width = 1216
+                crop_mask = [crop_height, crop_width]
+            elif evaluation_protocol == 'nuscenes':
+                # Crop output_depth and ground_truth
+                crop_height = 540
+                crop_width = 1600
+                crop_mask = [crop_height, crop_width]
+            else:
+                crop_mask = None
 
-        # Select valid regions to evaluate
-        validity_mask = np.where(ground_truth > 0, 1, 0)
+            if crop_mask is not None:
+                height, width = ground_truth.shape[-2], ground_truth.shape[-1]
+                center = width // 2
+                start_x = center - crop_width // 2
+                end_x = center + crop_width // 2
+                # bottom crop
+                end_y = height
+                start_y = end_y - crop_height
+                output_depth = output_depth[start_y:end_y, start_x:end_x]
+                ground_truth = ground_truth[start_y:end_y, start_x:end_x]
 
-        min_max_mask = np.logical_and(
-            ground_truth > min_evaluate_depth,
-            ground_truth < max_evaluate_depth)
+            # Select valid regions to evaluate
+            validity_mask = np.where(ground_truth > 0, 1, 0)
 
-        mask = np.where(np.logical_and(validity_mask, min_max_mask) > 0)
+            min_max_mask = np.logical_and(
+                ground_truth > min_evaluate_depth,
+                ground_truth < max_evaluate_depth)
 
-        output_depth = output_depth[mask]
-        ground_truth = ground_truth[mask]
+            mask = np.where(np.logical_and(validity_mask, min_max_mask) > 0)
 
-        # Compute validation metrics
-        mae[idx] = eval_utils.mean_abs_err(1000.0 * output_depth, 1000.0 * ground_truth)
-        rmse[idx] = eval_utils.root_mean_sq_err(1000.0 * output_depth, 1000.0 * ground_truth)
-        imae[idx] = eval_utils.inv_mean_abs_err(0.001 * output_depth, 0.001 * ground_truth)
-        irmse[idx] = eval_utils.inv_root_mean_sq_err(0.001 * output_depth, 0.001 * ground_truth)
+            output_depth = output_depth[mask]
+            ground_truth = ground_truth[mask]
+
+            # Compute validation metrics
+            mae[total_idx] = eval_utils.mean_abs_err(1000.0 * output_depth, 1000.0 * ground_truth)
+            rmse[total_idx] = eval_utils.root_mean_sq_err(1000.0 * output_depth, 1000.0 * ground_truth)
+            imae[total_idx] = eval_utils.inv_mean_abs_err(0.001 * output_depth, 0.001 * ground_truth)
+            irmse[total_idx] = eval_utils.inv_root_mean_sq_err(0.001 * output_depth, 0.001 * ground_truth)
+            total_idx += 1
 
     # Compute mean metrics
     mae   = np.mean(mae)
