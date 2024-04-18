@@ -12,10 +12,10 @@ python depth_completion/src/train_depth_completion.py \
 --train_intrinsics_path \
     training/void/unsupervised/void_train_intrinsics_1500.txt \
     training/kitti/unsupervised/kitti_train_nonstatic_intrinsics.txt \
---val_image_path testing/void/void_test_image_1500.txt \
---val_sparse_depth_path testing/void/void_test_sparse_depth_1500.txt \
---val_intrinsics_path testing/void/void_test_intrinsics_1500.txt \
---val_ground_truth_path testing/void/void_test_ground_truth_1500.txt \
+--val_image_paths testing/void/void_test_image_1500.txt \
+--val_sparse_depth_paths testing/void/void_test_sparse_depth_1500.txt \
+--val_intrinsics_paths testing/void/void_test_intrinsics_1500.txt \
+--val_ground_truth_paths testing/void/void_test_ground_truth_1500.txt \
 --model_name kbnet_void \
 --network_modules depth pose \
 --min_predict_depth 0.1 \
@@ -62,5 +62,5 @@ python depth_completion/src/train_depth_completion.py \
 --start_step_validation 100000 \
 --checkpoint_path \
 trained_completion/kbnet/void1500_kitti/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070 \
---device gpu \
+--device cpu \
 --n_thread 8
