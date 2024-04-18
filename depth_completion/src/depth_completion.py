@@ -22,10 +22,10 @@ def train(train_image_paths,
           # replay_intrinsics_path,
           # replay_ground_truth_paths,
           # Validation filepaths
-          val_image_path,
-          val_sparse_depth_path,
-          val_intrinsics_path,
-          val_ground_truth_path,
+          val_image_paths,
+          val_sparse_depth_paths,
+          val_intrinsics_paths,
+          val_ground_truth_paths,
           # TODO: Uncomment to use
           # replay_batch_size,
           # replay_crop_shapes,
@@ -135,7 +135,7 @@ def train(train_image_paths,
     for n_train_sample, sparse_depth_paths in zip(n_train_samples, train_sparse_depth_paths_arr):
         assert n_train_sample == len(sparse_depth_paths)
 
-    # Read optional ground truth paths
+    # Read OPTIONAL ground truth paths
     if train_ground_truth_paths is not None and len(train_ground_truth_paths) > 0:
         assert len(train_image_paths) == len(train_ground_truth_paths)
 
@@ -156,7 +156,7 @@ def train(train_image_paths,
 
         is_available_ground_truth = False
 
-    # Read optional intrinsics input paths
+    # Read OPTIONAL intrinsics input paths
     if train_intrinsics_paths is not None and len(train_intrinsics_paths) > 0:
         assert len(train_image_paths) == len(train_intrinsics_paths)
 
@@ -174,7 +174,7 @@ def train(train_image_paths,
         ]
 
     '''
-    Setup training dataloader
+    Setup training dataloaders
     '''
     train_dataloaders = []
 
@@ -291,43 +291,101 @@ def train(train_image_paths,
 
     # Load validation data if it is available
     is_available_validation = \
-        val_image_path is not None and \
-        val_sparse_depth_path is not None and \
-        val_ground_truth_path is not None
+        val_image_paths is not None and \
+        val_sparse_depth_paths is not None and \
+        val_ground_truth_paths is not None
 
     if is_available_validation:
 
         # TODO: Extend validation setup to handle multiple datasets (similar to training above)
         # This is so that we can gauge performance on current and previous datasets
         # We will keep the validation dataloaders in a list and
-        # iterate through them during validation setp
-        validation_dataloaders = []
+        # iterate through them during validation step
 
-        val_image_paths = data_utils.read_paths(val_image_path)
-        val_sparse_depth_paths = data_utils.read_paths(val_sparse_depth_path)
-        val_ground_truth_paths = data_utils.read_paths(val_ground_truth_path)
+        # Images <=> Sparse depths
+        assert len(val_image_paths) == len(val_sparse_depth_paths)
 
-        n_val_sample = len(val_image_paths)
+        # Read val input paths
+        val_image_paths_arr = [
+            data_utils.read_paths(val_image_path)
+            for val_image_path in val_image_paths
+        ]
 
-        if val_intrinsics_path is not None:
-            val_intrinsics_paths = data_utils.read_paths(val_intrinsics_path)
+        n_val_samples = [
+            len(paths) for paths in val_image_paths_arr
+        ]
+
+        val_sparse_depth_paths_arr = [
+            data_utils.read_paths(val_sparse_depth_path)
+            for val_sparse_depth_path in val_sparse_depth_paths
+        ]
+
+        # Make sure each set of paths have same number of samples
+        for n_val_sample, sparse_depth_paths in zip(n_val_samples, val_sparse_depth_paths_arr):
+            assert n_val_sample == len(sparse_depth_paths)
+
+        # Images <=> Ground truths
+        assert len(val_image_paths) == len(val_ground_truth_paths)
+
+        val_ground_truth_paths_arr = [
+            data_utils.read_paths(val_ground_truth_path)
+            for val_ground_truth_path in val_ground_truth_paths
+        ]
+
+        for n_val_sample, ground_truth_paths in zip(n_val_samples, val_ground_truth_paths_arr):
+            assert n_val_sample == len(ground_truth_paths)
+
+        # Images <=>? Intrinsics
+        if val_intrinsics_paths is not None and len(val_intrinsics_paths) > 0:
+            assert len(val_image_paths) == len(val_intrinsics_paths)
+
+            val_intrinsics_paths_arr = [
+                data_utils.read_paths(val_intrinsics_path)
+                for val_intrinsics_path in val_intrinsics_paths
+            ]
+
+            for n_val_sample, intrinsics_paths in zip(n_val_samples, val_intrinsics_paths_arr):
+                assert n_val_sample == len(intrinsics_paths)
         else:
-            val_intrinsics_paths = [None] * n_val_sample
+            val_intrinsics_paths_arr = [
+                [None] * n_val_sample
+                for n_val_sample in n_val_samples
+            ]
 
-        for paths in [val_sparse_depth_paths, val_intrinsics_paths, val_ground_truth_paths]:
-            assert len(paths) == n_val_sample
+        '''
+        Setup validation dataloaders
+        '''
+        val_dataloaders = []
 
-        val_dataloader = torch.utils.data.DataLoader(
-            datasets.DepthCompletionInferenceDataset(
-                image_paths=val_image_paths,
-                sparse_depth_paths=val_sparse_depth_paths,
-                intrinsics_paths=val_intrinsics_paths,
-                ground_truth_paths=val_ground_truth_paths,
-                load_image_triplets=False),
-            batch_size=1,
-            shuffle=False,
-            num_workers=1,
-            drop_last=False)
+        val_input_paths_arr = zip(
+            val_image_paths_arr,
+            val_sparse_depth_paths_arr,
+            val_intrinsics_paths_arr,
+            val_ground_truth_paths_arr)
+        
+        for inputs in val_input_paths_arr:
+            
+            # Unpack for each dataset
+            image_paths, \
+                sparse_depth_paths, \
+                intrinsics_paths, \
+                ground_truth_paths, \
+                batch_size, \
+                crop_shape = inputs
+            
+            val_dataloader = torch.utils.data.DataLoader(
+                datasets.DepthCompletionInferenceDataset(
+                    image_paths=image_paths,
+                    sparse_depth_paths=sparse_depth_paths,
+                    intrinsics_paths=intrinsics_paths,
+                    ground_truth_paths=ground_truth_paths,
+                    load_image_triplets=False),
+                batch_size=1,
+                shuffle=False,
+                num_workers=1,
+                drop_last=False)
+            
+            val_dataloaders.append(val_dataloader)
 
     '''
     Set up the model
@@ -799,7 +857,7 @@ def train(train_image_paths,
                     # Switch to validation mode
                     depth_completion_model.eval()
 
-                    # TODO: Support validating multiple datasets with a loop over validation dataloaders
+                    # TODO: Support validating multiple datasets with a loop over validation dataloaders  # PQR
 
                     with torch.no_grad():
                         # Perform validation
