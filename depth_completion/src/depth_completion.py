@@ -17,18 +17,18 @@ def train(train_image_paths,
           train_ground_truth_paths,
           # Replay filepaths
           # TODO: Uncomment filepaths to use
-          # replay_image_paths,
-          # replay_sparse_depth_paths,
-          # replay_intrinsics_path,
-          # replay_ground_truth_paths,
+          replay_image_paths,
+          replay_sparse_depth_paths,
+          replay_intrinsics_path,
+          replay_ground_truth_paths,
           # Validation filepaths
           val_image_path,
           val_sparse_depth_path,
           val_intrinsics_path,
           val_ground_truth_path,
           # TODO: Uncomment to use
-          # replay_batch_size,
-          # replay_crop_shapes,
+          replay_batch_size,
+          replay_crop_shapes,
           # Depth network settings
           model_name,
           network_modules,
@@ -284,10 +284,37 @@ def train(train_image_paths,
     padding_modes = ['edge', 'constant', 'constant', 'constant']
 
     # TODO: Load replay data if it is available
-    is_available_replay = False
+    is_available_replay = \
+        replay_image_path is not None and \
+        replay_sparse_depth_path is not None and \
+        replay_ground_truth_path is not None
 
     if is_available_replay:
-        pass
+        replay_image_paths = data_utils.read_paths(replay_image_path)
+        replay_sparse_depth_paths = data_utils.read_paths(replay_sparse_depth_path)
+        replay_ground_truth_paths = data_utils.read_paths(replay_ground_truth_path)
+
+        n_replay_sample = len(replay_image_paths)
+
+        if replay_intrinsics_path is not None:
+            replay_intrinsics_paths = data_utils.read_paths(replay_intrinsics_path)
+        else:
+            replay_intrinsics_paths = [None] * n_replay_sample
+
+        for paths in [replay_sparse_depth_paths, replay_intrinsics_paths, replay_ground_truth_paths]:
+            assert len(paths) == n_replay_sample
+
+        replay_dataloader = torch.utils.data.DataLoader(
+            datasets.DepthCompletionInferenceDataset(
+                image_paths=replay_image_paths,
+                sparse_depth_paths=replay_sparse_depth_paths,
+                intrinsics_paths=replay_intrinsics_paths,
+                ground_truth_paths=replay_ground_truth_paths,
+                load_image_triplets=False),
+            batch_size=replay_batch_size,
+            shuffle=False,
+            num_workers=1,
+            drop_last=False)
 
     # Load validation data if it is available
     is_available_validation = \
@@ -300,7 +327,7 @@ def train(train_image_paths,
         # TODO: Extend validation setup to handle multiple datasets (similar to training above)
         # This is so that we can gauge performance on current and previous datasets
         # We will keep the validation dataloaders in a list and
-        # iterate through them during validation setp
+        # iterate through them during validation step
         validation_dataloaders = []
 
         val_image_paths = data_utils.read_paths(val_image_path)
@@ -383,7 +410,17 @@ def train(train_image_paths,
 
     # TODO: if replay filepaths is available then log paths
     if is_available_replay:
-        pass
+        log('Replay input paths:', log_path)
+        replay_input_paths = [
+            replay_image_path,
+            replay_sparse_depth_path,
+            replay_intrinsics_path,
+            replay_ground_truth_path
+        ]
+        for path in replay_input_paths:
+            if path is not None:
+                log(path, log_path)
+        log('', log_path)
 
     if is_available_validation:
         log('Validation input paths:', log_path)
@@ -561,7 +598,8 @@ def train(train_image_paths,
         if is_available_replay:
             # TODO: One design is to add it to the list of train dataloaders at the setup stage
             # Another is to have it in a separate loop to allow for separate logging
-            pass
+            # Choosing first design
+            train_dataloaders.append(replay_dataloader)
 
         # Zip all dataloaders together to get batches from each
         train_dataloaders_epoch = tqdm.tqdm(
