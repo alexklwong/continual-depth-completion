@@ -312,9 +312,9 @@ def train(train_image_paths,
                 ground_truth_paths=replay_ground_truth_paths,
                 load_image_triplets=False),
             batch_size=replay_batch_size,
-            shuffle=False,
-            num_workers=1,
-            drop_last=False)
+            shuffle=True,
+            num_workers=n_thread,
+            drop_last=True)
 
     # Load validation data if it is available
     is_available_validation = \
