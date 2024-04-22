@@ -71,8 +71,8 @@ def train(train_image_paths,
           # TODO: Uncomment to use frozen model for loss
           # frozen_model_paths,
           # Evaluation settings
-          min_evaluate_depth,
-          max_evaluate_depth,
+          min_evaluate_depths,  # allows multiple val datasets
+          max_evaluate_depths,  # allows multiple val datasets
           evaluation_protocol,
           # Checkpoint settings
           checkpoint_path,
@@ -373,9 +373,7 @@ def train(train_image_paths,
             image_paths, \
                 sparse_depth_paths, \
                 intrinsics_paths, \
-                ground_truth_paths, \
-                batch_size, \
-                crop_shape = inputs
+                ground_truth_paths = inputs
             
             val_dataloader = torch.utils.data.DataLoader(
                 datasets.DepthCompletionInferenceDataset(
@@ -524,8 +522,8 @@ def train(train_image_paths,
 
     log_evaluation_settings(
         log_path,
-        min_evaluate_depth=min_evaluate_depth,
-        max_evaluate_depth=max_evaluate_depth,
+        min_evaluate_depths=min_evaluate_depths,
+        max_evaluate_depths=max_evaluate_depths,
         evaluation_protocol=evaluation_protocol)
 
     log_system_settings(
@@ -877,8 +875,8 @@ def train(train_image_paths,
                             dataloaders=val_dataloaders,  # multiple dataloaders
                             step=train_step,
                             best_results=best_results,
-                            min_evaluate_depth=min_evaluate_depth,
-                            max_evaluate_depth=max_evaluate_depth,
+                            min_evaluate_depths=min_evaluate_depths,
+                            max_evaluate_depths=max_evaluate_depths,
                             evaluation_protocol=evaluation_protocol,
                             device=device,
                             summary_writer=val_summary_writer,
@@ -903,11 +901,11 @@ def train(train_image_paths,
     with torch.no_grad():
         best_results = validate(
             depth_model=depth_completion_model,
-            dataloader=val_dataloader,
+            dataloaders=val_dataloaders,
             step=train_step,
             best_results=best_results,
-            min_evaluate_depth=min_evaluate_depth,
-            max_evaluate_depth=max_evaluate_depth,
+            min_evaluate_depths=min_evaluate_depths,
+            max_evaluate_depths=max_evaluate_depths,
             evaluation_protocol=evaluation_protocol,
             device=device,
             summary_writer=val_summary_writer,
@@ -925,8 +923,8 @@ def validate(depth_model,
              dataloaders,  # multiple dataloaders
              step,
              best_results,
-             min_evaluate_depth,
-             max_evaluate_depth,
+             min_evaluate_depths,
+             max_evaluate_depths,
              evaluation_protocol,
              device,
              summary_writer,
@@ -934,12 +932,12 @@ def validate(depth_model,
              n_interval_per_summary=250,
              log_path=None):
 
-    n_sample = sum(len(dataloader) for dataloader in dataloaders)
-    # Could easily reconfigure to compute metrics for each dataset
-    mae = np.zeros(n_sample)
-    rmse = np.zeros(n_sample)
-    imae = np.zeros(n_sample)
-    irmse = np.zeros(n_sample)
+    n_val_steps = min([len(dataloader) for dataloader in dataloaders])
+    n_val_batches = n_val_steps * len(dataloaders)
+    mae = np.zeros(n_val_batches)
+    rmse = np.zeros(n_val_batches)
+    imae = np.zeros(n_val_batches)
+    irmse = np.zeros(n_val_batches)
 
     image_summary = []
     output_depth_summary = []
@@ -947,17 +945,24 @@ def validate(depth_model,
     validity_map_summary = []
     ground_truth_summary = []
 
+    val_dataloaders_epoch = tqdm.tqdm(
+        zip(*dataloaders),
+        desc='Batch',
+        total=n_val_steps)
+
     total_idx = 0
-    for dataloader in enumerate(dataloaders):
+    for val_batches in val_dataloaders_epoch:
+        '''
+        Iterate over batches from different datasets
+        '''
+        for dataset_id, val_batch in enumerate(val_batches):
 
-        for idx, inputs in enumerate(dataloader):
-
-            # Move inputs to device
-            inputs = [
-                in_.to(device) for in_ in inputs
+            # Fetch data
+            val_batch = [
+                in_.to(device) for in_ in val_batch
             ]
 
-            image, sparse_depth, intrinsics, ground_truth = inputs
+            image, sparse_depth, intrinsics, ground_truth = val_batch
 
             with torch.no_grad():
                 # Validity map is where sparse depth is available
@@ -974,7 +979,7 @@ def validate(depth_model,
                     intrinsics=intrinsics,
                     return_all_outputs=False)
 
-            if (idx % n_interval_per_summary) == 0 and summary_writer is not None:
+            if (total_idx % n_interval_per_summary) == 0 and summary_writer is not None:
                 image_summary.append(image)
                 output_depth_summary.append(output_depth)
                 sparse_depth_summary.append(sparse_depth)
@@ -1013,8 +1018,8 @@ def validate(depth_model,
             validity_mask = np.where(ground_truth > 0, 1, 0)
 
             min_max_mask = np.logical_and(
-                ground_truth > min_evaluate_depth,
-                ground_truth < max_evaluate_depth)
+                ground_truth > min_evaluate_depths[dataset_id],
+                ground_truth < max_evaluate_depths[dataset_id])
 
             mask = np.where(np.logical_and(validity_mask, min_max_mask) > 0)
 
@@ -1088,6 +1093,7 @@ def validate(depth_model,
     return best_results
 
 
+# NOT set up for multiple val dataloaders
 def run(image_path,
         sparse_depth_path,
         intrinsics_path,
@@ -1569,15 +1575,16 @@ def log_loss_func_settings(log_path,
     log('', log_path)
 
 def log_evaluation_settings(log_path,
-                            min_evaluate_depth,
-                            max_evaluate_depth,
+                            min_evaluate_depths,
+                            max_evaluate_depths,
                             evaluation_protocol):
 
     log('Evaluation settings:', log_path)
     log('evaluation_protocol={}'.format(evaluation_protocol),
         log_path)
-    log('min_evaluate_depth={:.2f}  max_evaluate_depth={:.2f}'.format(
-        min_evaluate_depth, max_evaluate_depth),
+    for i in range(len(min_evaluate_depths)):
+        log('Dataset {}: min_evaluate_depth={:.2f}  max_evaluate_depth={:.2f}'.format(
+        i, min_evaluate_depths[i], max_evaluate_depths[i]),
         log_path)
     log('', log_path)
 

@@ -14,3 +14,4 @@ testing
 *__pycache__*
 *.out
 trained_model
+trained_completion
