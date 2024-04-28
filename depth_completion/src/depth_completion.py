@@ -426,7 +426,7 @@ def train(train_image_paths,
             max_predict_depth=max_predict_depth,
             device=device)
 
-        frozen_model.restore_model(frozen_model_paths)
+        frozen_model.restore_model(frozen_model_paths, frozen_model=True)
         frozen_model.eval()
     else:
         frozen_model = None
@@ -609,7 +609,7 @@ def train(train_image_paths,
                 optimizer_pose=optimizer_pose)
         except Exception:
             print('Failed to restore optimizer for depth network: Ignoring...')
-            train_step, _ = depth_completion_model.restore_model(
+            train_step = depth_completion_model.restore_model(
                 restore_paths)
 
         for g in optimizer_depth.param_groups:

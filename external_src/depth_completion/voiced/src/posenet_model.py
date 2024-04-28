@@ -21,7 +21,7 @@ class PoseNetModel(object):
 
     def __init__(self,
                  encoder_type='posenet',
-                 rotation_parameterization='euler',
+                 rotation_parameterization='exponential',
                  weight_initializer='xavier_normal',
                  activation_func='leaky_relu',
                  device=torch.device('cuda')):
