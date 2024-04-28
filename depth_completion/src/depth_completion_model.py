@@ -1,5 +1,6 @@
 import os, torch, torchvision
-from utils.src import log_utils
+from utils.src import log_utils, net_utils
+from continual_learning_losses import ewc_loss
 
 
 class DepthCompletionModel(object):
@@ -83,6 +84,12 @@ class DepthCompletionModel(object):
                 device=device)
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(model_name))
+
+        if 'ewc' in network_modules:
+            self.ewc = True
+            self.prev_fisher = None
+            self.fisher = None
+            self.epoch_fisher = net_utils.init_fisher(self.model.parameters_depth())
 
     def forward_depth(self, image, sparse_depth, validity_map, intrinsics=None, return_all_outputs=False):
         '''
@@ -180,11 +187,11 @@ class DepthCompletionModel(object):
         # TODO: Add frozen model as argument to loss computation (i.e. EWC, LWF)
 
         if supervision_type == 'supervised':
-            return self.model.compute_loss(
+            loss, loss_info = self.model.compute_loss(
                 target_depth=ground_truth0,
                 output_depth=output_depth0)
         elif supervision_type == 'unsupervised':
-            return self.model.compute_loss(
+            loss, loss_info = self.model.compute_loss(
                 image0=image0,
                 image1=image1,
                 image2=image2,
@@ -198,6 +205,28 @@ class DepthCompletionModel(object):
                 w_losses=w_losses)
         else:
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
+
+        if w_losses['w_ewc']:
+            loss_ewc = ewc_loss(
+                current_parameters=self.model.parameters_depth(),
+                frozen_parameters=frozen_model.parameters_depth(),
+                lambda_ewc=w_losses['w_ewc'],
+                fisher_info=self.prev_fisher)
+
+            loss += loss_ewc
+            loss_info['loss_ewc'] = loss_ewc
+
+        return loss, loss_info
+
+    def parameters(self):
+        '''
+        Returns the list of parameters in the model
+
+        Returns:
+            list[torch.Tensor[float32]] : list of parameters
+        '''
+
+        return self.model.parameters()
 
     def parameters_depth(self):
         '''
@@ -270,7 +299,8 @@ class DepthCompletionModel(object):
     def restore_model(self,
                       restore_paths,
                       optimizer_depth=None,
-                      optimizer_pose=None):
+                      optimizer_pose=None,
+                      frozen_model=False):
         '''
         Loads weights from checkpoint
 
@@ -284,6 +314,10 @@ class DepthCompletionModel(object):
             torch.optimizer : optimizer for depth or None if no optimizer is passed in
             torch.optimizer : optimizer for pose or None if no optimizer is passed in
         '''
+        if self.ewc and self.prev_fisher is None and not frozen_model:
+            # Assuming that if ewc we should have fisher information matrix path at the last of restore paths
+            assert 'fisher' in restore_paths[-1]
+            self.prev_fisher = torch.load(restore_paths[-1])
 
         if 'kbnet' in self.model_name:
             return self.model.restore_model(
@@ -363,6 +397,55 @@ class DepthCompletionModel(object):
                 optimizer_pose=optimizer_pose)
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
+
+        if self.ewc and self.fisher is not None:
+            torch.save(self.fisher, os.path.join(checkpoint_dirpath, 'fisher-info_{}.pth'.format(step)))
+
+    def update_fisher(self):
+        '''
+        Update fisher information matrix at the end of an epoch
+        '''
+        self.fisher = self.epoch_fisher
+        self.epoch_fisher = net_utils.init_fisher(self.model.parameters_depth())
+
+    def calculate_fisher(self, normalization):
+        '''
+        Calculate fisher information matrix at the end of a batch
+
+        Arg(s):
+            normalization : int
+                length of dataset
+        '''
+        self.epoch_fisher = net_utils.compute_fisher(
+                    fisher_info=self.epoch_fisher,
+                    parameters=self.model.parameters_depth(),
+                    normalization=normalization)
+
+    # TODO add fisher matrix to model save
+    # def save_fisher(self,
+    #                checkpoint_dirpath,
+    #                step,
+    #                fisher_info):
+
+    #     if 'kbnet' in self.model_name:
+    #         checkpoint_path = os.path.join(checkpoint_dirpath, 'kbnet-{}.pth'.format(step))
+    #     elif 'scaffnet' in self.model_name:
+    #          checkpoint_path = os.path.join(checkpoint_dirpath, 'scaffnet-{}.pth'.format(step))
+    #     elif 'fusionnet' in self.model_name:
+    #          checkpoint_path = os.path.join(checkpoint_dirpath, 'fusionnet-{}.pth'.format(step))
+    #     elif 'voiced' in self.model_name:
+    #          checkpoint_path = os.path.join(checkpoint_dirpath, 'voiced-{}.pth'.format(step))
+    #     else:
+    #         raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
+
+    #     if not os.path.exists(checkpoint_path):
+    #         raise FileExistsError('Model checkpoint does not exist {}'.format(checkpoint_dirpath))
+
+    #     checkpoint = torch.load(checkpoint_dirpath)
+
+    #     checkpoint['fisher_info'] = fisher_info
+
+    #     torch.save(checkpoint, checkpoint_dirpath)
 
     def log_summary(self,
                     summary_writer,
