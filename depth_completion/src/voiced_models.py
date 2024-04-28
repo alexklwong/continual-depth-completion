@@ -46,9 +46,9 @@ class VOICEDModel(object):
         if 'pose' in network_modules:
             self.model_pose = PoseNet(
                 encoder_type='posenet',
-                rotation_parameterization='exponential',
+                rotation_parameterization='euler',
                 weight_initializer='xavier_normal',
-                activation_func='relu',
+                activation_func='leaky_relu',
                 device=device)
         else:
             self.model_pose = None
@@ -136,7 +136,7 @@ class VOICEDModel(object):
 
         # Normalize image between [0, 1]
         image0, image1 = [
-            image / 255.0 for image in [image0, image1] if torch.max(image) > 1.0
+            image / 255.0 if torch.max(image) > 1.0 else image for image in [image0, image1]
         ]
 
         return self.model_pose.forward(image0, image1)
@@ -350,7 +350,10 @@ class VOICEDModel(object):
                 model_pose_restore_path,
                 optimizer_pose)
 
-        return train_step, optimizer_depth, optimizer_pose
+        if optimizer_depth is None and optimizer_pose is None:
+            return train_step
+        else:
+            return train_step, optimizer_depth, optimizer_pose
 
     def save_model(self,
                    model_depth_checkpoint_path,
