@@ -202,20 +202,7 @@ class DepthCompletionModel(object):
 
         if w_losses['w_lwf']:
             
-            frozen_model_output_depth0 = frozen_model.compute_loss(
-                image0=image0,
-                image1=image1,
-                image2=image2,
-                output_depth0=output_depth0,
-                sparse_depth0=sparse_depth0,
-                validity_map_depth0=validity_map_depth0,
-                validity_map_image0=validity_map_image0,
-                intrinsics=intrinsics,
-                pose0to1=pose0to1,
-                pose0to2=pose0to2,
-                w_losses=w_losses)
-            
-            loss += lwf_loss(output_depth0, frozen_model_output_depth0, w_losses['w_lwf'])
+            loss += lwf_loss(output_depth0, image0, frozen_model, w_losses['w_lwf'])
 
     def parameters_depth(self):
         '''

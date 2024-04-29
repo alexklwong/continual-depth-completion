@@ -5,7 +5,8 @@ import torch.nn.functional as F
 #During training on the new task, you aim to find a set of parameters for the model that not only performs well on the new task but also produces similar predictions to the recorded predictions by the frozen model. 
 def compute_loss(self,
                 output_depth0,
-                frozen_model_output_depth0,
+                image0,
+                frozen_model,
                 lambda_lwf):
     '''
     Compute the LWF loss for unsupervised learning scenarios based on depth prediction.
@@ -13,14 +14,20 @@ def compute_loss(self,
     Args:
         output_depth0 : torch.Tensor
             Tensor of the current model's output depth maps [N, 1, H, W].
-        frozen_model_output_depth0 : torch.Tensor
-            Tensor of the frozen model's output depth maps [N, 1, H, W].
+        image0 : torch.Tensor[float32]
+                N x 3 x H x W image at time step t
+        frozen_model : object
+                instance of pretrained model frozen for loss computations
         lambda_lwf : float
             Regularization weight for the LWF loss component.
 
     Returns:
         torch.Tensor : The computed LWF loss, scaled by lambda_lwf\.
     '''
+    #compute frozen model's output on current data
+    frozen_model.eval()
+    with torch.no_grad():
+        frozen_model_output_depth0 = frozen_model(image0)
     # lwf LOSS: the difference between current and frozen model outputs. (original paper uses knoweldge distillation loss for classification)
     lwf_loss = F.mse_loss(output_depth0, frozen_model_output_depth0)
     
