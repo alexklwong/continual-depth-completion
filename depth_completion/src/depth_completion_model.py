@@ -201,8 +201,9 @@ class DepthCompletionModel(object):
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
 
         if w_losses['w_lwf']:
+            frozen_model_output_depth0 = frozen_model.forward_depth(image0, sparse_depth0, validity_map_depth0, intrinsics)
             
-            loss += lwf_loss(output_depth0, image0, frozen_model, w_losses['w_lwf'])
+            loss += lwf_loss(output_depth0, frozen_model_output_depth0, w_losses['w_lwf'])
 
             return loss
 
