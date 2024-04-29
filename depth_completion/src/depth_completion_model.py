@@ -204,6 +204,8 @@ class DepthCompletionModel(object):
             
             loss += lwf_loss(output_depth0, image0, frozen_model, w_losses['w_lwf'])
 
+            return loss
+
     def parameters_depth(self):
         '''
         Returns the list of parameters in the model
