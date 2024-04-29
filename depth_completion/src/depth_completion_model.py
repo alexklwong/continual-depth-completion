@@ -1,5 +1,6 @@
 import os, torch, torchvision
 from utils.src import log_utils
+from losses import lwf_loss
 
 
 class DepthCompletionModel(object):
@@ -180,11 +181,11 @@ class DepthCompletionModel(object):
         # TODO: Add frozen model as argument to loss computation (i.e. EWC, LWF)
 
         if supervision_type == 'supervised':
-            return self.model.compute_loss(
+            loss = self.model.compute_loss(
                 target_depth=ground_truth0,
                 output_depth=output_depth0)
         elif supervision_type == 'unsupervised':
-            return self.model.compute_loss(
+            loss = self.model.compute_loss(
                 image0=image0,
                 image1=image1,
                 image2=image2,
@@ -198,6 +199,23 @@ class DepthCompletionModel(object):
                 w_losses=w_losses)
         else:
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
+
+        if w_losses['w_lwf']:
+            
+            frozen_model_output_depth0 = frozen_model.compute_loss(
+                image0=image0,
+                image1=image1,
+                image2=image2,
+                output_depth0=output_depth0,
+                sparse_depth0=sparse_depth0,
+                validity_map_depth0=validity_map_depth0,
+                validity_map_image0=validity_map_image0,
+                intrinsics=intrinsics,
+                pose0to1=pose0to1,
+                pose0to2=pose0to2,
+                w_losses=w_losses)
+            
+            loss += lwf_loss(output_depth0, frozen_model_output_depth0, w_losses['w_lwf'])
 
     def parameters_depth(self):
         '''
