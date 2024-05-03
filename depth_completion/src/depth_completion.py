@@ -105,14 +105,6 @@ def train(train_image_paths,
     os.makedirs(os.path.join(event_path, 'events-train'), exist_ok=True)
     os.makedirs(os.path.join(event_path, 'events-val'), exist_ok=True)
 
-    best_results = {
-        'step': -1,
-        'mae': np.infty,
-        'rmse': np.infty,
-        'imae': np.infty,
-        'irmse': np.infty
-    }
-
     '''
     Read input paths and assert paths
     '''
@@ -394,6 +386,15 @@ def train(train_image_paths,
                 drop_last=False)
             
             val_dataloaders.append(val_dataloader)
+        
+        # Moved here because we need to know how many val datasets
+        best_results = {
+            'step': [-1] * len(val_dataloaders),
+            'mae': [np.infty] * len(val_dataloaders),
+            'rmse': [np.infty] * len(val_dataloaders),
+            'imae': [np.infty] * len(val_dataloaders),
+            'irmse': [np.infty] * len(val_dataloaders)
+        }
 
     '''
     Set up the model
@@ -962,25 +963,24 @@ def validate(depth_model,
              log_path=None):
 
     n_val_steps = min([len(dataloader) for dataloader in dataloaders])
-    n_val_batches = n_val_steps * len(dataloaders)
-    mae = np.zeros(n_val_batches)
-    rmse = np.zeros(n_val_batches)
-    imae = np.zeros(n_val_batches)
-    irmse = np.zeros(n_val_batches)
+    n_dataloaders = len(dataloaders)
+    mae = np.zeros((n_dataloaders, n_val_steps))
+    rmse = np.zeros((n_dataloaders, n_val_steps))
+    imae = np.zeros((n_dataloaders, n_val_steps))
+    irmse = np.zeros((n_dataloaders, n_val_steps))
 
-    image_summary = []
-    output_depth_summary = []
-    sparse_depth_summary = []
-    validity_map_summary = []
-    ground_truth_summary = []
+    image_summary = [[] for _ in range(n_dataloaders)]
+    output_depth_summary = [[] for _ in range(n_dataloaders)]
+    sparse_depth_summary = [[] for _ in range(n_dataloaders)]
+    validity_map_summary = [[] for _ in range(n_dataloaders)]
+    ground_truth_summary = [[] for _ in range(n_dataloaders)]
 
     val_dataloaders_epoch = tqdm.tqdm(
         zip(*dataloaders),
         desc='Batch',
         total=n_val_steps)
 
-    total_idx = 0
-    for val_batches in val_dataloaders_epoch:
+    for idx, val_batches in enumerate(val_dataloaders_epoch):
         '''
         Iterate over batches from different datasets
         '''
@@ -1008,12 +1008,12 @@ def validate(depth_model,
                     intrinsics=intrinsics,
                     return_all_outputs=False)
 
-            if (total_idx % n_interval_per_summary) == 0 and summary_writer is not None:
-                image_summary.append(image)
-                output_depth_summary.append(output_depth)
-                sparse_depth_summary.append(sparse_depth)
-                validity_map_summary.append(validity_map)
-                ground_truth_summary.append(ground_truth)
+            if (idx % n_interval_per_summary) == 0 and summary_writer is not None:
+                image_summary[dataset_id].append(image)
+                output_depth_summary[dataset_id].append(output_depth)
+                sparse_depth_summary[dataset_id].append(sparse_depth)
+                validity_map_summary[dataset_id].append(validity_map)
+                ground_truth_summary[dataset_id].append(ground_truth)
 
             # Convert to numpy to validate
             output_depth = np.squeeze(output_depth.cpu().numpy())
@@ -1056,68 +1056,73 @@ def validate(depth_model,
             ground_truth = ground_truth[mask]
 
             # Compute validation metrics
-            mae[total_idx] = eval_utils.mean_abs_err(1000.0 * output_depth, 1000.0 * ground_truth)
-            rmse[total_idx] = eval_utils.root_mean_sq_err(1000.0 * output_depth, 1000.0 * ground_truth)
-            imae[total_idx] = eval_utils.inv_mean_abs_err(0.001 * output_depth, 0.001 * ground_truth)
-            irmse[total_idx] = eval_utils.inv_root_mean_sq_err(0.001 * output_depth, 0.001 * ground_truth)
-            total_idx += 1
+            mae[dataset_id, idx] = eval_utils.mean_abs_err(1000.0 * output_depth, 1000.0 * ground_truth)
+            rmse[dataset_id, idx] = eval_utils.root_mean_sq_err(1000.0 * output_depth, 1000.0 * ground_truth)
+            imae[dataset_id, idx] = eval_utils.inv_mean_abs_err(0.001 * output_depth, 0.001 * ground_truth)
+            irmse[dataset_id, idx] = eval_utils.inv_root_mean_sq_err(0.001 * output_depth, 0.001 * ground_truth)
 
     # Compute mean metrics
-    mae   = np.mean(mae)
-    rmse  = np.mean(rmse)
-    imae  = np.mean(imae)
-    irmse = np.mean(irmse)
+    mae   = np.mean(mae, axis=1)
+    rmse  = np.mean(rmse, axis=1)
+    imae  = np.mean(imae, axis=1)
+    irmse = np.mean(irmse, axis=1)
 
-    # Log to tensorboard
-    if summary_writer is not None:
-        depth_model.log_summary(
-            summary_writer=summary_writer,
-            tag='eval',
-            step=step,
-            image0=torch.cat(image_summary, dim=0),
-            output_depth0=torch.cat(output_depth_summary, dim=0),
-            sparse_depth0=torch.cat(sparse_depth_summary, dim=0),
-            validity_map0=torch.cat(validity_map_summary, dim=0),
-            ground_truth0=torch.cat(ground_truth_summary, dim=0),
-            scalars={'mae' : mae, 'rmse' : rmse, 'imae' : imae, 'irmse': irmse},
-            n_image_per_summary=n_image_per_summary)
+    # Log for each dataset:
+    for dataset_id in range(n_dataloaders):
 
-    # Print validation results to console
-    log('Validation results:', log_path)
-    log('{:>8}  {:>8}  {:>8}  {:>8}  {:>8}'.format(
-        'Step', 'MAE', 'RMSE', 'iMAE', 'iRMSE'),
-        log_path)
-    log('{:8}  {:8.3f}  {:8.3f}  {:8.3f}  {:8.3f}'.format(
-        step, mae, rmse, imae, irmse),
-        log_path)
+        # Log to tensorboard
+        if summary_writer is not None:
+            depth_model.log_summary(
+                summary_writer=summary_writer,
+                tag='eval' + '-{}'.format(dataset_id),
+                step=step,
+                image0=torch.cat(image_summary[dataset_id], dim=0),
+                output_depth0=torch.cat(output_depth_summary[dataset_id], dim=0),
+                sparse_depth0=torch.cat(sparse_depth_summary[dataset_id], dim=0),
+                validity_map0=torch.cat(validity_map_summary[dataset_id], dim=0),
+                ground_truth0=torch.cat(ground_truth_summary[dataset_id], dim=0),
+                scalars={'mae' : mae[dataset_id],
+                         'rmse' : rmse[dataset_id], 
+                         'imae' : imae[dataset_id],
+                         'irmse': irmse[dataset_id]},
+                n_image_per_summary=n_image_per_summary)
 
-    n_improve = 0
-    if np.round(mae, 2) <= np.round(best_results['mae'], 2):
-        n_improve = n_improve + 1
-    if np.round(rmse, 2) <= np.round(best_results['rmse'], 2):
-        n_improve = n_improve + 1
-    if np.round(imae, 2) <= np.round(best_results['imae'], 2):
-        n_improve = n_improve + 1
-    if np.round(irmse, 2) <= np.round(best_results['irmse'], 2):
-        n_improve = n_improve + 1
+        # Print validation results to console
+        log('Validation results:', log_path)
+        log('{:>8}  {:>8}  {:>8}  {:>8}  {:>8}'.format(
+            'Step', 'MAE', 'RMSE', 'iMAE', 'iRMSE'),
+            log_path)
+        log('{:8}  {:8.3f}  {:8.3f}  {:8.3f}  {:8.3f}'.format(
+            step, mae[dataset_id], rmse[dataset_id], imae[dataset_id], irmse[dataset_id]),
+            log_path)
 
-    if n_improve > 2:
-        best_results['step'] = step
-        best_results['mae'] = mae
-        best_results['rmse'] = rmse
-        best_results['imae'] = imae
-        best_results['irmse'] = irmse
+        n_improve = 0
+        if np.round(mae[dataset_id], 2) <= np.round(best_results['mae'][dataset_id], 2):
+            n_improve = n_improve + 1
+        if np.round(rmse[dataset_id], 2) <= np.round(best_results['rmse'][dataset_id], 2):
+            n_improve = n_improve + 1
+        if np.round(imae[dataset_id], 2) <= np.round(best_results['imae'][dataset_id], 2):
+            n_improve = n_improve + 1
+        if np.round(irmse[dataset_id], 2) <= np.round(best_results['irmse'][dataset_id], 2):
+            n_improve = n_improve + 1
 
-    log('Best results:', log_path)
-    log('{:>8}  {:>8}  {:>8}  {:>8}  {:>8}'.format(
-        'Step', 'MAE', 'RMSE', 'iMAE', 'iRMSE'),
-        log_path)
-    log('{:8}  {:8.3f}  {:8.3f}  {:8.3f}  {:8.3f}'.format(
-        best_results['step'],
-        best_results['mae'],
-        best_results['rmse'],
-        best_results['imae'],
-        best_results['irmse']), log_path)
+        if n_improve > 2:
+            best_results['step'][dataset_id] = step
+            best_results['mae'][dataset_id] = mae
+            best_results['rmse'][dataset_id] = rmse
+            best_results['imae'][dataset_id] = imae
+            best_results['irmse'][dataset_id] = irmse
+
+        log('Best results:', log_path)
+        log('{:>8}  {:>8}  {:>8}  {:>8}  {:>8}'.format(
+            'Step', 'MAE', 'RMSE', 'iMAE', 'iRMSE'),
+            log_path)
+        log('{:8}  {:8.3f}  {:8.3f}  {:8.3f}  {:8.3f}'.format(
+            best_results['step'][dataset_id],
+            best_results['mae'][dataset_id],
+            best_results['rmse'][dataset_id],
+            best_results['imae'][dataset_id],
+            best_results['irmse'][dataset_id]), log_path)
 
     return best_results
 
