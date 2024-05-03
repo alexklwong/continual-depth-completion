@@ -67,8 +67,8 @@ python depth_completion/src/train_depth_completion.py \
 --max_evaluate_depth 5.0 100.0 \
 --evaluation_protocol default \
 --n_step_per_summary 1000 \
---n_step_per_checkpoint 1000 \
---start_step_validation 100000 \
+--n_step_per_checkpoint 100 \
+--start_step_validation 100 \
 --checkpoint_path \
 trained_completion/kbnet/void1500_kitti/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070 \
 --device gpu \

@@ -1088,7 +1088,7 @@ def validate(depth_model,
                 n_image_per_summary=n_image_per_summary)
 
         # Print validation results to console
-        log('Validation results:', log_path)
+        log('Validation results for dataset {}:'.format(dataset_id), log_path)
         log('{:>8}  {:>8}  {:>8}  {:>8}  {:>8}'.format(
             'Step', 'MAE', 'RMSE', 'iMAE', 'iRMSE'),
             log_path)
@@ -1108,12 +1108,12 @@ def validate(depth_model,
 
         if n_improve > 2:
             best_results['step'][dataset_id] = step
-            best_results['mae'][dataset_id] = mae
-            best_results['rmse'][dataset_id] = rmse
-            best_results['imae'][dataset_id] = imae
-            best_results['irmse'][dataset_id] = irmse
+            best_results['mae'][dataset_id] = mae[dataset_id]
+            best_results['rmse'][dataset_id] = rmse[dataset_id]
+            best_results['imae'][dataset_id] = imae[dataset_id]
+            best_results['irmse'][dataset_id] = irmse[dataset_id]
 
-        log('Best results:', log_path)
+        log('Best results for dataset {}:'.format(dataset_id), log_path)
         log('{:>8}  {:>8}  {:>8}  {:>8}  {:>8}'.format(
             'Step', 'MAE', 'RMSE', 'iMAE', 'iRMSE'),
             log_path)
