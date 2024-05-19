@@ -1,0 +1,300 @@
+Training input paths:
+/media/staging1/common/datasets/void_release/void_1500/train_image.txt
+/media/staging1/common/datasets/void_release/void_1500/train_sparse_depth.txt
+/media/staging1/common/datasets/void_release/void_1500/train_intrinsics.txt
+
+Validation input paths:
+/media/staging1/common/datasets/void_release/void_1500/test_image.txt
+/media/staging1/common/datasets/void_release/void_1500/test_sparse_depth.txt
+/media/staging1/common/datasets/void_release/void_1500/test_intrinsics.txt
+/media/staging1/common/datasets/void_release/void_1500/test_ground_truth.txt
+
+Depth network settings:
+model_name=kbnet_void
+network_modules=['depth', 'pose']
+min_predict_depth=0.10  max_predict_depth=8.00
+
+Weight settings:
+n_parameter=11020868  n_parameter_depth=6957764  n_parameter_pose=4063104
+
+Batch settings
+batch_size=12
+dataset_id=0  n_batch=12  n_height=416  n_width=512
+Training settings:
+n_sample=48248  n_epoch=40  n_step=160800
+learning_schedule=[0-80400 : 0.0001, 80400-160800 : 5e-05]
+
+Augmentation settings:
+augmentation_schedule=[0--4020 : 1.0]
+Photometric data augmentations:
+augmentation_random_brightness=[0.5, 1.5]
+augmentation_random_contrast=[0.5, 1.5]
+augmentation_random_gamma=[-1.0, -1.0]
+augmentation_random_hue=[-0.1, 0.1]
+augmentation_random_saturation=[0.5, 1.5]
+augmentation_random_gaussian_blur_kernel_size=[-1, -1]  augmentation_random_gaussian_blur_sigma_range=[-1, -1]
+augmentation_random_noise_type=none  augmentation_random_noise_spread=-1.0
+Geometric data augmentations:
+augmentation_padding_mode=edge
+augmentation_random_crop_type=['horizontal', 'vertical']
+augmentation_random_crop_to_shape=None
+augmentation_reverse_crop_to_shape=None
+augmentation_random_flip_type=['horizontal', 'vertical']
+augmentation_random_rotate_max=25.0
+augmentation_random_crop_and_pad=[0.9, 1.0]
+augmentation_random_resize_to_shape=[-1, -1]
+augmentation_random_resize_and_pad=[0.6, 1.0]
+augmentation_random_resize_and_crop=[-1.0, -1.0]
+Occlusion data augmentations:
+augmentation_random_remove_patch_percent_range_image=[0.001, 0.005]  augmentation_random_remove_patch_size_image=[5, 5]
+augmentation_random_remove_patch_percent_range_depth=[0.6, 0.7]  augmentation_random_remove_patch_size_depth=[1, 1]
+
+Loss function settings:
+supervision_type=unsupervised
+w_color=1.5e-01  w_structure=9.5e-01  w_sparse_depth=2.0e+00  
+w_smoothness=2.0e+00  w_weight_decay_depth=0.0e+00  w_weight_decay_pose=0.0e+00  
+
+Evaluation settings:
+evaluation_protocol=default
+min_evaluate_depth=0.20  max_evaluate_depth=5.00
+
+Checkpoint settings:
+checkpoint_path=trained_completion/kbnet/void1500/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070
+n_step_per_checkpoint=1000
+start_step_validation=100000
+
+Tensorboard settings:
+event_path=trained_completion/kbnet/void1500/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070/tensorboard
+n_step_per_summary=1000  n_image_per_summary=4  
+restore_paths=[]
+
+Hardware settings:
+device=cuda
+n_thread=8
+
+Begin training...
+Training input paths:
+/media/home/alwong/workspace/continual-depth-completion/training/void/unsupervised/void_train_image_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/training/void/unsupervised/void_train_sparse_depth_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/training/void/unsupervised/void_train_intrinsics_1500.txt
+
+Validation input paths:
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_image_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_sparse_depth_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_intrinsics_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_ground_truth_1500.txt
+
+Depth network settings:
+model_name=kbnet_void
+network_modules=['depth', 'pose']
+min_predict_depth=0.10  max_predict_depth=8.00
+
+Weight settings:
+n_parameter=11020868  n_parameter_depth=6957764  n_parameter_pose=4063104
+
+Batch settings
+batch_size=12
+dataset_id=0  n_batch=12  n_height=416  n_width=512
+Training settings:
+n_sample=44888  n_epoch=40  n_step=149600
+learning_schedule=[0-74800 : 0.0001, 74800-149600 : 5e-05]
+
+Augmentation settings:
+augmentation_schedule=[0--3740 : 1.0]
+Photometric data augmentations:
+augmentation_random_brightness=[0.5, 1.5]
+augmentation_random_contrast=[0.5, 1.5]
+augmentation_random_gamma=[-1.0, -1.0]
+augmentation_random_hue=[-0.1, 0.1]
+augmentation_random_saturation=[0.5, 1.5]
+augmentation_random_gaussian_blur_kernel_size=[-1, -1]  augmentation_random_gaussian_blur_sigma_range=[-1, -1]
+augmentation_random_noise_type=none  augmentation_random_noise_spread=-1.0
+Geometric data augmentations:
+augmentation_padding_mode=edge
+augmentation_random_crop_type=['horizontal', 'vertical']
+augmentation_random_crop_to_shape=None
+augmentation_reverse_crop_to_shape=None
+augmentation_random_flip_type=['horizontal', 'vertical']
+augmentation_random_rotate_max=25.0
+augmentation_random_crop_and_pad=[0.9, 1.0]
+augmentation_random_resize_to_shape=[-1, -1]
+augmentation_random_resize_and_pad=[0.6, 1.0]
+augmentation_random_resize_and_crop=[-1.0, -1.0]
+Occlusion data augmentations:
+augmentation_random_remove_patch_percent_range_image=[0.001, 0.005]  augmentation_random_remove_patch_size_image=[5, 5]
+augmentation_random_remove_patch_percent_range_depth=[0.6, 0.7]  augmentation_random_remove_patch_size_depth=[1, 1]
+
+Loss function settings:
+supervision_type=unsupervised
+w_color=1.5e-01  w_structure=9.5e-01  w_sparse_depth=2.0e+00  
+w_smoothness=2.0e+00  w_weight_decay_depth=0.0e+00  w_weight_decay_pose=0.0e+00  
+
+Evaluation settings:
+evaluation_protocol=default
+min_evaluate_depth=0.20  max_evaluate_depth=5.00
+
+Checkpoint settings:
+checkpoint_path=trained_completion/kbnet/void1500/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070
+n_step_per_checkpoint=1000
+start_step_validation=100000
+
+Tensorboard settings:
+event_path=trained_completion/kbnet/void1500/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070/tensorboard
+n_step_per_summary=1000  n_image_per_summary=4  
+restore_paths=[]
+
+Hardware settings:
+device=cuda
+n_thread=8
+
+Begin training...
+Training input paths:
+/media/home/alwong/workspace/continual-depth-completion/training/void/unsupervised/void_train_image_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/training/void/unsupervised/void_train_sparse_depth_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/training/void/unsupervised/void_train_intrinsics_1500.txt
+
+Validation input paths:
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_image_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_sparse_depth_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_intrinsics_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_ground_truth_1500.txt
+
+Depth network settings:
+model_name=kbnet_void
+network_modules=['depth', 'pose']
+min_predict_depth=0.10  max_predict_depth=8.00
+
+Weight settings:
+n_parameter=11020868  n_parameter_depth=6957764  n_parameter_pose=4063104
+
+Batch settings
+batch_size=12
+dataset_id=0  n_batch=12  n_height=416  n_width=512
+Training settings:
+n_sample=44888  n_epoch=40  n_step=149600
+learning_schedule=[0-74800 : 0.0001, 74800-149600 : 5e-05]
+
+Augmentation settings:
+augmentation_schedule=[0--3740 : 1.0]
+Photometric data augmentations:
+augmentation_random_brightness=[0.5, 1.5]
+augmentation_random_contrast=[0.5, 1.5]
+augmentation_random_gamma=[-1.0, -1.0]
+augmentation_random_hue=[-0.1, 0.1]
+augmentation_random_saturation=[0.5, 1.5]
+augmentation_random_gaussian_blur_kernel_size=[-1, -1]  augmentation_random_gaussian_blur_sigma_range=[-1, -1]
+augmentation_random_noise_type=none  augmentation_random_noise_spread=-1.0
+Geometric data augmentations:
+augmentation_padding_mode=edge
+augmentation_random_crop_type=['horizontal', 'vertical']
+augmentation_random_crop_to_shape=None
+augmentation_reverse_crop_to_shape=None
+augmentation_random_flip_type=['horizontal', 'vertical']
+augmentation_random_rotate_max=25.0
+augmentation_random_crop_and_pad=[0.9, 1.0]
+augmentation_random_resize_to_shape=[-1, -1]
+augmentation_random_resize_and_pad=[0.6, 1.0]
+augmentation_random_resize_and_crop=[-1.0, -1.0]
+Occlusion data augmentations:
+augmentation_random_remove_patch_percent_range_image=[0.001, 0.005]  augmentation_random_remove_patch_size_image=[5, 5]
+augmentation_random_remove_patch_percent_range_depth=[0.6, 0.7]  augmentation_random_remove_patch_size_depth=[1, 1]
+
+Loss function settings:
+supervision_type=unsupervised
+w_color=1.5e-01  w_structure=9.5e-01  w_sparse_depth=2.0e+00  
+w_smoothness=2.0e+00  w_weight_decay_depth=0.0e+00  w_weight_decay_pose=0.0e+00  
+
+Evaluation settings:
+evaluation_protocol=default
+min_evaluate_depth=0.20  max_evaluate_depth=5.00
+
+Checkpoint settings:
+checkpoint_path=trained_completion/kbnet/void1500/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070
+n_step_per_checkpoint=1000
+start_step_validation=100000
+
+Tensorboard settings:
+event_path=trained_completion/kbnet/void1500/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070/tensorboard
+n_step_per_summary=1000  n_image_per_summary=4  
+restore_paths=[]
+
+Hardware settings:
+device=cuda
+n_thread=8
+
+Begin training...
+Training input paths:
+/media/home/alwong/workspace/continual-depth-completion/training/void/unsupervised/void_train_image_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/training/void/unsupervised/void_train_sparse_depth_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/training/void/unsupervised/void_train_intrinsics_1500.txt
+
+Validation input paths:
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_image_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_sparse_depth_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_intrinsics_1500.txt
+/media/home/alwong/workspace/continual-depth-completion/testing/void/void_test_ground_truth_1500.txt
+
+Depth network settings:
+model_name=kbnet_void
+network_modules=['depth', 'pose']
+min_predict_depth=0.10  max_predict_depth=8.00
+
+Weight settings:
+n_parameter=11020868  n_parameter_depth=6957764  n_parameter_pose=4063104
+
+Batch settings
+batch_size=12
+dataset_id=0  n_batch=12  n_height=416  n_width=512
+Training settings:
+n_sample=44888  n_epoch=40  n_step=149600
+learning_schedule=[0-74800 : 0.0001, 74800-149600 : 5e-05]
+
+Augmentation settings:
+augmentation_schedule=[0--3740 : 1.0]
+Photometric data augmentations:
+augmentation_random_brightness=[0.5, 1.5]
+augmentation_random_contrast=[0.5, 1.5]
+augmentation_random_gamma=[-1.0, -1.0]
+augmentation_random_hue=[-0.1, 0.1]
+augmentation_random_saturation=[0.5, 1.5]
+augmentation_random_gaussian_blur_kernel_size=[-1, -1]  augmentation_random_gaussian_blur_sigma_range=[-1, -1]
+augmentation_random_noise_type=none  augmentation_random_noise_spread=-1.0
+Geometric data augmentations:
+augmentation_padding_mode=edge
+augmentation_random_crop_type=['horizontal', 'vertical']
+augmentation_random_crop_to_shape=None
+augmentation_reverse_crop_to_shape=None
+augmentation_random_flip_type=['horizontal', 'vertical']
+augmentation_random_rotate_max=25.0
+augmentation_random_crop_and_pad=[0.9, 1.0]
+augmentation_random_resize_to_shape=[-1, -1]
+augmentation_random_resize_and_pad=[0.6, 1.0]
+augmentation_random_resize_and_crop=[-1.0, -1.0]
+Occlusion data augmentations:
+augmentation_random_remove_patch_percent_range_image=[0.001, 0.005]  augmentation_random_remove_patch_size_image=[5, 5]
+augmentation_random_remove_patch_percent_range_depth=[0.6, 0.7]  augmentation_random_remove_patch_size_depth=[1, 1]
+
+Loss function settings:
+supervision_type=unsupervised
+w_color=1.5e-01  w_structure=9.5e-01  w_sparse_depth=2.0e+00  
+w_smoothness=2.0e+00  w_weight_decay_depth=0.0e+00  w_weight_decay_pose=0.0e+00  
+
+Evaluation settings:
+evaluation_protocol=default
+min_evaluate_depth=0.20  max_evaluate_depth=5.00
+
+Checkpoint settings:
+checkpoint_path=trained_completion/kbnet/void1500/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070
+n_step_per_checkpoint=1000
+start_step_validation=100000
+
+Tensorboard settings:
+event_path=trained_completion/kbnet/void1500/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070/tensorboard
+n_step_per_summary=1000  n_image_per_summary=4  
+restore_paths=[]
+
+Hardware settings:
+device=cuda
+n_thread=8
+
+Begin training...
