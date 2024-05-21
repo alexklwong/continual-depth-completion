@@ -248,10 +248,10 @@ class VOICEDModel(object):
             list[torch.Tensor[float32]] : list of parameters
         '''
 
-        parameters = list(self.model_depth.parameters())
+        parameters = self.model_depth.parameters()
 
         if 'pose' in self.network_modules:
-            parameters = parameters + list(self.model_pose.parameters())
+            parameters = parameters + self.model_pose.parameters()
 
         return parameters
 
@@ -263,7 +263,7 @@ class VOICEDModel(object):
             list[torch.Tensor[float32]] : list of model parameters for depth network modules
         '''
 
-        return self.model_depth.parameters()
+        return list(self.model_depth.parameters())
 
     def parameters_pose(self):
         '''
@@ -274,7 +274,7 @@ class VOICEDModel(object):
         '''
 
         if 'pose' in self.network_modules:
-            return self.model_pose.parameters()
+            return list(self.model_pose.parameters())
         else:
             raise ValueError('Unsupported pose network architecture: {}'.format(self.network_modules))
 

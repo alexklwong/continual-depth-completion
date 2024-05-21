@@ -88,8 +88,15 @@ class DepthCompletionModel(object):
         if 'ewc' in network_modules:
             self.ewc = True
             self.prev_fisher = None
+        else:
+            self.ewc = False
+
+        if 'fisher' in network_modules:
+            self.calculate_fisher_enabled = True
             self.fisher = None
             self.epoch_fisher = net_utils.init_fisher(self.model.parameters_depth())
+        else:
+            self.calculate_fisher_enabled = False
 
     def forward_depth(self, image, sparse_depth, validity_map, intrinsics=None, return_all_outputs=False):
         '''
@@ -206,7 +213,7 @@ class DepthCompletionModel(object):
         else:
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
 
-        if w_losses['w_ewc']:
+        if 'w_ewc' in w_losses:
             loss_ewc = ewc_loss(
                 current_parameters=self.model.parameters_depth(),
                 frozen_parameters=frozen_model.parameters_depth(),
@@ -398,7 +405,7 @@ class DepthCompletionModel(object):
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
 
-        if self.ewc and self.fisher is not None:
+        if self.calculate_fisher_enabled and self.fisher is not None:
             torch.save(self.fisher, os.path.join(checkpoint_dirpath, 'fisher-info_{}.pth'.format(step)))
 
     def update_fisher(self):

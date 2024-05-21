@@ -9,27 +9,19 @@ python depth_completion/src/train_depth_completion.py \
     training/kitti/unsupervised/kitti_train_nonstatic_sparse_depth.txt \
 --train_intrinsics_path \
     training/kitti/unsupervised/kitti_train_nonstatic_intrinsics.txt \
---val_image_paths \
-    testing/void/void_test_image_1500.txt \
-    validation/kitti/kitti_val_image.txt \
---val_sparse_depth_paths \
-    testing/void/void_test_sparse_depth_1500.txt \
-    validation/kitti/kitti_val_sparse_depth.txt \
---val_intrinsics_paths \
-    testing/void/void_test_intrinsics_1500.txt \
-    validation/kitti/kitti_val_intrinsics.txt \
---val_ground_truth_paths \
-    testing/void/void_test_ground_truth_1500.txt \
-    validation/kitti/kitti_val_ground_truth.txt \
---model_name voiced \
---network_modules depth pose ewc \
+--val_image_path validation/kitti/kitti_val_image.txt \
+--val_sparse_depth_path validation/kitti/kitti_val_sparse_depth.txt \
+--val_intrinsics_path validation/kitti/kitti_val_intrinsics.txt \
+--val_ground_truth_path validation/kitti/kitti_val_ground_truth.txt \
+--model_name kbnet_kitti \
+--network_modules depth pose fisher \
 --min_predict_depth 0.1 \
 --max_predict_depth 100.0 \
 --train_batch_size 12 \
 --train_crop_shapes \
-    320 768 \
---learning_rates 1e-3 5e-5 \
---learning_schedule 20 40 \
+        320 768 \
+--learning_rates 0 \
+--learning_schedule 1 \
 --augmentation_probabilities 1.0 \
 --augmentation_schedule -1 \
 --augmentation_random_brightness 0.50 1.50 \
@@ -58,21 +50,16 @@ python depth_completion/src/train_depth_completion.py \
     w_smoothness=2.0 \
     w_weight_decay_depth=0.0 \
     w_weight_decay_pose=0.0 \
-    w_ewc=1.0 \
---min_evaluate_depth 0.2 0.0 \
---max_evaluate_depth 5.0 100.0 \
+--min_evaluate_depth 0.0 \
+--max_evaluate_depth 100.0 \
 --evaluation_protocol default \
 --n_step_per_summary 100 \
 --n_step_per_checkpoint 100 \
 --start_step_validation 100 \
 --restore_paths \
-    external_models/voiced/void/voiced-void1500.pth \
-    external_models/voiced/void/posenet-void1500.pth \
-    trained_completion/voiced/void1500/voiced_void1500/checkpoints_voiced-77740/fisher-info_77740.pth \
+    external_models/kbnet/kitti/newckpt.pth \
+    external_models/kbnet/kitti/pose_newckpt.pth \
 --checkpoint_path \
-    trained_completion/voiced/kitti/voiced_void1500_kitti_ewc \
---frozen_model_paths \
-    external_models/voiced/void/voiced-void1500.pth \
-    external_models/voiced/void/posenet-void1500.pth \
+    trained_completion/kbnet/kitti/kbnet_kitti_fisher \
 --device gpu \
 --n_thread 8
