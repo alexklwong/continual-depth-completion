@@ -14,14 +14,14 @@ python depth_completion/src/train_depth_completion.py \
 --val_intrinsics_path testing/void/void_test_intrinsics_1500.txt \
 --val_ground_truth_path testing/void/void_test_ground_truth_1500.txt \
 --model_name kbnet_void \
---network_modules depth pose \
+--network_modules depth pose fisher \
 --min_predict_depth 0.1 \
 --max_predict_depth 8.0 \
 --train_batch_size 12 \
 --train_crop_shapes \
     416 512 \
---learning_rates 1e-4 5e-5 \
---learning_schedule 20 40 \
+--learning_rates 0 \
+--learning_schedule 1 \
 --augmentation_probabilities 1.0 \
 --augmentation_schedule -1 \
 --augmentation_random_brightness 0.50 1.50 \
@@ -55,8 +55,11 @@ python depth_completion/src/train_depth_completion.py \
 --evaluation_protocol default \
 --n_step_per_summary 1000 \
 --n_step_per_checkpoint 1000 \
---start_step_validation 100000 \
+--start_step_validation 10000 \
+--restore_paths \
+    external_models/kbnet/void/newckpt.pth \
+    external_models/kbnet/void/pose_newckpt.pth \
 --checkpoint_path \
-trained_completion/kbnet/void1500/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070 \
+    trained_completion/kbnet/void/kbnet_void_fisher \
 --device gpu \
 --n_thread 8
