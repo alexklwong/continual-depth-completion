@@ -288,8 +288,7 @@ def train(train_image_paths,
 
     # TODO: Load replay data if it is available
 
-    is_available_ewc = 'ewc' in network_modules
-
+    calculate_fisher_enabled = 'fisher' in network_modules
 
     is_available_replay = False
 
@@ -371,16 +370,16 @@ def train(train_image_paths,
             val_sparse_depth_paths_arr,
             val_intrinsics_paths_arr,
             val_ground_truth_paths_arr)
-        
+
         # For each dataset
         for inputs in val_input_paths_arr:
-            
+
             # Unpack for each dataset
             image_paths, \
                 sparse_depth_paths, \
                 intrinsics_paths, \
                 ground_truth_paths = inputs
-            
+
             val_dataloader = torch.utils.data.DataLoader(
                 datasets.DepthCompletionInferenceDataset(
                     image_paths=image_paths,
@@ -392,7 +391,7 @@ def train(train_image_paths,
                 shuffle=False,
                 num_workers=1,
                 drop_last=False)
-            
+
             val_dataloaders.append(val_dataloader)
 
     '''
@@ -863,7 +862,7 @@ def train(train_image_paths,
                 optimizer_pose.step()
 
             # Compute fisher information for EWC
-            if is_available_ewc:
+            if calculate_fisher_enabled:
                 depth_completion_model.calculate_fisher(normalization=len(train_dataloaders[0].dataset))
 
             '''
@@ -918,7 +917,7 @@ def train(train_image_paths,
                     optimizer_pose)
 
         # update fisher at the end of epoch
-        if is_available_ewc:
+        if calculate_fisher_enabled:
             depth_completion_model.update_fisher()
 
 

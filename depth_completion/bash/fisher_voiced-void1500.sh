@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 
 python depth_completion/src/train_depth_completion.py \
 --train_image_paths \
@@ -14,7 +14,7 @@ python depth_completion/src/train_depth_completion.py \
 --val_intrinsics_path testing/void/void_test_intrinsics_1500.txt \
 --val_ground_truth_path testing/void/void_test_ground_truth_1500.txt \
 --model_name voiced \
---network_modules depth pose ewc \
+--network_modules depth pose fisher \
 --min_predict_depth 0.1 \
 --max_predict_depth 8.0 \
 --train_batch_size 12 \
@@ -50,18 +50,16 @@ python depth_completion/src/train_depth_completion.py \
     w_smoothness=2.0 \
     w_weight_decay_depth=0.0 \
     w_weight_decay_pose=0.0 \
-    w_ewc=1.0 \
 --min_evaluate_depth 0.2 \
 --max_evaluate_depth 5.0 \
 --evaluation_protocol default \
---n_step_per_summary 1000 \
---n_step_per_checkpoint 1000 \
---start_step_validation 100000 \
+--n_step_per_summary 100 \
+--n_step_per_checkpoint 100 \
+--start_step_validation 100 \
 --restore_paths \
     external_models/voiced/void/voiced-void1500.pth \
     external_models/voiced/void/posenet-void1500.pth \
-    trained_completion/voiced/void1500/voiced_void1500/checkpoints_voiced-77740/fisher-info_77740.pth \
 --checkpoint_path \
-    trained_completion/voiced/void1500/voiced_void1500 \
+    trained_completion/voiced/void1500/voiced_void15002 \
 --device gpu \
 --n_thread 8
