@@ -31,10 +31,6 @@ def train(train_image_paths,
           val_sparse_depth_paths,
           val_intrinsics_paths,
           val_ground_truth_paths,
-          val_image_paths,  # Added support for multiple val datasets
-          val_sparse_depth_paths,
-          val_intrinsics_paths,
-          val_ground_truth_paths,
           # TODO: Uncomment to use
           # replay_batch_size,
           # replay_crop_shapes,
@@ -79,10 +75,7 @@ def train(train_image_paths,
           w_losses,
           # TODO: Uncomment to use frozen model for loss
           frozen_model_paths,
-          frozen_model_paths,
           # Evaluation settings
-          min_evaluate_depths,  # allows multiple val datasets
-          max_evaluate_depths,  # allows multiple val datasets
           min_evaluate_depths,  # allows multiple val datasets
           max_evaluate_depths,  # allows multiple val datasets
           evaluation_protocol,
