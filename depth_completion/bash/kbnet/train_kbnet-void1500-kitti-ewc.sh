@@ -4,34 +4,34 @@ export CUDA_VISIBLE_DEVICES=0
 
 python depth_completion/src/train_depth_completion.py \
 --train_image_paths \
-    training/void/unsupervised/void_train_image_1500.txt \
     training/kitti/unsupervised/kitti_train_nonstatic_images.txt \
+    training/void/unsupervised/void_train_image_1500.txt \
 --train_sparse_depth_path \
-    training/void/unsupervised/void_train_sparse_depth_1500.txt \
     training/kitti/unsupervised/kitti_train_nonstatic_sparse_depth.txt \
+    training/void/unsupervised/void_train_sparse_depth_1500.txt \
 --train_intrinsics_path \
-    training/void/unsupervised/void_train_intrinsics_1500.txt \
     training/kitti/unsupervised/kitti_train_nonstatic_intrinsics.txt \
+    training/void/unsupervised/void_train_intrinsics_1500.txt \
 --val_image_paths \
-    testing/void/void_test_image_1500.txt \
     validation/kitti/kitti_val_image.txt \
+    testing/void/void_test_image_1500.txt \
 --val_sparse_depth_paths \
-    testing/void/void_test_sparse_depth_1500.txt \
     validation/kitti/kitti_val_sparse_depth.txt \
+    testing/void/void_test_sparse_depth_1500.txt \
 --val_intrinsics_paths \
-    testing/void/void_test_intrinsics_1500.txt \
     validation/kitti/kitti_val_intrinsics.txt \
+    testing/void/void_test_intrinsics_1500.txt \
 --val_ground_truth_paths \
-    testing/void/void_test_ground_truth_1500.txt \
     validation/kitti/kitti_val_ground_truth.txt \
+    testing/void/void_test_ground_truth_1500.txt \
 --model_name kbnet_void \
---network_modules depth pose \
---min_predict_depth 0.1 \
---max_predict_depth 100.0 \
+--network_modules depth pose ewc fisher \
+--min_predict_depth  0.1 \
+--max_predict_depth 8.0 \
 --train_batch_size 12 \
 --train_crop_shapes \
-    416 512 \
     320 768 \
+    416 512 \
 --learning_rates 1e-4 5e-5 \
 --learning_schedule 20 40 \
 --augmentation_probabilities 1.0 \
@@ -62,13 +62,21 @@ python depth_completion/src/train_depth_completion.py \
     w_smoothness=2.0 \
     w_weight_decay_depth=0.0 \
     w_weight_decay_pose=0.0 \
---min_evaluate_depths 0.2 0.0 \
---max_evaluate_depths 5.0 100.0 \
+    w_ewc=1.0 \
+--min_evaluate_depths 0.0 0.2 \
+--max_evaluate_depths 100.0 5.0 \
 --evaluation_protocol default \
 --n_step_per_summary 1000 \
 --n_step_per_checkpoint 100 \
 --start_step_validation 100 \
+--restore_paths \
+    trained_completion/kbnet/void/kbnet_void_fisher/checkpoints_kbnet_void-70740/kbnet-70740.pth \
+    trained_completion/kbnet/void/kbnet_void_fisher/checkpoints_kbnet_void-70740/posenet-70740.pth \
+    trained_completion/kbnet/void/kbnet_void_fisher/checkpoints_kbnet_void-70740/fisher-info_70740.pth \
+--frozen_model_paths \
+    trained_completion/kbnet/void/kbnet_void_fisher/checkpoints_kbnet_void-70740/kbnet-70740.pth \
+    trained_completion/kbnet/void/kbnet_void_fisher/checkpoints_kbnet_void-70740/posenet-70740.pth \
 --checkpoint_path \
-trained_completion/kbnet/void1500_kitti/kbnet_12x416x512_min01max80_lr0-1e4_20-5e5_40_co015_st095_sz200_sm200_bri050-150_con050-150_hue10_sat050-150_hvflip_rot25_cap090-100_rap060-100_rac000-000_rmim1e3-5e3_5x5_rmpt060-070 \
+    trained_completion/kbnet/void_kitti_ewc \
 --device gpu \
 --n_thread 8

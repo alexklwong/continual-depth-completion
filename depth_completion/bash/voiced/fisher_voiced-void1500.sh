@@ -60,6 +60,6 @@ python depth_completion/src/train_depth_completion.py \
     external_models/voiced/void/voiced-void1500.pth \
     external_models/voiced/void/posenet-void1500.pth \
 --checkpoint_path \
-    trained_completion/voiced/void1500/voiced_void15002 \
+    trained_completion/voiced/void1500/voiced_void1500 \
 --device gpu \
 --n_thread 8
