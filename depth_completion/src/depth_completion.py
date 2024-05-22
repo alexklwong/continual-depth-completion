@@ -5,10 +5,13 @@ from torch.utils.tensorboard import SummaryWriter
 sys.path.insert(0, os.getcwd())
 import datasets
 from utils.src import data_utils, eval_utils, net_utils
+from utils.src import data_utils, eval_utils, net_utils
 from utils.src.log_utils import log
 from depth_completion_model import DepthCompletionModel
 from utils.src.transforms import Transforms
 from PIL import Image
+
+
 
 
 
@@ -24,6 +27,10 @@ def train(train_image_paths,
           # replay_intrinsics_path,
           # replay_ground_truth_paths,
           # Validation filepaths
+          val_image_paths,  # Added support for multiple val datasets
+          val_sparse_depth_paths,
+          val_intrinsics_paths,
+          val_ground_truth_paths,
           val_image_paths,  # Added support for multiple val datasets
           val_sparse_depth_paths,
           val_intrinsics_paths,
@@ -72,7 +79,10 @@ def train(train_image_paths,
           w_losses,
           # TODO: Uncomment to use frozen model for loss
           frozen_model_paths,
+          frozen_model_paths,
           # Evaluation settings
+          min_evaluate_depths,  # allows multiple val datasets
+          max_evaluate_depths,  # allows multiple val datasets
           min_evaluate_depths,  # allows multiple val datasets
           max_evaluate_depths,  # allows multiple val datasets
           evaluation_protocol,
@@ -169,6 +179,7 @@ def train(train_image_paths,
 
     '''
     Setup training dataloaders
+    Setup training dataloaders
     '''
     train_dataloaders = []
 
@@ -196,6 +207,7 @@ def train(train_image_paths,
         train_batch_sizes_arr,
         train_crop_shapes_arr)
 
+    # For each dataset
     # For each dataset
     for inputs in train_input_paths_arr:
 
@@ -385,7 +397,7 @@ def train(train_image_paths,
                 drop_last=False)
 
             val_dataloaders.append(val_dataloader)
-        
+
         # Moved here because we need to know how many val datasets
         best_results = {
             'step': [-1] * len(val_dataloaders),
@@ -1081,7 +1093,7 @@ def validate(depth_model,
                 validity_map0=torch.cat(validity_map_summary[dataset_id], dim=0),
                 ground_truth0=torch.cat(ground_truth_summary[dataset_id], dim=0),
                 scalars={'mae' : mae[dataset_id],
-                         'rmse' : rmse[dataset_id], 
+                         'rmse' : rmse[dataset_id],
                          'imae' : imae[dataset_id],
                          'irmse': irmse[dataset_id]},
                 n_image_per_summary=n_image_per_summary)
