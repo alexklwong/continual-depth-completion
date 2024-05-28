@@ -29,6 +29,14 @@ parser.add_argument('--train_ground_truth_paths',
     nargs='+', type=str, default=None, help='Paths to list of training ground_truth paths')
 
 # TODO: Add replay filepaths
+parser.add_argument('--replay_image_paths',
+    nargs='+', type=str, required=True, help='Paths to list of replay image paths')
+parser.add_argument('--replay_sparse_depth_paths',
+    nargs='+', type=str, required=True, help='Paths to list of replay sparse depth paths')
+parser.add_argument('--replay_intrinsics_paths',
+    nargs='+', type=str, default=None, help='Paths to list of replay camera intrinsics paths')
+parser.add_argument('--replay_ground_truth_paths',
+    nargs='+', type=str, default=None, help='Paths to list of replay ground_truth paths')
 
 # Validation filepaths
 parser.add_argument('--val_image_path',
@@ -39,6 +47,12 @@ parser.add_argument('--val_intrinsics_path',
     type=str, default=None, help='Path to list of validation camera intrinsics paths')
 parser.add_argument('--val_ground_truth_path',
     type=str, default=None, help='Path to list of validation ground truth depth paths')
+
+# Replay settings
+parser.add_argument('--replay_batch_size',
+    type=int, default=8, help='Number of samples per batch (divisible by number of datasets)')
+parser.add_argument('--replay_crop_shapes',
+    nargs='+', type=int, default=[480, 640], help='List of (height, width) crop shapes for training data')
 
 # Depth network settings
 parser.add_argument('--model_name',
