@@ -69,7 +69,7 @@ def train(train_image_paths,
           supervision_type,
           w_losses,
           # TODO: Uncomment to use frozen model for loss
-          # frozen_model_paths,
+          frozen_model_paths,
           # Evaluation settings
           min_evaluate_depth,
           max_evaluate_depth,
@@ -301,33 +301,101 @@ def train(train_image_paths,
         # This is so that we can gauge performance on current and previous datasets
         # We will keep the validation dataloaders in a list and
         # iterate through them during validation setp
-        validation_dataloaders = []
+        # Images <=> Sparse depths
+        assert len(val_image_path) == len(val_sparse_depth_path)
 
-        val_image_paths = data_utils.read_paths(val_image_path)
-        val_sparse_depth_paths = data_utils.read_paths(val_sparse_depth_path)
-        val_ground_truth_paths = data_utils.read_paths(val_ground_truth_path)
+        # Read val input paths
+        val_image_paths_arr = [
+            data_utils.read_paths(val_image)
+            for val_image in val_image_path
+        ]
 
-        n_val_sample = len(val_image_paths)
+        n_val_samples = [
+            len(paths) for paths in val_image_paths_arr
+        ]
 
-        if val_intrinsics_path is not None:
-            val_intrinsics_paths = data_utils.read_paths(val_intrinsics_path)
+        val_sparse_depth_paths_arr = [
+            data_utils.read_paths(val_sparse_depth)
+            for val_sparse_depth in val_sparse_depth_path
+        ]
+
+        # Make sure each set of paths have same number of samples
+        for n_val_sample, sparse_depth_path in zip(n_val_samples, val_sparse_depth_paths_arr):
+            assert n_val_sample == len(sparse_depth_path)
+
+        # Images <=> Ground truths
+        assert len(val_image_path) == len(val_ground_truth_path)
+
+        val_ground_truth_paths_arr = [
+            data_utils.read_paths(val_ground_truth)
+            for val_ground_truth in val_ground_truth_path
+        ]
+
+        # Make sure each set of paths have same number of samples
+        for n_val_sample, ground_truth_path in zip(n_val_samples, val_ground_truth_paths_arr):
+            assert n_val_sample == len(ground_truth_path)
+
+        # Images <=>? Intrinsics
+        if val_intrinsics_path is not None and len(val_intrinsics_path) > 0:
+            assert len(val_image_path) == len(val_intrinsics_path)
+
+            val_intrinsics_paths_arr = [
+                data_utils.read_paths(val_intrinsics)
+                for val_intrinsics in val_intrinsics_path
+            ]
+
+            # Make sure each set of paths have same number of samples
+            for n_val_sample, intrinsics_path in zip(n_val_samples, val_intrinsics_paths_arr):
+                assert n_val_sample == len(intrinsics_path)
         else:
-            val_intrinsics_paths = [None] * n_val_sample
+            val_intrinsics_paths_arr = [
+                [None] * n_val_sample
+                for n_val_sample in n_val_samples
+            ]
 
-        for paths in [val_sparse_depth_paths, val_intrinsics_paths, val_ground_truth_paths]:
-            assert len(paths) == n_val_sample
+        '''
+        Setup validation dataloaders
+        '''
+        val_dataloaders = []
 
-        val_dataloader = torch.utils.data.DataLoader(
-            datasets.DepthCompletionInferenceDataset(
-                image_paths=val_image_paths,
-                sparse_depth_paths=val_sparse_depth_paths,
-                intrinsics_paths=val_intrinsics_paths,
-                ground_truth_paths=val_ground_truth_paths,
-                load_image_triplets=False),
-            batch_size=1,
-            shuffle=False,
-            num_workers=1,
-            drop_last=False)
+        val_input_paths_arr = zip(
+            val_image_paths_arr,
+            val_sparse_depth_paths_arr,
+            val_intrinsics_paths_arr,
+            val_ground_truth_paths_arr)
+
+        # For each dataset
+        for inputs in val_input_paths_arr:
+
+            # Unpack for each dataset
+            image_path, \
+                sparse_depth_path, \
+                intrinsics_path, \
+                ground_truth_path = inputs
+
+            val_dataloader = torch.utils.data.DataLoader(
+                datasets.DepthCompletionInferenceDataset(
+                    image_paths=image_path,
+                    sparse_depth_paths=sparse_depth_path,
+                    intrinsics_paths=intrinsics_path,
+                    ground_truth_paths=ground_truth_path,
+                    load_image_triplets=False),
+                batch_size=1,
+                shuffle=False,
+                num_workers=1,
+                drop_last=False)
+
+            val_dataloaders.append(val_dataloader)
+
+        # Moved here because we need to know how many val datasets
+        best_results = {
+            'step': [-1] * len(val_dataloaders),
+            'mae': [np.infty] * len(val_dataloaders),
+            'rmse': [np.infty] * len(val_dataloaders),
+            'imae': [np.infty] * len(val_dataloaders),
+            'irmse': [np.infty] * len(val_dataloaders)
+        }
+
 
     '''
     Set up the model
@@ -351,6 +419,18 @@ def train(train_image_paths,
 
     # TODO: If using loss based (e.g. EWC or LWF) then create another instance of the model
     # Also will need to introduce an argument for restoring weights from previous dataset
+    if len(frozen_model_paths) > 0:
+        frozen_model =  DepthCompletionModel(
+            model_name=model_name,
+            network_modules=network_modules,
+            min_predict_depth=min_predict_depth,
+            max_predict_depth=max_predict_depth,
+            device=device)
+
+        frozen_model.restore_model(frozen_model_paths)
+        frozen_model.eval()
+    else:
+        frozen_model = None
 
     # Set up tensorboard summary writers
     train_summary_writer = SummaryWriter(event_path + '-train')
@@ -387,16 +467,21 @@ def train(train_image_paths,
 
     if is_available_validation:
         log('Validation input paths:', log_path)
-        val_input_paths = [
+        val_input_path = [
             val_image_path,
             val_sparse_depth_path,
             val_intrinsics_path,
             val_ground_truth_path
         ]
-        for path in val_input_paths:
-            if path is not None:
-                log(path, log_path)
+        for dataset_id, paths in enumerate(zip(*val_input_path)):
+
+            log('dataset_id={}'.format(dataset_id))
+            for path in paths:
+                if path is not None:
+                    log(path, log_path)
+
         log('', log_path)
+
 
     log_network_settings(
         log_path,
@@ -710,7 +795,8 @@ def train(train_image_paths,
                     pose0to1=pose0to1,
                     pose0to2=pose0to2,
                     supervision_type=supervision_type,
-                    w_losses=w_losses)
+                    w_losses=w_losses,
+                    frozen_model=frozen_model)
 
                 # Accumulate loss over batches and update loss info
                 loss = loss + loss_batch

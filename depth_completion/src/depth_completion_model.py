@@ -181,11 +181,11 @@ class DepthCompletionModel(object):
         # TODO: Add frozen model as argument to loss computation (i.e. EWC, LWF)
 
         if supervision_type == 'supervised':
-            loss = self.model.compute_loss(
+            loss, loss_info = self.model.compute_loss(
                 target_depth=ground_truth0,
                 output_depth=output_depth0)
         elif supervision_type == 'unsupervised':
-            loss = self.model.compute_loss(
+            loss, loss_info = self.model.compute_loss(
                 image0=image0,
                 image1=image1,
                 image2=image2,
@@ -201,11 +201,14 @@ class DepthCompletionModel(object):
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
 
         if w_losses['w_lwf']:
-            frozen_model_output_depth0 = frozen_model.forward_depth(image0, sparse_depth0, validity_map_depth0, intrinsics)
+            #to debug this, I modified a few lines in random crop, need to fix back later
+            frozen_model_output_depth0 = frozen_model.forward_depth(image0, sparse_depth0, validity_map_depth0, intrinsics, return_all_outputs=True)
             
-            loss += lwf_loss(output_depth0, frozen_model_output_depth0, w_losses['w_lwf'])
+            loss_lwf = lwf_loss(output_depth0, frozen_model_output_depth0, w_losses['w_lwf'])
+            loss += loss_lwf
+            loss_info['loss_lwf'] = loss_lwf
 
-            return loss
+        return loss, loss_info
 
     def parameters_depth(self):
         '''

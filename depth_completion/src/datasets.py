@@ -115,8 +115,8 @@ def random_crop(inputs, shape, intrinsics=None, crop_type=['none']):
             x_start = int(widths[np.random.randint(low=0, high=len(widths))])
 
         # Randomly select a crop location
-        else:
-            x_start = np.random.randint(low=0, high=d_width+1)
+        # else:
+        #     x_start = np.random.randint(low=0, high=d_width+1)
 
     # If bottom alignment, then set starting height to bottom position
     if 'bottom' in crop_type:

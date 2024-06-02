@@ -32,13 +32,13 @@ parser.add_argument('--train_ground_truth_paths',
 
 # Validation filepaths
 parser.add_argument('--val_image_path',
-    type=str, default=None, help='Path to list of validation image paths')
+    nargs='+', type=str, default=None, help='Path to list of validation image paths')
 parser.add_argument('--val_sparse_depth_path',
-    type=str, default=None, help='Path to list of validation sparse depth paths')
+    nargs='+', type=str, default=None, help='Path to list of validation sparse depth paths')
 parser.add_argument('--val_intrinsics_path',
-    type=str, default=None, help='Path to list of validation camera intrinsics paths')
+    nargs='+', type=str, default=None, help='Path to list of validation camera intrinsics paths')
 parser.add_argument('--val_ground_truth_path',
-    type=str, default=None, help='Path to list of validation ground truth depth paths')
+    nargs='+', type=str, default=None, help='Path to list of validation ground truth depth paths')
 
 # Depth network settings
 parser.add_argument('--model_name',
@@ -121,6 +121,8 @@ parser.add_argument('--w_losses',
     nargs='+', type=str, action=ParseStrFloatKeyValueAction, help='Weight of each loss term as key-value pairs: w_color=0.90 w_smoothness=2.00')
 
 # TODO: Add frozen model path(s)
+parser.add_argument('--frozen_model_paths',
+    nargs='+', type=str, default=[], help='Frozen models path for continue losses')
 
 # Evaluation settings
 parser.add_argument('--min_evaluate_depth',
@@ -240,6 +242,7 @@ if __name__ == '__main__':
         n_image_per_summary=args.n_image_per_summary,
         start_step_validation=args.start_step_validation,
         restore_paths=args.restore_paths,
+        frozen_model_paths=args.frozen_model_paths,
         # Hardware settings
         device=args.device,
         n_thread=args.n_thread)
