@@ -6,8 +6,8 @@ def lwf_loss(output_depth0, output_frozen_depth0, lambda_lwf):
     Compute the LwF loss for unsupervised learning scenarios based on depth prediction.
 
     Args:
-        output_depth0 (torch.Tensor): Current model's output depth maps [N, 1, H, W].
-        output_frozen_depth0 (torch.Tensor): Frozen model's output depth maps [N, 1, H, W].
+        output_depth0 (list): Current model's output depth maps [N, 1, H, W].
+        output_frozen_depth0 (list): Frozen model's output depth maps [N, 1, H, W].
         lambda_lwf (float): Regularization weight for the LwF loss component.
 
     Returns:
@@ -18,10 +18,10 @@ def lwf_loss(output_depth0, output_frozen_depth0, lambda_lwf):
     # print(f"Type of output_frozen_depth0: {type(output_frozen_depth0)}, expected torch.Tensor")
 
     if isinstance(output_depth0, list):
-        output_depth0 = torch.cat(output_depth0, dim=0)
+        output_depth0 = output_depth0[0]
 
     if isinstance(output_frozen_depth0, list):
-        output_frozen_depth0 = torch.cat(output_frozen_depth0, dim=0)
+        output_frozen_depth0 = output_frozen_depth0[0]
 
     if output_depth0.shape[0] != output_frozen_depth0.shape[0]:
         raise ValueError("Mismatch in batch size of output_depth0 and output_frozen_depth0")
