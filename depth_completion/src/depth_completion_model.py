@@ -504,6 +504,9 @@ class DepthCompletionModel(object):
                         dim=3))
 
             if output_depth0 is not None:
+                print("output_depth0 shape:", output_depth0.shape)
+                print("output_depth0 contents:", output_depth0)
+
                 output_depth0_summary = output_depth0[0:n_image_per_summary, ...]
 
                 display_summary_depth_text += '_output0'

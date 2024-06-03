@@ -10,6 +10,7 @@ from depth_completion_model import DepthCompletionModel
 from utils.src.transforms import Transforms
 from PIL import Image
 
+torch.autograd.set_detect_anomaly(True)
 
 def train(train_image_paths,
           train_sparse_depth_paths,
