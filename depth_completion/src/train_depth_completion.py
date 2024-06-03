@@ -31,13 +31,13 @@ parser.add_argument('--train_ground_truth_paths',
 # TODO: Add replay filepaths
 
 # Validation filepaths
-parser.add_argument('--val_image_path',
+parser.add_argument('--val_image_paths',
     nargs='+', type=str, default=None, help='Path to list of validation image paths')
-parser.add_argument('--val_sparse_depth_path',
+parser.add_argument('--val_sparse_depth_paths',
     nargs='+', type=str, default=None, help='Path to list of validation sparse depth paths')
-parser.add_argument('--val_intrinsics_path',
+parser.add_argument('--val_intrinsics_paths',
     nargs='+', type=str, default=None, help='Path to list of validation camera intrinsics paths')
-parser.add_argument('--val_ground_truth_path',
+parser.add_argument('--val_ground_truth_paths',
     nargs='+', type=str, default=None, help='Path to list of validation ground truth depth paths')
 
 # Depth network settings
@@ -122,13 +122,13 @@ parser.add_argument('--w_losses',
 
 # TODO: Add frozen model path(s)
 parser.add_argument('--frozen_model_paths',
-    nargs='+', type=str, default=[], help='Frozen models path for continue losses')
+    nargs='+', type=str, default=[], help='Path to frozen models from checkpoint')
 
 # Evaluation settings
-parser.add_argument('--min_evaluate_depth',
-    type=float, default=0.20, help='Minimum value of depth to evaluate')
-parser.add_argument('--max_evaluate_depth',
-    type=float, default=5.00, help='Maximum value of depth to evaluate')
+parser.add_argument('--min_evaluate_depths',
+    nargs='+', type=float, default=[0.20], help='Minimum value of depth to evaluate')
+parser.add_argument('--max_evaluate_depths',
+    nargs='+', type=float, default=[5.00], help='Maximum value of depth to evaluate')
 parser.add_argument('--evaluation_protocol',
     type=str, default='default', help='Protocol for evaluation i.e. vkitti, nuscenes, default')
 
@@ -188,10 +188,10 @@ if __name__ == '__main__':
         train_intrinsics_paths=args.train_intrinsics_paths,
         train_ground_truth_paths=args.train_ground_truth_paths,
         # Validation filepaths
-        val_image_path=args.val_image_path,
-        val_sparse_depth_path=args.val_sparse_depth_path,
-        val_intrinsics_path=args.val_intrinsics_path,
-        val_ground_truth_path=args.val_ground_truth_path,
+        val_image_paths=args.val_image_paths,
+        val_sparse_depth_paths=args.val_sparse_depth_paths,
+        val_intrinsics_paths=args.val_intrinsics_paths,
+        val_ground_truth_paths=args.val_ground_truth_paths,
         # Depth network settings
         model_name=args.model_name,
         network_modules=args.network_modules,
@@ -231,9 +231,11 @@ if __name__ == '__main__':
         # Loss function settings
         supervision_type=args.supervision_type,
         w_losses=args.w_losses,
+        # Frozen model paths
+        frozen_model_paths=args.frozen_model_paths,
         # Evaluation settings
-        min_evaluate_depth=args.min_evaluate_depth,
-        max_evaluate_depth=args.max_evaluate_depth,
+        min_evaluate_depths=args.min_evaluate_depths,
+        max_evaluate_depths=args.max_evaluate_depths,
         evaluation_protocol=args.evaluation_protocol,
         # Checkpoint settings
         checkpoint_path=args.checkpoint_path,
