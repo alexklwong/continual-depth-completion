@@ -21,7 +21,7 @@ class PoseNetModel(object):
 
     def __init__(self,
                  encoder_type='posenet',
-                 rotation_parameterization='euler',
+                 rotation_parameterization='exponential',
                  weight_initializer='xavier_normal',
                  activation_func='leaky_relu',
                  device=torch.device('cuda')):
@@ -168,7 +168,7 @@ class PoseNetModel(object):
         else:
             self.decoder.load_state_dict(checkpoint['decoder_state_dict'])
 
-        if optimizer is not None:
+        if optimizer is not None and 'optimizer_state_dict' in checkpoint.keys():
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
         # Return the current step and optimizer
