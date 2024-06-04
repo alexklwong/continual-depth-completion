@@ -58,14 +58,14 @@ python depth_completion/src/train_depth_completion.py \
     w_weight_decay_depth=0.0 \
     w_weight_decay_pose=0.0 \
     w_ewc=0.0 \
-    w_lwf=0.0 \
+    w_lwf=1.0 \
 --min_evaluate_depth 0.2 0.2 \
 --max_evaluate_depth 5.0 5.0 \
 --evaluation_protocol default \
---n_step_per_summary 1000 \
---n_step_per_checkpoint 1000 \
+--n_step_per_summary 5000 \
+--n_step_per_checkpoint 5000 \
 --start_step_validation 100000 \
---checkpoint_path trained_completion/kbnet/void1500_nyu/kbnet_lwf \
+--checkpoint_path trained_completion/kbnet/void1500_nyu/kbnet_lwf_2 \
 --device gpu \
 --n_thread 8 \
 --restore_paths \
