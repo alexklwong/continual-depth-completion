@@ -249,3 +249,37 @@ def grid_sample(image, target_xy, shape, padding_mode='border'):
         mode='bilinear',
         padding_mode=padding_mode,
         align_corners=True)
+
+def init_fisher(parameters):
+    '''
+    Initialize the fisher information matrix for a model's parameters on a task
+
+    Arg(s):
+        parameters: list[torch.tensor]
+            list of Pytorch depth model parameters
+    Returns:
+        list[torch.tensor]
+            Empty fisher information matrix
+    '''
+    fisher = []
+    for param in parameters:
+        fisher.append(torch.zeros_like(param.data))
+    return fisher
+
+def compute_fisher(fisher_info, parameters, normalization):
+    '''
+    Calculate the fisher information matrix for a model's parameters on a task
+
+    Arg(s):
+        parameters: list[torch.tensor]
+            list of Pytorch depth model parameters with gradients
+    Returns:
+        list[torch.tensor]
+            Updated fisher information matrix
+    '''
+
+    for idx, param in enumerate(parameters):
+        if param.grad is not None:
+            fisher_info[idx] += param.grad.data ** 2 / normalization
+
+    return fisher_info
