@@ -1,6 +1,6 @@
 import os, torch, torchvision
 from utils.src import log_utils, net_utils
-from continual_learning_losses import ewc_loss
+from continual_learning_losses import ewc_loss, lwf_loss
 
 
 class DepthCompletionModel(object):
@@ -222,6 +222,17 @@ class DepthCompletionModel(object):
 
             loss += loss_ewc
             loss_info['loss_ewc'] = loss_ewc
+
+        if w_losses['w_lwf']:
+            #to debug this, I modified a few lines in random crop, need to fix back later
+            frozen_model_output_depth0 = frozen_model.forward_depth(image0, sparse_depth0, validity_map_depth0, intrinsics, return_all_outputs=True)
+
+            loss_lwf = lwf_loss(output_depth0, frozen_model_output_depth0, w_losses['w_lwf'])
+            loss += loss_lwf
+            loss_info['loss_lwf'] = loss_lwf
+
+        return loss, loss_info
+
 
         return loss, loss_info
 
