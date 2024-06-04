@@ -233,9 +233,6 @@ class DepthCompletionModel(object):
 
         return loss, loss_info
 
-
-        return loss, loss_info
-
     def parameters(self):
         '''
         Returns the list of parameters in the model
