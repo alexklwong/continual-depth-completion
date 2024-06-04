@@ -18,7 +18,6 @@ def ewc_loss(current_parameters, frozen_parameters, fisher_info, lambda_ewc):
 
     for curr, old, fisher in zip(current_parameters, frozen_parameters, fisher_info):
         loss += torch.sum(fisher * (old - curr)**2)
-
     return (lambda_ewc / 2) * loss
 
 def lwf_loss(output_depth0, output_frozen_depth0, lambda_lwf):
