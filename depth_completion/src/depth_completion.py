@@ -677,8 +677,9 @@ def train(train_image_paths,
                 optimizer_pose=optimizer_pose)
         except Exception:
             print('Failed to restore optimizer for depth network: Ignoring...')
-            train_step, _ = depth_completion_model.restore_model(
+            restore_results = depth_completion_model.restore_model(
                 restore_paths)
+            train_step = restore_results[0]
 
         for g in optimizer_depth.param_groups:
             g['lr'] = learning_rate
@@ -1174,6 +1175,10 @@ def run(image_path,
         ground_truth_path,
         # Restore path settings
         restore_paths,
+        # Input settings
+        input_channels_image,
+        input_channels_depth,
+        normalized_image_range,
         # Depth network settings
         model_name,
         network_modules,
