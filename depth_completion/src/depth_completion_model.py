@@ -223,7 +223,7 @@ class DepthCompletionModel(object):
             loss += loss_ewc
             loss_info['loss_ewc'] = loss_ewc
 
-        if w_losses['w_lwf']:
+        if 'w_lwf' in w_losses:
             #to debug this, I modified a few lines in random crop, need to fix back later
             frozen_model_output_depth0 = frozen_model.forward_depth(image0, sparse_depth0, validity_map_depth0, intrinsics, return_all_outputs=True)
 

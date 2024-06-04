@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=3
 
 python depth_completion/src/train_depth_completion.py \
 --train_image_paths \
@@ -57,7 +57,6 @@ python depth_completion/src/train_depth_completion.py \
     w_smoothness=2.0 \
     w_weight_decay_depth=0.0 \
     w_weight_decay_pose=0.0 \
-    w_ewc=0.0 \
     w_lwf=1.0 \
 --min_evaluate_depth 0.2 0.2 \
 --max_evaluate_depth 5.0 5.0 \
