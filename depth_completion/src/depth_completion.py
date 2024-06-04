@@ -22,18 +22,18 @@ def train(train_image_paths,
           train_ground_truth_paths,
           # Replay filepaths
           # TODO: Uncomment filepaths to use
-          # replay_image_paths,
-          # replay_sparse_depth_paths,
-          # replay_intrinsics_path,
-          # replay_ground_truth_paths,
+          replay_image_paths,
+          replay_sparse_depth_paths,
+          replay_intrinsics_paths,
+          replay_ground_truth_paths,
           # Validation filepaths
           val_image_paths,  # Added support for multiple val datasets
           val_sparse_depth_paths,
           val_intrinsics_paths,
           val_ground_truth_paths,
           # TODO: Uncomment to use
-          # replay_batch_size,
-          # replay_crop_shapes,
+          replay_batch_size,
+          replay_crop_shapes,
           # Depth network settings
           model_name,
           network_modules,
@@ -284,13 +284,146 @@ def train(train_image_paths,
     padding_modes = ['edge', 'constant', 'constant', 'constant']
 
     # TODO: Load replay data if it is available
+    if supervision_type == "unsupervised":
+        is_available_replay = \
+            replay_image_paths is not None and \
+            replay_sparse_depth_paths is not None
+    else:
+        is_available_replay = \
+            replay_image_paths is not None and \
+            replay_sparse_depth_paths is not None and \
+            replay_ground_truth_paths is not None
 
     calculate_fisher_enabled = 'fisher' in network_modules
 
-    is_available_replay = False
-
     if is_available_replay:
-        pass
+        '''
+        Read input paths and assert paths
+        '''
+        assert len(replay_image_paths) == len(replay_sparse_depth_paths)
+
+        # Read training input paths
+        replay_image_paths_arr = [
+            data_utils.read_paths(replay_image_path)
+            for replay_image_path in replay_image_paths
+        ]
+
+        n_replay_samples = [
+            len(paths) for paths in replay_image_paths_arr
+        ]
+
+        replay_sparse_depth_paths_arr = [
+            data_utils.read_paths(replay_sparse_depth_path)
+            for replay_sparse_depth_path in replay_sparse_depth_paths
+        ]
+
+        # Make sure each set of paths have same number of samples
+        for n_replay_sample, sparse_depth_paths in zip(n_replay_samples, replay_sparse_depth_paths_arr):
+            assert n_replay_sample == len(sparse_depth_paths)
+
+        # Read optional ground truth paths
+        if replay_ground_truth_paths is not None and len(replay_ground_truth_paths) > 0:
+            assert len(replay_image_paths) == len(replay_ground_truth_paths)
+
+            replay_ground_truth_paths_arr = [
+                data_utils.read_paths(replay_ground_truth_path)
+                for replay_ground_truth_path in replay_ground_truth_paths
+            ]
+
+            for n_replay_sample, ground_truth_paths in zip(n_replay_samples, replay_ground_truth_paths_arr):
+                assert n_replay_sample == len(ground_truth_paths)
+
+            is_available_ground_truth = True
+        else:
+            replay_ground_truth_paths_arr = [
+                [None] * n_replay_sample
+                for n_replay_sample in n_replay_samples
+            ]
+
+            is_available_ground_truth = False
+
+        # Read optional intrinsics input paths
+        if replay_intrinsics_paths is not None and len(replay_intrinsics_paths) > 0:
+            assert len(replay_image_paths) == len(replay_intrinsics_paths)
+
+            replay_intrinsics_paths_arr = [
+                data_utils.read_paths(replay_intrinsics_path)
+                for replay_intrinsics_path in replay_intrinsics_paths
+            ]
+
+            for n_replay_sample, intrinsics_paths in zip(n_replay_samples, replay_intrinsics_paths_arr):
+                assert n_replay_sample == len(intrinsics_paths)
+        else:
+            replay_intrinsics_paths_arr = [
+                [None] * n_replay_sample
+                for n_replay_sample in n_replay_samples
+            ]
+
+        '''
+        Setup replaying dataloader
+        '''
+
+        # Make sure batch size is divisible by datasets
+        n_dataset = len(replay_image_paths_arr)
+        assert replay_batch_size % n_dataset == 0
+
+        # Crop shapes are defined for each dataset
+        assert len(replay_crop_shapes) % 2 == 0 and len(replay_crop_shapes) // 2 == n_dataset
+
+        # Set up batch size and crop shape for each dataset
+        batch_size = replay_batch_size // n_dataset
+        replay_batch_sizes_arr = [batch_size] * n_dataset
+
+        replay_crop_shapes_arr = [
+            (height, width)
+            for height, width in zip(replay_crop_shapes[::2], replay_crop_shapes[1::2])
+        ]
+
+        replay_input_paths_arr = zip(
+            replay_image_paths_arr,
+            replay_sparse_depth_paths_arr,
+            replay_intrinsics_paths_arr,
+            replay_ground_truth_paths_arr,
+            replay_batch_sizes_arr,
+            replay_crop_shapes_arr)
+
+        for inputs in replay_input_paths_arr:
+
+            # Unpack for each dataset
+            image_paths, \
+                sparse_depth_paths, \
+                intrinsics_paths, \
+                ground_truth_paths, \
+                batch_size, \
+                crop_shape = inputs
+
+            if supervision_type == 'supervised':
+                replay_dataset = datasets.DepthCompletionSupervisedTrainingDataset(
+                    image_paths=image_paths,
+                    sparse_depth_paths=sparse_depth_paths,
+                    intrinsics_paths=intrinsics_paths,
+                    ground_truth_paths=ground_truth_paths,
+                    random_crop_shape=crop_shape,
+                    random_crop_type=augmentation_random_crop_type)
+            elif supervision_type == 'unsupervised':
+                replay_dataset = datasets.DepthCompletionMonocularTrainingDataset(
+                    images_paths=image_paths,
+                    sparse_depth_paths=sparse_depth_paths,
+                    intrinsics_paths=intrinsics_paths,
+                    random_crop_shape=crop_shape,
+                    random_crop_type=augmentation_random_crop_type)
+            else:
+                raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
+
+            replay_dataloader = torch.utils.data.DataLoader(
+                replay_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=n_thread,
+                pin_memory=False,
+                drop_last=True)
+
+            train_dataloaders.append(replay_dataloader)
 
     # Load validation data if it is available
     is_available_validation = \
@@ -467,7 +600,26 @@ def train(train_image_paths,
 
     # TODO: if replay filepaths is available then log paths
     if is_available_replay:
-        pass
+        log('Replay input paths:', log_path)
+        replay_input_paths = [
+            replay_image_paths,
+            replay_sparse_depth_paths,
+            replay_intrinsics_paths
+        ]
+
+        if is_available_ground_truth:
+            replay_input_paths.append(replay_ground_truth_paths)
+        else:
+            replay_input_paths.append([None] * len(replay_image_paths))
+
+        for dataset_id, paths in enumerate(zip(*replay_input_paths)):
+
+            log('dataset_id={}'.format(dataset_id))
+            for path in paths:
+                if path is not None:
+                    log(path, log_path)
+        
+        log('', log_path)
 
     # Added multiple dataset support
     if is_available_validation:
@@ -651,6 +803,7 @@ def train(train_image_paths,
         if is_available_replay:
             # TODO: One design is to add it to the list of train dataloaders at the setup stage
             # Another is to have it in a separate loop to allow for separate logging
+            # Choosing first design
             pass
 
         # Zip all dataloaders together to get batches from each
@@ -1138,6 +1291,10 @@ def run(image_path,
         ground_truth_path,
         # Restore path settings
         restore_paths,
+        # Input settings
+        input_channels_image,
+        input_channels_depth,
+        normalized_image_range,
         # Depth network settings
         model_name,
         network_modules,

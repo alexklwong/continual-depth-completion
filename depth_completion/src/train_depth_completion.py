@@ -29,6 +29,14 @@ parser.add_argument('--train_ground_truth_paths',
     nargs='+', type=str, default=None, help='Paths to list of training ground_truth paths')
 
 # TODO: Add replay filepaths
+parser.add_argument('--replay_image_paths',
+    nargs='+', type=str, default=None, help='Paths to list of replay image paths')
+parser.add_argument('--replay_sparse_depth_paths',
+    nargs='+', type=str, default=None, help='Paths to list of replay sparse depth paths')
+parser.add_argument('--replay_intrinsics_paths',
+    nargs='+', type=str, default=None, help='Paths to list of replay camera intrinsics paths')
+parser.add_argument('--replay_ground_truth_paths',
+    nargs='+', type=str, default=None, help='Paths to list of replay ground_truth paths')
 
 # Validation filepaths
 parser.add_argument('--val_image_paths',
@@ -39,6 +47,12 @@ parser.add_argument('--val_intrinsics_paths',
     nargs='+', type=str, default=None, help='Path to list of validation camera intrinsics paths')
 parser.add_argument('--val_ground_truth_paths',
     nargs='+', type=str, default=None, help='Path to list of validation ground truth depth paths')
+
+# Replay settings
+parser.add_argument('--replay_batch_size',
+    type=int, default=8, help='Number of samples per batch (divisible by number of datasets)')
+parser.add_argument('--replay_crop_shapes',
+    nargs='+', type=int, default=[480, 640], help='List of (height, width) crop shapes for training data')
 
 # Depth network settings
 parser.add_argument('--model_name',
@@ -187,11 +201,19 @@ if __name__ == '__main__':
         train_sparse_depth_paths=args.train_sparse_depth_paths,
         train_intrinsics_paths=args.train_intrinsics_paths,
         train_ground_truth_paths=args.train_ground_truth_paths,
+        # Replay filepaths
+        replay_image_paths=args.replay_image_paths,
+        replay_sparse_depth_paths=args.replay_sparse_depth_paths,
+        replay_intrinsics_paths=args.replay_intrinsics_paths,
+        replay_ground_truth_paths=args.replay_ground_truth_paths,
         # Validation filepaths
         val_image_paths=args.val_image_paths,
         val_sparse_depth_paths=args.val_sparse_depth_paths,
         val_intrinsics_paths=args.val_intrinsics_paths,
         val_ground_truth_paths=args.val_ground_truth_paths,
+        # Replay settings
+        replay_batch_size=args.replay_batch_size,
+        replay_crop_shapes=args.replay_crop_shapes,
         # Depth network settings
         model_name=args.model_name,
         network_modules=args.network_modules,
