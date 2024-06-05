@@ -1438,8 +1438,8 @@ def run(image_path,
 
     log_evaluation_settings(
         log_path,
-        min_evaluate_depth=min_evaluate_depth,
-        max_evaluate_depth=max_evaluate_depth,
+        min_evaluate_depths=min_evaluate_depth,
+        max_evaluate_depths=max_evaluate_depth,
         evaluation_protocol=evaluation_protocol)
 
     log_system_settings(
