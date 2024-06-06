@@ -932,9 +932,6 @@ def train(train_image_paths,
 
                 train_dataloaders.append(replay_dataloader)
 
-        for dataloader in train_dataloaders:
-            print("Final number of batches: {}".format(len(dataloader)))
-
         # Zip all dataloaders together to get batches from each
         train_dataloaders_epoch = tqdm.tqdm(
             zip(*train_dataloaders),
