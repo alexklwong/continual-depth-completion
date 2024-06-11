@@ -292,6 +292,19 @@ def process_frame(inputs):
             sparse_depth_output_path,
             ground_truth_output_path)
 
+def find_matching_directories(base_dir):
+    first_level_dirs = natsorted(glob.glob(os.path.join(base_dir, '*/')))
+
+    matching_dirs = []
+    for dir_path in first_level_dirs:
+        folder_name = os.path.basename(os.path.dirname(dir_path))
+
+        second_level_dir = os.path.join(dir_path, folder_name)
+        if os.path.isdir(second_level_dir):
+            matching_dirs.append(second_level_dir)
+
+    return matching_dirs
+
 def setup_dataset_scannet_training(sparse_depth_distro_type,
                                    n_points,
                                    min_points,
@@ -333,7 +346,7 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
 
     w = int(temporal_window // 2)
 
-    train_sequence_dirpaths = natsorted(glob.glob(os.path.join(SCANNET_TRAIN_DIRPATH, '*/')))
+    train_sequence_dirpaths = find_matching_directories(SCANNET_TRAIN_DIRPATH)
 
     for train_sequence_dirpath in train_sequence_dirpaths:
 
@@ -367,8 +380,11 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
         intrinsics[0, 2] = intrinsics[0, 2] * scale_factor_x - offset_x
         intrinsics[1, 2] = intrinsics[1, 2] * scale_factor_x - offset_y
 
-        intrinsics_output_path = intrinsics_path \
-            .replace(os.path.join('intrinsic', 'intrinsic_color.txt'), 'intrinsics.npy')
+        intrinsics_output_path = intrinsics_path.replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH).replace(os.path.join('intrinsic', 'intrinsic_color.txt'), 'intrinsics.npy').replace('export', 'intrinsic')
+        intrinsics_dir_path, extension = os.path.splitext(intrinsics_output_path)
+
+        if intrinsics_dir_path is not None and not os.path.exists(intrinsics_dir_path):
+            os.makedirs(intrinsics_dir_path, exist_ok=True)
 
         np.save(intrinsics_output_path, intrinsics)
 
@@ -435,7 +451,7 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
                 train_unsupervised_ground_truth_output_paths.append(ground_truth_output_path)
                 train_unsupervised_intrinsics_output_paths.extend([intrinsics_output_path] * len(images_output_paths))
         else:
-            print('Processing testing {} samples in: {}'.format(n_sample, train_sequence_dirpath))
+            print('Processing training {} samples in: {}'.format(n_sample, train_sequence_dirpath))
 
             pool_inputs = []
 
@@ -494,7 +510,6 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
                         train_unsupervised_sparse_depth_output_paths.append(sparse_depth_output_path)
                         train_unsupervised_ground_truth_output_paths.append(ground_truth_output_path)
                         train_unsupervised_intrinsics_output_paths.append(intrinsics_output_path)
-
                     train_supervised_image_output_paths.append(image_output_path)
                     train_supervised_sparse_depth_output_paths.append(sparse_depth_output_path)
                     train_supervised_ground_truth_output_paths.append(ground_truth_output_path)
