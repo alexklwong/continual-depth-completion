@@ -292,19 +292,6 @@ def process_frame(inputs):
             sparse_depth_output_path,
             ground_truth_output_path)
 
-def find_matching_directories(base_dir):
-    first_level_dirs = natsorted(glob.glob(os.path.join(base_dir, '*/')))
-
-    matching_dirs = []
-    for dir_path in first_level_dirs:
-        folder_name = os.path.basename(os.path.dirname(dir_path))
-
-        second_level_dir = os.path.join(dir_path, folder_name)
-        if os.path.isdir(second_level_dir):
-            matching_dirs.append(second_level_dir)
-
-    return matching_dirs
-
 def setup_dataset_scannet_training(sparse_depth_distro_type,
                                    n_points,
                                    min_points,
@@ -346,8 +333,8 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
 
     w = int(temporal_window // 2)
 
-    train_sequence_dirpaths = find_matching_directories(SCANNET_TRAIN_DIRPATH)
-
+    train_sequence_dirpaths = natsorted(glob.glob(os.path.join(SCANNET_TRAIN_DIRPATH, '*/')))
+    
     for train_sequence_dirpath in train_sequence_dirpaths:
 
         image_paths = natsorted(glob.glob(
