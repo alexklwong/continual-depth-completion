@@ -10,7 +10,7 @@ sys.path.insert(0, './')
 import utils.src.data_utils as data_utils
 
 
-N_CLUSTER = 1500
+N_CLUSTER = 20000
 O_HEIGHT = 968
 O_WIDTH = 1296
 R_HEIGHT = 480
@@ -69,6 +69,37 @@ TEST_GROUND_TRUTH_OUTPUT_FILEPATH = \
 TEST_INTRINSICS_OUTPUT_FILEPATH = \
     os.path.join(TEST_REF_DIRPATH, 'scannet_test_intrinsics_{}.txt')
 
+def create_fast_feature_validity_map(fast_feature_detector, image, n_points):
+    '''
+    Creates validity map using a FAST feature detector
+
+    Arg(s):
+        fast_feature_detector : cv2.FastFeatureDetector
+            FAST feature detector instance
+        image : numpy[uint8]
+            H x W x 3 RGB image in range [0, 255]
+        n_points : int
+            number of points to sample
+    '''
+
+    n_height, n_width = image.shape[0:2]
+
+    # Run fast feature detector
+    key_points = fast_feature_detector.detect(image, None)
+    key_points = np.array([p.pt for p in key_points]).astype(int)
+
+    # Sample up to the number of points
+    selected = np.random.permutation(np.arange(key_points.shape[0]))[:n_points]
+
+    try:
+        points = key_points[selected, :]
+        validity_map = np.zeros((n_height, n_width))
+        validity_map[points[:, 1], points[:, 0]] = 1
+
+    except Exception:
+        validity_map = np.zeros((n_height, n_width))
+
+    return validity_map
 
 def process_frame(inputs):
     '''
@@ -160,6 +191,9 @@ def process_frame(inputs):
 
         # Use k-Means means as corners
         selected_indices = kmeans.cluster_centers_.astype(np.uint16)
+        # Convert the indices into validity map
+        validity_map = np.zeros_like(image0).astype(np.int16)
+        validity_map[selected_indices[:, 0], selected_indices[:, 1]] = 1.0
 
     elif sparse_depth_distro_type == 'uniform':
         indices = \
@@ -170,17 +204,24 @@ def process_frame(inputs):
             np.random.permutation(range(n_height * n_width))[0:n_points]
         selected_indices = indices[selected_indices]
 
+        # Convert the indices into validity map
+        validity_map = np.zeros_like(image0).astype(np.int16)
+        validity_map[selected_indices[:, 0], selected_indices[:, 1]] = 1.0
+
+    elif sparse_depth_distro_type == 'fast':
+
+        image0_raw = cv2.imread(image0_path)
+
+        fast_feature_detector = cv2.FastFeatureDetector_create(threshold=1, nonmaxSuppression=False)
+        validity_map = create_fast_feature_validity_map(fast_feature_detector, image0_raw, n_points)
+        validity_map = cv2.resize(validity_map, (n_width, n_height), interpolation=cv2.INTER_NEAREST)
+
     else:
         raise ValueError('Unsupported sparse depth distribution type: {}'.format(
             sparse_depth_distro_type))
 
-    # Convert the indices into validity map
-    validity_map = np.zeros_like(image0).astype(np.int16)
-    validity_map[selected_indices[:, 0], selected_indices[:, 1]] = 1.0
-
     # Build validity map from selected points, keep only ones greater than 0
     validity_map = np.where(validity_map * ground_truth > 0.0, 1.0, 0.0)
-
     # Get sparse depth based on validity map
     sparse_depth = validity_map * ground_truth
 
@@ -199,7 +240,7 @@ def process_frame(inputs):
     if np.sum(np.where(validity_map > 0.0, 1.0, 0.0)) < min_points:
         error_flag = True
         print('FAILED: np.sum(np.where(validity_map > 0.0, 1.0, 0.0)) < MIN_POINTS', np.sum(np.where(validity_map > 0.0, 1.0, 0.0)))
-
+  
     if np.sum(np.where(ground_truth > 0.0, 1.0, 0.0)) < min_points:
         error_flag = True
         print('FAILED: np.sum(np.where(ground_truth > 0.0, 1.0, 0.0)) < MIN_POINTS')
@@ -747,7 +788,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--sparse_depth_distro_type', type=str, default='corner')
+    parser.add_argument('--sparse_depth_distro_type', type=str, default='fast')
     parser.add_argument('--n_points',                 type=int, default=N_CLUSTER)
     parser.add_argument('--min_points',               type=int, default=MIN_POINTS)
     parser.add_argument('--n_height',                 type=int, default=N_HEIGHT)
