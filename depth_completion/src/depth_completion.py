@@ -172,13 +172,29 @@ def train(train_image_paths,
 
     '''
     Setup training dataloaders
-    Setup training dataloaders
-    '''
-    train_dataloaders = []
+    '''    
+    # Get number of train samples and training step
+    # Note: zipping up iterators will pad based on largest one
+    max_train_sample = max(n_train_samples)
+
+    n_multiplier_sample_padding_arr = [
+        max_train_sample // n_train_sample
+        for n_train_sample in n_train_samples
+    ]
+
+    n_remainder_sample_padding_arr = [
+        max_train_sample % n_train_sample
+        for n_train_sample in n_train_samples
+    ]
+
+    n_train_sample = max_train_sample * len(n_train_samples)
 
     # Make sure batch size is divisible by datasets
     n_dataset = len(train_image_paths_arr)
     assert train_batch_size % n_dataset == 0
+
+    n_train_step = \
+        learning_schedule[-1] * np.floor(n_train_sample / train_batch_size).astype(np.int32)
 
     # Crop shapes are defined for each dataset
     assert len(train_crop_shapes) % 2 == 0 and len(train_crop_shapes) // 2 == n_dataset
@@ -192,62 +208,7 @@ def train(train_image_paths,
         for height, width in zip(train_crop_shapes[::2], train_crop_shapes[1::2])
     ]
 
-    train_input_paths_arr = zip(
-        train_image_paths_arr,
-        train_sparse_depth_paths_arr,
-        train_intrinsics_paths_arr,
-        train_ground_truth_paths_arr,
-        train_batch_sizes_arr,
-        train_crop_shapes_arr)
-
-    # For each dataset
-    # For each dataset
-    for inputs in train_input_paths_arr:
-
-        # Unpack for each dataset
-        image_paths, \
-            sparse_depth_paths, \
-            intrinsics_paths, \
-            ground_truth_paths, \
-            batch_size, \
-            crop_shape = inputs
-
-        if supervision_type == 'supervised':
-            train_dataset = datasets.DepthCompletionSupervisedTrainingDataset(
-                image_paths=image_paths,
-                sparse_depth_paths=sparse_depth_paths,
-                intrinsics_paths=intrinsics_paths,
-                ground_truth_paths=ground_truth_paths,
-                random_crop_shape=crop_shape,
-                random_crop_type=augmentation_random_crop_type)
-        elif supervision_type == 'unsupervised':
-            train_dataset = datasets.DepthCompletionMonocularTrainingDataset(
-                images_paths=image_paths,
-                sparse_depth_paths=sparse_depth_paths,
-                intrinsics_paths=intrinsics_paths,
-                random_crop_shape=crop_shape,
-                random_crop_type=augmentation_random_crop_type)
-        else:
-            raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
-
-        train_dataloader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=n_thread,
-            pin_memory=False,
-            drop_last=True)
-
-        train_dataloaders.append(train_dataloader)
-
-    # Get number of train samples and training step
-    # Note: zipping up iterators will truncate based on shortest one
-    min_train_sample = min(n_train_samples)
-    n_train_sample = min_train_sample * len(n_train_samples)
-    n_step_per_epoch = min([len(dataloader) for dataloader in train_dataloaders])
-
-    n_train_step = \
-        learning_schedule[-1] * np.floor(n_train_sample / train_batch_size).astype(np.int32)
+    n_step_per_epoch = max_train_sample // batch_size
 
     # Set up data augmentations
     train_transforms_geometric = Transforms(
@@ -363,6 +324,16 @@ def train(train_image_paths,
         Setup replaying dataloader
         '''
 
+        replay_multiplier_sample_padding_arr = [
+            (n_step_per_epoch * replay_batch_size) // n_replay_sample
+            for n_replay_sample in n_replay_samples
+        ]
+
+        replay_remainder_sample_padding_arr = [
+            (n_step_per_epoch * replay_batch_size) % n_replay_sample
+            for n_replay_sample in n_replay_samples
+        ]
+
         # Make sure batch size is divisible by datasets
         n_dataset = len(replay_image_paths_arr)
         assert replay_batch_size % n_dataset == 0
@@ -378,52 +349,6 @@ def train(train_image_paths,
             (height, width)
             for height, width in zip(replay_crop_shapes[::2], replay_crop_shapes[1::2])
         ]
-
-        replay_input_paths_arr = zip(
-            replay_image_paths_arr,
-            replay_sparse_depth_paths_arr,
-            replay_intrinsics_paths_arr,
-            replay_ground_truth_paths_arr,
-            replay_batch_sizes_arr,
-            replay_crop_shapes_arr)
-
-        for inputs in replay_input_paths_arr:
-
-            # Unpack for each dataset
-            image_paths, \
-                sparse_depth_paths, \
-                intrinsics_paths, \
-                ground_truth_paths, \
-                batch_size, \
-                crop_shape = inputs
-
-            if supervision_type == 'supervised':
-                replay_dataset = datasets.DepthCompletionSupervisedTrainingDataset(
-                    image_paths=image_paths,
-                    sparse_depth_paths=sparse_depth_paths,
-                    intrinsics_paths=intrinsics_paths,
-                    ground_truth_paths=ground_truth_paths,
-                    random_crop_shape=crop_shape,
-                    random_crop_type=augmentation_random_crop_type)
-            elif supervision_type == 'unsupervised':
-                replay_dataset = datasets.DepthCompletionMonocularTrainingDataset(
-                    images_paths=image_paths,
-                    sparse_depth_paths=sparse_depth_paths,
-                    intrinsics_paths=intrinsics_paths,
-                    random_crop_shape=crop_shape,
-                    random_crop_type=augmentation_random_crop_type)
-            else:
-                raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
-
-            replay_dataloader = torch.utils.data.DataLoader(
-                replay_dataset,
-                batch_size=batch_size,
-                shuffle=True,
-                num_workers=n_thread,
-                pin_memory=False,
-                drop_last=True)
-
-            train_dataloaders.append(replay_dataloader)
 
     # Load validation data if it is available
     is_available_validation = \
@@ -799,12 +724,213 @@ def train(train_image_paths,
             augmentation_schedule_pos = augmentation_schedule_pos + 1
             augmentation_probability = augmentation_probabilities[augmentation_schedule_pos]
 
+        # Pad all datasets
+        train_image_paths_arr_epoch = []
+        train_sparse_depth_paths_arr_epoch = []
+        train_intrinsics_paths_arr_epoch = []
+        train_ground_truth_paths_arr_epoch = []
+        train_batch_sizes_arr_epoch = train_batch_sizes_arr
+        train_crop_shapes_arr_epoch = train_crop_shapes_arr
+
+        train_input_paths_arr = zip(
+            train_image_paths_arr,
+            train_sparse_depth_paths_arr,
+            train_intrinsics_paths_arr,
+            train_ground_truth_paths_arr,
+            n_multiplier_sample_padding_arr,
+            n_remainder_sample_padding_arr)
+
+        for inputs in train_input_paths_arr:
+            # Unpack for each dataset
+            image_paths, \
+                sparse_depth_paths, \
+                intrinsics_paths, \
+                ground_truth_paths, \
+                multiplier_sample_padding,\
+                remainder_sample_padding = inputs
+            
+            # Compute indices to select remainder for this epoch
+            idx_remainder = np.random.permutation(range(len(image_paths)))[:remainder_sample_padding]
+
+            # Extend image paths
+            image_paths_epoch = image_paths + \
+                image_paths * (multiplier_sample_padding - 1) + \
+                (np.array(image_paths)[idx_remainder]).tolist()
+
+            # Extend sparse depth paths
+            sparse_depth_paths_epoch = sparse_depth_paths + \
+                sparse_depth_paths * (multiplier_sample_padding - 1) + \
+                (np.array(sparse_depth_paths)[idx_remainder]).tolist()
+
+            # Extend intrinsics paths
+            intrinsics_paths_epoch = intrinsics_paths + \
+                intrinsics_paths * (multiplier_sample_padding - 1) + \
+                (np.array(intrinsics_paths)[idx_remainder]).tolist()
+            
+            # Extend ground truth paths
+            ground_truth_paths_epoch = ground_truth_paths + \
+                ground_truth_paths * (multiplier_sample_padding - 1) + \
+                (np.array(ground_truth_paths)[idx_remainder]).tolist()
+            
+            # Append extended paths for each dataset
+            train_image_paths_arr_epoch.append(image_paths_epoch)
+            train_sparse_depth_paths_arr_epoch.append(sparse_depth_paths_epoch)
+            train_intrinsics_paths_arr_epoch.append(intrinsics_paths_epoch)
+            train_ground_truth_paths_arr_epoch.append(ground_truth_paths_epoch)
+
+        train_input_paths_arr_epoch = zip(
+            train_image_paths_arr_epoch,
+            train_sparse_depth_paths_arr_epoch,
+            train_intrinsics_paths_arr_epoch,
+            train_ground_truth_paths_arr_epoch,
+            train_batch_sizes_arr_epoch,
+            train_crop_shapes_arr_epoch)
+        
+        train_dataloaders = []
+        # For each dataset
+        for inputs in train_input_paths_arr_epoch:
+
+            # Unpack for each dataset
+            image_paths, \
+                sparse_depth_paths, \
+                intrinsics_paths, \
+                ground_truth_paths, \
+                batch_size, \
+                crop_shape = inputs
+
+            if supervision_type == 'supervised':
+                train_dataset = datasets.DepthCompletionSupervisedTrainingDataset(
+                    image_paths=image_paths,
+                    sparse_depth_paths=sparse_depth_paths,
+                    intrinsics_paths=intrinsics_paths,
+                    ground_truth_paths=ground_truth_paths,
+                    random_crop_shape=crop_shape,
+                    random_crop_type=augmentation_random_crop_type)
+            elif supervision_type == 'unsupervised':
+                train_dataset = datasets.DepthCompletionMonocularTrainingDataset(
+                    images_paths=image_paths,
+                    sparse_depth_paths=sparse_depth_paths,
+                    intrinsics_paths=intrinsics_paths,
+                    random_crop_shape=crop_shape,
+                    random_crop_type=augmentation_random_crop_type)
+            else:
+                raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
+            
+
+            train_dataloader = torch.utils.data.DataLoader(
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=n_thread,
+                pin_memory=False,
+                drop_last=True)
+
+            train_dataloaders.append(train_dataloader)
+
         # TODO: If replay is available, incorporate it to training loop
         if is_available_replay:
             # TODO: One design is to add it to the list of train dataloaders at the setup stage
             # Another is to have it in a separate loop to allow for separate logging
-            # Choosing first design
-            pass
+
+            # Pad all datasets
+            replay_image_paths_arr_epoch = []
+            replay_sparse_depth_paths_arr_epoch = []
+            replay_intrinsics_paths_arr_epoch = []
+            replay_ground_truth_paths_arr_epoch = []
+            replay_batch_sizes_arr_epoch = replay_batch_sizes_arr
+            replay_crop_shapes_arr_epoch = replay_crop_shapes_arr
+
+            replay_input_paths_arr = zip(
+                replay_image_paths_arr,
+                replay_sparse_depth_paths_arr,
+                replay_intrinsics_paths_arr,
+                replay_ground_truth_paths_arr,
+                replay_multiplier_sample_padding_arr,
+                replay_remainder_sample_padding_arr)
+
+            for inputs in replay_input_paths_arr:
+                # Unpack for each dataset
+                image_paths, \
+                    sparse_depth_paths, \
+                    intrinsics_paths, \
+                    ground_truth_paths, \
+                    multiplier_sample_padding,\
+                    remainder_sample_padding = inputs
+                
+                # Compute indices to select remainder for this epoch
+                idx_remainder = np.random.permutation(range(len(image_paths)))[:remainder_sample_padding]
+
+                # Extend image paths
+                image_paths_epoch = image_paths + \
+                    image_paths * (multiplier_sample_padding - 1) + \
+                    (np.array(image_paths)[idx_remainder]).tolist()
+
+                # Extend sparse depth paths
+                sparse_depth_paths_epoch = sparse_depth_paths + \
+                    sparse_depth_paths * (multiplier_sample_padding - 1) + \
+                    (np.array(sparse_depth_paths)[idx_remainder]).tolist()
+
+                # Extend intrinsics paths
+                intrinsics_paths_epoch = intrinsics_paths + \
+                    intrinsics_paths * (multiplier_sample_padding - 1) + \
+                    (np.array(intrinsics_paths)[idx_remainder]).tolist()
+                
+                # Extend ground truth paths
+                ground_truth_paths_epoch = ground_truth_paths + \
+                    ground_truth_paths * (multiplier_sample_padding - 1) + \
+                    (np.array(ground_truth_paths)[idx_remainder]).tolist()
+                
+                # Append extended paths for each dataset
+                replay_image_paths_arr_epoch.append(image_paths_epoch)
+                replay_sparse_depth_paths_arr_epoch.append(sparse_depth_paths_epoch)
+                replay_intrinsics_paths_arr_epoch.append(intrinsics_paths_epoch)
+                replay_ground_truth_paths_arr_epoch.append(ground_truth_paths_epoch)
+
+            replay_input_paths_arr_epoch = zip(
+                replay_image_paths_arr_epoch,
+                replay_sparse_depth_paths_arr_epoch,
+                replay_intrinsics_paths_arr_epoch,
+                replay_ground_truth_paths_arr_epoch,
+                replay_batch_sizes_arr_epoch,
+                replay_crop_shapes_arr_epoch)
+
+            for inputs in replay_input_paths_arr_epoch:
+
+                # Unpack for each dataset
+                image_paths, \
+                    sparse_depth_paths, \
+                    intrinsics_paths, \
+                    ground_truth_paths, \
+                    batch_size, \
+                    crop_shape = inputs
+
+                if supervision_type == 'supervised':
+                    replay_dataset = datasets.DepthCompletionSupervisedTrainingDataset(
+                        image_paths=image_paths,
+                        sparse_depth_paths=sparse_depth_paths,
+                        intrinsics_paths=intrinsics_paths,
+                        ground_truth_paths=ground_truth_paths,
+                        random_crop_shape=crop_shape,
+                        random_crop_type=augmentation_random_crop_type)
+                elif supervision_type == 'unsupervised':
+                    replay_dataset = datasets.DepthCompletionMonocularTrainingDataset(
+                        images_paths=image_paths,
+                        sparse_depth_paths=sparse_depth_paths,
+                        intrinsics_paths=intrinsics_paths,
+                        random_crop_shape=crop_shape,
+                        random_crop_type=augmentation_random_crop_type)
+                else:
+                    raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
+
+                replay_dataloader = torch.utils.data.DataLoader(
+                    replay_dataset,
+                    batch_size=batch_size,
+                    shuffle=True,
+                    num_workers=n_thread,
+                    pin_memory=False,
+                    drop_last=True)
+
+                train_dataloaders.append(replay_dataloader)
 
         # Zip all dataloaders together to get batches from each
         train_dataloaders_epoch = tqdm.tqdm(
