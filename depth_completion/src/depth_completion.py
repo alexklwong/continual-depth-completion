@@ -34,6 +34,7 @@ def train(train_image_paths,
           # TODO: Uncomment to use
           replay_batch_size,
           replay_crop_shapes,
+          replay_dataset_size,
           # Depth network settings
           model_name,
           network_modules,
@@ -324,13 +325,48 @@ def train(train_image_paths,
         Setup replaying dataloader
         '''
 
+        # Sample replay datasets down to replay_dataset_size
+        for n_replay_sample in n_replay_samples:
+            assert replay_dataset_size <= n_replay_sample
+
+        replay_input_paths_arr = zip(
+            replay_image_paths_arr,
+            replay_sparse_depth_paths_arr,
+            replay_intrinsics_paths_arr,
+            replay_ground_truth_paths_arr)
+
+        truncated_replay_image_paths_arr = []
+        truncated_replay_sparse_depth_paths_arr = []
+        truncated_replay_intrinsics_paths_arr = []
+        truncated_replay_ground_truth_paths_arr = []
+
+        for inputs in replay_input_paths_arr:
+            # Unpack for each dataset
+            image_paths, \
+                sparse_depth_paths, \
+                intrinsics_paths, \
+                ground_truth_paths = inputs
+
+            # Compute indices to select 
+            idx_replay_samples = np.random.permutation(range(len(image_paths)))[:replay_dataset_size]
+
+            truncated_replay_image_paths_arr.append((np.array(image_paths)[idx_replay_samples]).tolist())
+            truncated_replay_sparse_depth_paths_arr.append((np.array(sparse_depth_paths)[idx_replay_samples]).tolist())
+            truncated_replay_intrinsics_paths_arr.append((np.array(intrinsics_paths)[idx_replay_samples]).tolist())
+            truncated_replay_ground_truth_paths_arr.append((np.array(ground_truth_paths)[idx_replay_samples]).tolist())
+
+        replay_image_paths_arr = truncated_replay_image_paths_arr
+        replay_sparse_depth_paths_arr = truncated_replay_sparse_depth_paths_arr
+        replay_intrinsics_paths_arr = truncated_replay_intrinsics_paths_arr
+        replay_ground_truth_paths_arr = truncated_replay_ground_truth_paths_arr
+
         replay_multiplier_sample_padding_arr = [
-            (n_step_per_epoch * replay_batch_size) // n_replay_sample
+            (n_step_per_epoch * replay_batch_size) // replay_dataset_size
             for n_replay_sample in n_replay_samples
         ]
 
         replay_remainder_sample_padding_arr = [
-            (n_step_per_epoch * replay_batch_size) % n_replay_sample
+            (n_step_per_epoch * replay_batch_size) % replay_dataset_size
             for n_replay_sample in n_replay_samples
         ]
 
@@ -931,7 +967,7 @@ def train(train_image_paths,
                     drop_last=True)
 
                 train_dataloaders.append(replay_dataloader)
-
+        
         # Zip all dataloaders together to get batches from each
         train_dataloaders_epoch = tqdm.tqdm(
             zip(*train_dataloaders),
