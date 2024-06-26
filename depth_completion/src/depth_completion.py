@@ -1873,6 +1873,7 @@ def log_training_settings(log_path,
         log('replay_batch_size={}'.format(replay_batch_size), log_path)
         log('replay_crop_shapes={}'.format(replay_crop_shapes), log_path)
         log('replay_dataset_size={}'.format(replay_dataset_size), log_path)
+        log('', log_path)
 
     log('Augmentation settings:', log_path)
     log('augmentation_schedule=[%s]' %
