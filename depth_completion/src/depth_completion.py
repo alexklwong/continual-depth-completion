@@ -621,6 +621,11 @@ def train(train_image_paths,
         n_train_step=n_train_step,
         learning_rates=learning_rates,
         learning_schedule=learning_schedule,
+        # Replay settings
+        is_available_replay=is_available_replay,
+        replay_batch_size=replay_batch_size,
+        replay_crop_shapes=replay_crop_shapes,
+        replay_dataset_size=replay_dataset_size,
         # Augmentation settings
         augmentation_probabilities=augmentation_probabilities,
         augmentation_schedule=augmentation_schedule,
@@ -1808,6 +1813,11 @@ def log_training_settings(log_path,
                           # Learning rate settings
                           learning_rates,
                           learning_schedule,
+                          # Replay settings
+                          is_available_replay,
+                          replay_batch_size,
+                          replay_crop_shapes,
+                          replay_dataset_size,
                           # Augmentation settings
                           augmentation_probabilities,
                           augmentation_schedule,
@@ -1857,6 +1867,12 @@ def log_training_settings(log_path,
             for ls, le, v in zip([0] + learning_schedule[:-1], learning_schedule, learning_rates)),
         log_path)
     log('', log_path)
+
+    if is_available_replay:
+        log('Replay settings:', log_path)
+        log('replay_batch_size={}'.format(replay_batch_size), log_path)
+        log('replay_crop_shapes={}'.format(replay_crop_shapes), log_path)
+        log('replay_dataset_size={}'.format(replay_dataset_size), log_path)
 
     log('Augmentation settings:', log_path)
     log('augmentation_schedule=[%s]' %
