@@ -10,7 +10,7 @@ sys.path.insert(0, './')
 import utils.src.data_utils as data_utils
 
 
-N_CLUSTER = 20000
+N_CLUSTER = 7500
 O_HEIGHT = 968
 O_WIDTH = 1296
 R_HEIGHT = 480
@@ -664,12 +664,12 @@ def setup_dataset_scannet_testing(sparse_depth_distro_type,
         intrinsics[0, 2] = intrinsics[0, 2] * scale_factor_x - offset_x
         intrinsics[1, 2] = intrinsics[1, 2] * scale_factor_x - offset_y
 
-        test_intrinsics_output_path = intrinsics_path \
+        test_intrinsics_output_path = test_intrinsics_path \
             .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH) \
             .replace(os.path.join('intrinsic', 'intrinsic_color.txt'), 'intrinsics.npy') \
             .replace('export', 'intrinsic')
             
-        intrinsics_dir_path, extension = os.path.splitext(intrinsics_output_path)
+        intrinsics_dir_path, extension = os.path.splitext(test_intrinsics_output_path)
 
         if intrinsics_dir_path is not None and not os.path.exists(intrinsics_dir_path):
             os.makedirs(intrinsics_dir_path, exist_ok=True)
