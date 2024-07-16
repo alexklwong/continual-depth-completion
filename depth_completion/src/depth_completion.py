@@ -348,7 +348,9 @@ def train(train_image_paths,
                 ground_truth_paths = inputs
 
             # Compute indices to select 
+            np.random.seed(52234)
             idx_replay_samples = np.random.permutation(range(len(image_paths)))[:replay_dataset_size]
+            np.random.seed(None)
 
             truncated_replay_image_paths_arr.append((np.array(image_paths)[idx_replay_samples]).tolist())
             truncated_replay_sparse_depth_paths_arr.append((np.array(sparse_depth_paths)[idx_replay_samples]).tolist())
