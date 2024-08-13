@@ -55,6 +55,8 @@ parser.add_argument('--replay_crop_shapes',
     nargs='+', type=int, default=[480, 640], help='List of (height, width) crop shapes for training data')
 parser.add_argument('--replay_dataset_size',
     type=int, default=2048, help='Number of samples to use per dataset')
+parser.add_argument('--replay_seed',
+    type=int, default=8667, help='Seed for randomly choosing the samples in the replay buffer')
 
 # Depth network settings
 parser.add_argument('--model_name',
@@ -217,6 +219,7 @@ if __name__ == '__main__':
         replay_batch_size=args.replay_batch_size,
         replay_crop_shapes=args.replay_crop_shapes,
         replay_dataset_size=args.replay_dataset_size,
+        replay_seed=args.replay_seed,
         # Depth network settings
         model_name=args.model_name,
         network_modules=args.network_modules,

@@ -35,6 +35,7 @@ def train(train_image_paths,
           replay_batch_size,
           replay_crop_shapes,
           replay_dataset_size,
+          replay_seed,
           # Depth network settings
           model_name,
           network_modules,
@@ -348,7 +349,7 @@ def train(train_image_paths,
                 ground_truth_paths = inputs
 
             # Compute indices to select 
-            np.random.seed(52234)
+            np.random.seed(replay_seed)
             idx_replay_samples = np.random.permutation(range(len(image_paths)))[:replay_dataset_size]
             np.random.seed(None)
 
@@ -628,6 +629,7 @@ def train(train_image_paths,
         replay_batch_size=replay_batch_size,
         replay_crop_shapes=replay_crop_shapes,
         replay_dataset_size=replay_dataset_size,
+        replay_seed=replay_seed,
         # Augmentation settings
         augmentation_probabilities=augmentation_probabilities,
         augmentation_schedule=augmentation_schedule,
@@ -1820,6 +1822,7 @@ def log_training_settings(log_path,
                           replay_batch_size,
                           replay_crop_shapes,
                           replay_dataset_size,
+                          replay_seed,
                           # Augmentation settings
                           augmentation_probabilities,
                           augmentation_schedule,
@@ -1875,6 +1878,7 @@ def log_training_settings(log_path,
         log('replay_batch_size={}'.format(replay_batch_size), log_path)
         log('replay_crop_shapes={}'.format(replay_crop_shapes), log_path)
         log('replay_dataset_size={}'.format(replay_dataset_size), log_path)
+        log('replay_seed={}'.format(replay_seed), log_path)
         log('', log_path)
 
     log('Augmentation settings:', log_path)
