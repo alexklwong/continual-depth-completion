@@ -329,6 +329,7 @@ def train(train_image_paths,
         # Sample replay datasets down to replay_dataset_size
         for n_replay_sample in n_replay_samples:
             assert replay_dataset_size <= n_replay_sample
+            assert replay_dataset_size < max_train_sample
 
         replay_input_paths_arr = zip(
             replay_image_paths_arr,
@@ -363,16 +364,6 @@ def train(train_image_paths,
         replay_intrinsics_paths_arr = truncated_replay_intrinsics_paths_arr
         replay_ground_truth_paths_arr = truncated_replay_ground_truth_paths_arr
 
-        replay_multiplier_sample_padding_arr = [
-            (n_step_per_epoch * replay_batch_size) // replay_dataset_size
-            for n_replay_sample in n_replay_samples
-        ]
-
-        replay_remainder_sample_padding_arr = [
-            (n_step_per_epoch * replay_batch_size) % replay_dataset_size
-            for n_replay_sample in n_replay_samples
-        ]
-
         # Make sure batch size is divisible by datasets
         n_dataset = len(replay_image_paths_arr)
         assert replay_batch_size % n_dataset == 0
@@ -387,6 +378,16 @@ def train(train_image_paths,
         replay_crop_shapes_arr = [
             (height, width)
             for height, width in zip(replay_crop_shapes[::2], replay_crop_shapes[1::2])
+        ]
+
+        replay_multiplier_sample_padding_arr = [
+            (n_step_per_epoch * batch_size) // replay_dataset_size
+            for n_replay_sample in n_replay_samples
+        ]
+
+        replay_remainder_sample_padding_arr = [
+            (n_step_per_epoch * batch_size) % replay_dataset_size
+            for n_replay_sample in n_replay_samples
         ]
 
     # Load validation data if it is available
@@ -976,7 +977,7 @@ def train(train_image_paths,
                     drop_last=True)
 
                 train_dataloaders.append(replay_dataloader)
-        
+
         # Zip all dataloaders together to get batches from each
         train_dataloaders_epoch = tqdm.tqdm(
             zip(*train_dataloaders),

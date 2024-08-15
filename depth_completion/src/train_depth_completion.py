@@ -54,7 +54,7 @@ parser.add_argument('--replay_batch_size',
 parser.add_argument('--replay_crop_shapes',
     nargs='+', type=int, default=[480, 640], help='List of (height, width) crop shapes for training data')
 parser.add_argument('--replay_dataset_size',
-    type=int, default=2048, help='Number of samples to use per dataset')
+    type=int, default=64, help='Number of samples to use per dataset')
 parser.add_argument('--replay_seed',
     type=int, default=8667, help='Seed for randomly choosing the samples in the replay buffer')
 
