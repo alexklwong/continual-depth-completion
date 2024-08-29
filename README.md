@@ -1,1 +1,1 @@
-# continual-depth-completion
+# TokenCDC: Token Pool Approach for Continual Learning of Unsupervised Depth Completion
