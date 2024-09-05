@@ -117,11 +117,16 @@ class DepthCompletionModel(object):
             list[torch.Tensor[float32]] : a single or list of N x 1 x H x W outputs
         '''
 
-        return self.model.forward_depth(
-            image,
-            sparse_depth,
-            validity_map,
-            intrinsics,
+        latent, skips, shape = self.model.forward_depth_encoder(
+            image, 
+            sparse_depth, 
+            validity_map, 
+            intrinsics)
+
+        return self.model.forward_depth_decoder(
+            latent,
+            skips,
+            shape,
             return_all_outputs)
 
     def forward_pose(self, image0, image1):

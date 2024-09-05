@@ -139,7 +139,7 @@ class KBNetModel(object):
         # Move to device
         self.to(self.device)
 
-    def forward(self,
+    def forward_encoder(self,
                 image,
                 sparse_depth,
                 validity_map_depth,
@@ -157,7 +157,9 @@ class KBNetModel(object):
             intrinsics : torch.Tensor[float32]
                 N x 3 x 3 camera intrinsics matrix
         Returns:
-            torch.Tensor[float32] : N x 1 x H x W output dense depth
+            torch.Tensor[float32] : N x C x H x W latent representation
+            list[torch.Tensor[float32]] : list of skip connections
+            tuple[int] : shape of latent representation
         '''
 
         # Clamp max value of sparse depth
@@ -180,6 +182,25 @@ class KBNetModel(object):
         # Forward through the network
         shape = input_depth.shape[-2:]
         latent, skips = self.encoder(image, input_depth, intrinsics)
+
+        return latent, skips, shape
+    
+    def forward_decoder(self,
+                        latent,
+                        skips,
+                        shape):
+        '''
+        Forwards the latent representation through the decoder
+        Arg(s):
+            latent : torch.Tensor[float32]
+                N x C x H x W latent representation
+            skips : list[torch.Tensor[float32]]
+                list of skip connections
+            shape : tuple[int]
+                shape of latent representation
+        Returns:
+            torch.Tensor[float32] : N x 1 x H x W output depth
+        '''
 
         output = self.decoder(latent, skips, shape)[-1]
 
