@@ -16,6 +16,8 @@ class DepthCompletionModel(object):
             minimum depth to predict
         max_predict_depth : float
             maximum depth to predict
+        frozen : bool
+            for TokenCDC, freeze the model if True
         device : torch.device
             device to run model on
     '''
@@ -25,6 +27,7 @@ class DepthCompletionModel(object):
                  network_modules,
                  min_predict_depth,
                  max_predict_depth,
+                 frozen=False,
                  device=torch.device('cuda')):
 
         self.model_name = model_name
@@ -98,7 +101,44 @@ class DepthCompletionModel(object):
         else:
             self.calculate_fisher_enabled = False
 
-    def forward_depth(self, image, sparse_depth, validity_map, intrinsics=None, return_all_outputs=False):
+        # TokenCDC: Freeze depth parameters
+        if frozen:
+            for param in self.model.parameters_depth():
+                param.requires_grad = False
+
+        # TokenCDC: initialize ParameterDict to store learnable tokens for each dataset
+        self.tokens = torch.nn.ParameterDict() 
+        self.new_params = []  # to add to the optimizer
+ 
+
+    def add_new_token(self, dataset_uid, latent_dim):
+        '''
+        Add and return token for a new unseen dataset
+
+        Arg(s):
+            dataset_uid : str
+                unique id of dataset
+            token : torch.Tensor[float32]
+                token to add
+        Returns:
+            torch.Tensor[float32] : added token
+        '''
+        new_token = torch.nn.Parameter(torch.randn((1, latent_dim),
+                                        device=self.device),
+                                        requires_grad=True)
+        torch.nn.init.uniform_(new_token, -1, 1)
+        self.tokens[dataset_uid] = new_token
+        self.new_params.append(new_token)  # to be added to the optimizer
+        return new_token
+
+
+    def forward_depth(self, 
+                      image, 
+                      sparse_depth, 
+                      validity_map, 
+                      dataset_uid,
+                      intrinsics=None, 
+                      return_all_outputs=False):
         '''
         Forwards stereo pair through network
 
@@ -111,20 +151,48 @@ class DepthCompletionModel(object):
                 N x 1 x H x W valid locations of projected sparse point cloud
             intrinsics : torch.Tensor[float32]
                 N x 3 x 3 intrinsic camera calibration matrix
+            dataset_uid : str
+                unique id of dataset
             return_all_outputs : bool
                 if set, then return list of N x 1 x H x W depth maps else a single N x 1 x H x W depth map
         Returns:
             list[torch.Tensor[float32]] : a single or list of N x 1 x H x W outputs
         '''
 
+        # Encoder Forward Pass
         latent, skips, shape = self.model.forward_depth_encoder(
             image, 
             sparse_depth, 
             validity_map, 
             intrinsics)
 
+        ##### BEGIN TokenCDC Implementation 
+
+        # TEST: print number of learnable params in the tokens dict
+        # count = 0
+        # for param in self.tokens.values():
+        #     if param.requires_grad:
+        #         count += param.numel()
+        # print("Learnable parameters in the model: {}".format(count))
+        # print("Current token keys: {}".format(self.tokens.keys()))
+
+        if dataset_uid not in self.tokens:
+            selected_token = self.add_new_token(dataset_uid, latent.shape[1])
+        else:
+            selected_token = self.tokens[dataset_uid]
+
+        # Expand token to match batch size
+        batch_size = latent.shape[0]
+        selected_token = selected_token.expand(batch_size, -1)
+
+        # Add token to latent
+        latent_with_token = latent + selected_token.unsqueeze(2).unsqueeze(3)
+
+        ##### END TokenCDC Implementation
+
+        # Decoder Forward Pass
         return self.model.forward_depth_decoder(
-            latent,
+            latent_with_token,
             skips,
             shape,
             return_all_outputs)
@@ -237,6 +305,7 @@ class DepthCompletionModel(object):
             loss_info['loss_lwf'] = loss_lwf
 
         return loss, loss_info
+        
 
     def parameters(self):
         '''
@@ -246,7 +315,7 @@ class DepthCompletionModel(object):
             list[torch.Tensor[float32]] : list of parameters
         '''
 
-        return self.model.parameters()
+        return list(self.model.parameters()) + list(self.tokens.values())
 
     def parameters_depth(self):
         '''
@@ -256,7 +325,7 @@ class DepthCompletionModel(object):
             list[torch.Tensor[float32]] : list of parameters
         '''
 
-        return self.model.parameters_depth()
+        return list(self.model.parameters_depth()) + list(self.tokens.values())
 
     def parameters_pose(self):
         '''
@@ -267,6 +336,18 @@ class DepthCompletionModel(object):
         '''
 
         return self.model.parameters_pose()
+
+    def get_new_params(self):
+        '''
+        Returns the list of new parameters added to the model and resets the list
+
+        Returns:
+            list[torch.Tensor[float32]] : list of new parameters
+        '''
+        new_params = self.new_params
+        self.new_params = []  # Clear the list after returning the new params
+        return new_params
+
 
     def train(self):
         '''
@@ -293,6 +374,7 @@ class DepthCompletionModel(object):
 
         self.device = device
         self.model.to(device)
+        self.tokens = self.tokens.to(device)
 
     def data_parallel(self):
         '''
@@ -334,10 +416,25 @@ class DepthCompletionModel(object):
             torch.optimizer : optimizer for depth or None if no optimizer is passed in
             torch.optimizer : optimizer for pose or None if no optimizer is passed in
         '''
-        if self.ewc and self.prev_fisher is None and not frozen_model:
-            # Assuming that if ewc we should have fisher information matrix path at the last of restore paths
-            assert 'fisher' in restore_paths[-1]
-            self.prev_fisher = torch.load(restore_paths[-1])
+        # if self.ewc and self.prev_fisher is None and not frozen_model:
+        #     # Assuming that if ewc we should have fisher information matrix path at the last of restore paths
+        #     assert 'fisher' in restore_paths[-1]
+        #     self.prev_fisher = torch.load(restore_paths[-1])
+
+        # TokenCDC: Restore tokens; must be the LAST PATH
+        if 'token' in self.network_modules:
+            tokens_state_dict = torch.load(restore_paths[-1], map_location=self.device)
+            # Get the keys from the model's param_dict and the saved state_dict
+            state_dict_keys = set(tokens_state_dict.keys())
+            model_keys = set(self.tokens.keys())
+            # Identify missing keys (keys in state_dict but not in model)
+            missing_keys = state_dict_keys - model_keys
+            # Add tokens for the missing keys (and add to new_params list to be added to optimizer)
+            for key in missing_keys:
+                self.add_new_token(key, tokens_state_dict[key].shape[1])
+            # Now, load the state dict
+            self.tokens.load_state_dict(tokens_state_dict)
+            print("TOKENS RESTORED\n\n\n\n\n\n")
 
         if 'kbnet' in self.model_name:
             return self.model.restore_model(
@@ -369,6 +466,7 @@ class DepthCompletionModel(object):
                 optimizer_pose=optimizer_pose)
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
+
 
     def save_model(self,
                    checkpoint_dirpath,
@@ -418,28 +516,33 @@ class DepthCompletionModel(object):
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
 
-        if self.calculate_fisher_enabled and self.fisher is not None:
-            torch.save(self.fisher, os.path.join(checkpoint_dirpath, 'fisher-info_{}.pth'.format(step)))
+        # TokenCDC: Save tokens
+        if 'token' in self.network_modules:
+            torch.save(self.tokens.state_dict(), os.path.join(checkpoint_dirpath, 'tokens-{}.pth'.format(step)))
 
-    def update_fisher(self):
-        '''
-        Update fisher information matrix at the end of an epoch
-        '''
-        self.fisher = self.epoch_fisher
-        self.epoch_fisher = net_utils.init_fisher(self.model.parameters_depth())
+        # if self.calculate_fisher_enabled and self.fisher is not None:
+        #     torch.save(self.fisher, os.path.join(checkpoint_dirpath, 'fisher-info_{}.pth'.format(step)))
 
-    def calculate_fisher(self, normalization):
-        '''
-        Calculate fisher information matrix at the end of a batch
 
-        Arg(s):
-            normalization : int
-                length of dataset
-        '''
-        self.epoch_fisher = net_utils.compute_fisher(
-                    fisher_info=self.epoch_fisher,
-                    parameters=self.model.parameters_depth(),
-                    normalization=normalization)
+    # def update_fisher(self):
+    #     '''
+    #     Update fisher information matrix at the end of an epoch
+    #     '''
+    #     self.fisher = self.epoch_fisher
+    #     self.epoch_fisher = net_utils.init_fisher(self.model.parameters_depth())
+
+    # def calculate_fisher(self, normalization):
+    #     '''
+    #     Calculate fisher information matrix at the end of a batch
+
+    #     Arg(s):
+    #         normalization : int
+    #             length of dataset
+    #     '''
+    #     self.epoch_fisher = net_utils.compute_fisher(
+    #                 fisher_info=self.epoch_fisher,
+    #                 parameters=self.model.parameters_depth(),
+    #                 normalization=normalization)
 
     # TODO add fisher matrix to model save
     # def save_fisher(self,

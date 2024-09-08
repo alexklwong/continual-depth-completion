@@ -178,6 +178,8 @@ class DepthCompletionMonocularTrainingDataset(torch.utils.data.Dataset):
             paths to sparse depth maps at t
         intrinsics_paths : list[str]
             paths to intrinsic camera calibration matrix
+        dataset_uid : str
+            unique dataset identifier
         random_crop_shape : tuple[int]
             shape (height, width) to crop inputs
         random_crop_type : list[str]
@@ -188,6 +190,7 @@ class DepthCompletionMonocularTrainingDataset(torch.utils.data.Dataset):
                  images_paths,
                  sparse_depth_paths,
                  intrinsics_paths,
+                 dataset_uid,
                  random_crop_shape=None,
                  random_crop_type=None):
 
@@ -204,6 +207,8 @@ class DepthCompletionMonocularTrainingDataset(torch.utils.data.Dataset):
         self.images_paths = images_paths
         self.sparse_depth_paths = sparse_depth_paths
         self.intrinsics_paths = intrinsics_paths
+
+        self.dataset_uid = dataset_uid
 
         self.random_crop_type = random_crop_type
         self.random_crop_shape = random_crop_shape
@@ -470,6 +475,8 @@ class DepthCompletionInferenceDataset(torch.utils.data.Dataset):
             paths to sparse depth maps
         intrinsics_paths : list[str]
             paths to intrinsic camera calibration matrix
+        dataset_uid : str
+            unique dataset identifier
         ground_truth_paths : list[str]
             paths to ground truth depth maps
         load_image_triplets : bool
@@ -480,6 +487,7 @@ class DepthCompletionInferenceDataset(torch.utils.data.Dataset):
                  image_paths,
                  sparse_depth_paths,
                  intrinsics_paths,
+                 dataset_uid,
                  ground_truth_paths=None,
                  load_image_triplets=False):
 
@@ -500,6 +508,8 @@ class DepthCompletionInferenceDataset(torch.utils.data.Dataset):
 
         self.data_format = 'CHW'
         self.load_image_triplets = load_image_triplets
+
+        self.dataset_uid = dataset_uid
 
     def __getitem__(self, index):
 
