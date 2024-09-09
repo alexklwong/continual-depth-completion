@@ -4,6 +4,7 @@ external_models
 plots
 pretrained_models
 setup/*/__pycache__
+depth_completion/bash/
 depth_completion/src/__pycache__
 utils/src/__pycache__
 tools/_jupyter/.ipynb_checkpoints
