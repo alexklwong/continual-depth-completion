@@ -1,6 +1,7 @@
 import os, torch, torchvision
+import torch.nn.functional as F
 from utils.src import log_utils, net_utils
-from continual_learning_losses import ewc_loss, lwf_loss
+from continual_learning_losses import token_loss, ewc_loss, lwf_loss
 
 
 class DepthCompletionModel(object):
@@ -27,6 +28,7 @@ class DepthCompletionModel(object):
                  network_modules,
                  min_predict_depth,
                  max_predict_depth,
+                 key_token_pool_size,
                  frozen=False,
                  device=torch.device('cuda')):
 
@@ -34,6 +36,7 @@ class DepthCompletionModel(object):
         self.network_modules = network_modules
         self.min_predict_depth = min_predict_depth
         self.max_predict_depth = max_predict_depth
+        self.key_token_pool_size = key_token_pool_size
         self.device = device
 
         # Parse dataset name
@@ -101,35 +104,46 @@ class DepthCompletionModel(object):
         else:
             self.calculate_fisher_enabled = False
 
-        # TokenCDC: Freeze depth parameters
+        # TokenCDC: Freeze depth model parameters if frozen=True
         if frozen:
             for param in self.model.parameters_depth():
                 param.requires_grad = False
+            for param in self.model.parameters_pose():
+                param.requires_grad = False
 
-        # TokenCDC: initialize ParameterDict to store learnable tokens for each dataset
-        self.tokens = torch.nn.ParameterDict() 
+        # TokenCDC: initialize two ParameterDicts to store learnable key & token POOLS for each dataset
+        self.key_pools = torch.nn.ParameterDict() 
+        self.token_pools = torch.nn.ParameterDict() 
         self.new_params = []  # to add to the optimizer
  
 
-    def add_new_token(self, dataset_uid, latent_dim):
+    def add_new_key_token_pool(self, dataset_uid, key_dim, token_dim):
         '''
         Add and return token for a new unseen dataset
 
         Arg(s):
             dataset_uid : str
                 unique id of dataset
-            token : torch.Tensor[float32]
-                token to add
+            latent_dim : torch.Tensor[float32]
+                dim of both key and token (for now)
         Returns:
             torch.Tensor[float32] : added token
         '''
-        new_token = torch.nn.Parameter(torch.randn((1, latent_dim),
+        new_key_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, key_dim),
                                         device=self.device),
                                         requires_grad=True)
-        torch.nn.init.uniform_(new_token, -1, 1)
-        self.tokens[dataset_uid] = new_token
-        self.new_params.append(new_token)  # to be added to the optimizer
-        return new_token
+        new_token_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, token_dim),
+                                        device=self.device),
+                                        requires_grad=True)
+        
+        self.key_pools[dataset_uid] = new_key_pool
+        self.token_pools[dataset_uid] = new_token_pool
+
+        self.new_params.append(new_key_pool)  # to be added to the optimizer
+        self.new_params.append(new_token_pool)  # to be added to the optimizer
+
+        assert set(self.key_pools.keys()) == set(self.token_pools.keys()), "Key and Token pools must have the same keys!"
+        return new_key_pool, new_token_pool
 
 
     def forward_depth(self, 
@@ -168,34 +182,51 @@ class DepthCompletionModel(object):
 
         ##### BEGIN TokenCDC Implementation 
 
-        # TEST: print number of learnable params in the tokens dict
+        # TokenCDC TEST: number of learnable params
         # count = 0
-        # for param in self.tokens.values():
-        #     if param.requires_grad:
-        #         count += param.numel()
+        # count += sum(p.numel() for p in self.tokens.values() if p.requires_grad)
+        # count += sum(p.numel() for p in self.model.parameters_depth() if p.requires_grad)
         # print("Learnable parameters in the model: {}".format(count))
         # print("Current token keys: {}".format(self.tokens.keys()))
 
-        if dataset_uid not in self.tokens:
-            selected_token = self.add_new_token(dataset_uid, latent.shape[1])
+        # Get dimensions and pools
+        N, key_dim, H, W = latent.shape
+        token_dim = latent.shape[1]
+        if dataset_uid not in self.key_pools:
+            curr_key_pool, curr_token_pool = self.add_new_key_token_pool(dataset_uid, key_dim, token_dim)
         else:
-            selected_token = self.tokens[dataset_uid]
+            curr_key_pool, curr_token_pool = self.key_pools[dataset_uid], self.token_pools[dataset_uid]
 
-        # Expand token to match batch size
-        batch_size = latent.shape[0]
-        selected_token = selected_token.expand(batch_size, -1)
+        # Compute cosine similarity between each channel-dim latent (query) and key pool
+        latent_norm = F.normalize(latent, p=2, dim=1)
+        curr_key_pool_norm = F.normalize(curr_key_pool, p=2, dim=1)
+        curr_key_pool_norm = curr_key_pool_norm[:, :, None, None]  # Add singleton dimensions for broadcasting
+        cosine_similarity = torch.einsum('nchw,kchw->nkhw', latent_norm, curr_key_pool_norm)
+
+        # Get tokens from token pool based on top cosine similarity
+        _, idxs = torch.max(cosine_similarity, dim=1)
+        selected_keys = curr_key_pool[idxs]
+        selected_keys = selected_keys.permute(0, 3, 1, 2)  # N x key_dim x H x W
+        selected_tokens = curr_token_pool[idxs]
+        selected_tokens = selected_tokens.permute(0, 3, 1, 2)  # N x token_dim x H x W
 
         # Add token to latent
-        latent_with_token = latent + selected_token.unsqueeze(2).unsqueeze(3)
+        latent_with_token = latent + selected_tokens
+
+        # Freeze queries
+        queries = latent.detach().clone()
 
         ##### END TokenCDC Implementation
 
         # Decoder Forward Pass
-        return self.model.forward_depth_decoder(
-            latent_with_token,
-            skips,
-            shape,
-            return_all_outputs)
+        output = self.model.forward_depth_decoder(
+                    latent_with_token,
+                    skips,
+                    shape,
+                    return_all_outputs)
+
+        return output, queries, selected_keys
+
 
     def forward_pose(self, image0, image1):
         '''
@@ -212,6 +243,7 @@ class DepthCompletionModel(object):
 
         return self.model.forward_pose(image0, image1)
 
+
     def compute_loss(self,
                      image0,
                      image1,
@@ -223,6 +255,8 @@ class DepthCompletionModel(object):
                      intrinsics,
                      pose0to1,
                      pose0to2,
+                     queries,
+                     keys,
                      ground_truth0=None,
                      supervision_type='unsupervised',
                      w_losses={},
@@ -251,6 +285,10 @@ class DepthCompletionModel(object):
                 N x 4 x 4 relative pose from image at time t to t-1
             pose0to2 : torch.Tensor[float32]
                 N x 4 x 4 relative pose from image at time t to t+1
+            queries : torch.Tensor[float32]
+                N x key_dim x H x W queries (FROZEN)
+            keys : torch.Tensor[float32]
+                N x key_dim x H x W keys
             ground_truth0 : torch.Tensor[float32]
                 N x 1 x H x W ground truth depth at time t
             supervision_type : str
@@ -263,8 +301,6 @@ class DepthCompletionModel(object):
             float : loss averaged over the batch
             dict[str, float] : loss info
         '''
-
-        # TODO: Add frozen model as argument to loss computation (i.e. EWC, LWF)
 
         if supervision_type == 'supervised':
             loss, loss_info = self.model.compute_loss(
@@ -285,6 +321,17 @@ class DepthCompletionModel(object):
                 w_losses=w_losses)
         else:
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
+
+        # TokenCDC: Loss between queries/keys and between keys in the key pool
+        if 'w_token' in w_losses:
+            loss_token = token_loss(
+                            queries=queries,
+                            keys=keys,
+                            key_pools=self.key_pools,
+                            lambda_token=w_losses['w_token'])
+
+            loss += loss_token
+            loss_info['loss_token'] = loss_token
 
         if 'w_ewc' in w_losses:
             loss_ewc = ewc_loss(
@@ -325,7 +372,7 @@ class DepthCompletionModel(object):
             list[torch.Tensor[float32]] : list of parameters
         '''
 
-        return list(self.model.parameters_depth()) + list(self.tokens.values())
+        return self.model.parameters_depth()
 
     def parameters_pose(self):
         '''
@@ -421,20 +468,31 @@ class DepthCompletionModel(object):
         #     assert 'fisher' in restore_paths[-1]
         #     self.prev_fisher = torch.load(restore_paths[-1])
 
-        # TokenCDC: Restore tokens; must be the LAST PATH
+        # TokenCDC: Restore key and token pools; must be the LAST PATH
         if 'token' in self.network_modules:
-            tokens_state_dict = torch.load(restore_paths[-1], map_location=self.device)
-            # Get the keys from the model's param_dict and the saved state_dict
-            state_dict_keys = set(tokens_state_dict.keys())
-            model_keys = set(self.tokens.keys())
+            checkpoint = torch.load(restore_paths[-1], map_location=self.device)
+            key_pools_state_dict = checkpoint['key_pools']
+            token_pools_state_dict = checkpoint['token_pools']
+
+            # Get the keys from the model's param_dicts and the saved state_dicts
+            key_pools_state_dict_keys = set(key_pools_state_dict.keys())
+            key_pools_curr_keys = set(self.key_pools.keys())
+            token_pools_state_dict_keys = set(token_pools_state_dict.keys())
+            token_pools_curr_keys = set(self.token_pools.keys())
+
             # Identify missing keys (keys in state_dict but not in model)
-            missing_keys = state_dict_keys - model_keys
-            # Add tokens for the missing keys (and add to new_params list to be added to optimizer)
-            for key in missing_keys:
-                self.add_new_token(key, tokens_state_dict[key].shape[1])
+            key_pools_missing_keys = key_pools_state_dict_keys - key_pools_curr_keys
+            token_pools_missing_keys = token_pools_state_dict_keys - token_pools_curr_keys
+            assert key_pools_missing_keys == token_pools_missing_keys, "Key and Token pools must have the same keys!"
+
+            # Add pools for the missing keys (and add to new_params list to be added to optimizer)
+            for mk in key_pools_missing_keys:
+                self.add_new_key_token_pool(mk, key_pools_state_dict[mk].shape[1], token_pools_state_dict[mk].shape[1])
+
             # Now, load the state dict
-            self.tokens.load_state_dict(tokens_state_dict)
-            print("TOKENS RESTORED\n\n\n\n\n\n")
+            self.key_pools.load_state_dict(key_pools_state_dict)
+            self.token_pools.load_state_dict(token_pools_state_dict)
+            print("KEY AND TOKEN POOLS RESTORED!\n\n\n\n\n\n")
 
         if 'kbnet' in self.model_name:
             return self.model.restore_model(
@@ -516,9 +574,11 @@ class DepthCompletionModel(object):
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
 
-        # TokenCDC: Save tokens
+        # TokenCDC: Save key and token pools
         if 'token' in self.network_modules:
-            torch.save(self.tokens.state_dict(), os.path.join(checkpoint_dirpath, 'tokens-{}.pth'.format(step)))
+            torch.save({'key_pools': self.key_pools.state_dict(),
+                        'token_pools': self.token_pools.state_dict()},
+                        os.path.join(checkpoint_dirpath, 'pools-{}.pth'.format(step)))
 
         # if self.calculate_fisher_enabled and self.fisher is not None:
         #     torch.save(self.fisher, os.path.join(checkpoint_dirpath, 'fisher-info_{}.pth'.format(step)))

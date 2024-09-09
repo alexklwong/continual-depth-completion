@@ -52,8 +52,11 @@ parser.add_argument('--val_ground_truth_paths',
 parser.add_argument('--val_dataset_uids',
     nargs='+', type=str, default=None, help='Unique dataset ID string for each validation dataset')
 
-parser.add_argument('--token_cdc_frozen',
-    nargs=1, type=bool, default=False, help='If True, then freeze model and only learn tokens')
+# TokenCDC settings
+parser.add_argument('--key_token_pool_size',
+    type=int, default=30, help='Size of each key/token pool')
+parser.add_argument('--freeze_model',
+    action='store_true', default=False, help='Use flag to freeze model and only learn tokens')
 
 # Replay settings
 # parser.add_argument('--replay_batch_size',
@@ -224,7 +227,8 @@ if __name__ == '__main__':
         val_intrinsics_paths=args.val_intrinsics_paths,
         val_ground_truth_paths=args.val_ground_truth_paths,
         val_dataset_uids=args.val_dataset_uids,  # TokenCDC: Added val dataset IDs
-        token_cdc_frozen=args.token_cdc_frozen,  # TokenCDC: Freeze model or not
+        key_token_pool_size=args.key_token_pool_size,  # TokenCDC: Key/token pool size
+        freeze_model=args.freeze_model,  # TokenCDC: Freeze model or not
         # Replay settings
         # replay_batch_size=args.replay_batch_size,
         # replay_crop_shapes=args.replay_crop_shapes,

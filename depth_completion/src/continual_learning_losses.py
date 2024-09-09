@@ -1,6 +1,36 @@
 import torch
 import torch.nn.functional as F
-# TODO: Add losses here as functions (e.g., EWC, LWF)
+
+
+def token_loss(queries, keys, key_pools, lambda_token):
+    '''
+    Calculate the loss between queries/keys and between keys in the key pool
+
+    Args:
+        queries : torch.Tensor[float32]
+            Queries tensor [N, C, H, W]
+        keys : torch.Tensor[float32]
+            Keys tensor [N, C, H, W]
+        key_pools : torch.Tensor[float32]
+            Key pools ParameterDict
+        lambda_token : float
+            Token loss weight
+    '''
+    loss = 0.0
+    cosine_sim_qk = F.cosine_similarity(queries, keys, dim=1)
+    loss_qk = 1 - cosine_sim_qk.mean()
+    loss += loss_qk
+
+    loss_kk = 0.0
+    for key_pool_i in key_pools.values():
+        for key_pool_j in key_pools.values():
+            if key_pool_i is not key_pool_j:
+                cosine_sim_kk = F.cosine_similarity(key_pool_i, key_pool_j, dim=1)
+                loss_kk += cosine_sim_kk.mean()
+    if len(key_pools) * (len(key_pools) - 1) > 0:
+        loss += loss_kk / (len(key_pools) * (len(key_pools) - 1))  # Normalize by number of key pools
+
+    return lambda_token * loss
 
 
 def ewc_loss(current_parameters, frozen_parameters, fisher_info, lambda_ewc):

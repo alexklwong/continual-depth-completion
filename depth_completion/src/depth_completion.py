@@ -28,7 +28,8 @@ def train(train_image_paths,
           val_intrinsics_paths,
           val_ground_truth_paths,
           val_dataset_uids,  # TokenCDC
-          token_cdc_frozen,  # TokenCDC
+          key_token_pool_size,  # TokenCDC
+          freeze_model,  # TokenCDC
           # Replay settings
           #  replay_batch_size,
           #  replay_crop_shapes,
@@ -514,7 +515,8 @@ def train(train_image_paths,
         network_modules=network_modules,
         min_predict_depth=min_predict_depth,
         max_predict_depth=max_predict_depth,
-        frozen=token_cdc_frozen,  # TokenCDC
+        key_token_pool_size=key_token_pool_size,  # TokenCDC
+        frozen=freeze_model,  # TokenCDC
         device=device)
 
     parameters_depth_model = depth_completion_model.parameters_depth()
@@ -1095,16 +1097,20 @@ def train(train_image_paths,
                     random_transform_probability=augmentation_probability)
 
                 '''
-                Forward through the network and compute loss
+                FORWARD THROUGH THE NETWORK
                 '''
                 # Inputs: augmented image, augmented sparse depth map, original (but aligned) validity map
-                output_depth0 = depth_completion_model.forward_depth(
+                output_depth0, queries, keys = depth_completion_model.forward_depth(
                     image=input_image0,
                     sparse_depth=input_sparse_depth0,
                     validity_map=input_validity_map0,
                     intrinsics=input_intrinsics,
                     dataset_uid=dataset_uid,
                     return_all_outputs=True)
+
+                # TokenCDC TEST: Check that queries are frozen
+                # print("Queries are learnable: {}".format(queries.requires_grad))
+                # print("Keys are learnable: {}".format(keys.requires_grad))
 
                 if supervision_type == 'unsupervised':
                     pose0to1 = depth_completion_model.forward_pose(image0, image1)
@@ -1123,10 +1129,11 @@ def train(train_image_paths,
                     return_all_outputs=True,
                     padding_modes=[padding_modes[0]])
 
-                # Compute loss function
                 validity_map_depth0 = validity_map0
 
-                # TODO: Add argument to allow frozen model to be passed in
+                '''
+                COMPUTE LOSS FUNCTION
+                '''
                 loss_batch, loss_info_batch = depth_completion_model.compute_loss(
                     image0=image0,
                     image1=image1,
@@ -1139,6 +1146,8 @@ def train(train_image_paths,
                     intrinsics=intrinsics,
                     pose0to1=pose0to1,
                     pose0to2=pose0to2,
+                    queries=queries,
+                    keys=keys,
                     supervision_type=supervision_type,
                     w_losses=w_losses,
                     frozen_model=frozen_model)
@@ -1207,11 +1216,15 @@ def train(train_image_paths,
                 optimizer_depth.add_param_group({'params' : new_params,
                                                  'weight_decay' : w_weight_decay_depth})
 
+            # TokenCDC TEST: total number of learnable parameters
+            # count = sum(p.numel() for group in optimizer_depth.param_groups for p in group['params'] if p.requires_grad)
+            # print("Learnable parameters in the model: {}".format(count))
+
             optimizer_depth.step()
 
             # TokenCDC TEST
             # print(depth_completion_model.tokens['nyu_v2'].grad.sum())
-            # print(depth_completion_model.tokens['nyu_v2'].sum())
+            # print(depth_completion_model.tokens['void'].sum())
 
             if supervision_type == 'unsupervised':
                 optimizer_pose.step()
@@ -1315,6 +1328,10 @@ def validate(depth_model,
              n_interval_per_summary=250,
              log_path=None):
 
+    # TokenCDC TEST: Sanity check number of key and token parameters
+    # print("Sum of key parameters: {}".format(sum(p.numel() for p in depth_model.key_pools.values() if p.requires_grad)))
+    # print("Sum of token parameters: {}".format(sum(p.numel() for p in depth_model.token_pools.values() if p.requires_grad)))
+
     n_val_steps = min([len(dataloader) for dataloader in dataloaders])
     n_dataloaders = len(dataloaders)
     mae = np.zeros((n_dataloaders, n_val_steps))
@@ -1356,7 +1373,7 @@ def validate(depth_model,
                     sparse_depth)
 
                 # Forward through network
-                output_depth = depth_model.forward_depth(
+                output_depth, _, _ = depth_model.forward_depth(
                     image=image,
                     sparse_depth=sparse_depth,
                     validity_map=validity_map,
