@@ -28,8 +28,11 @@ def train(train_image_paths,
           val_intrinsics_paths,
           val_ground_truth_paths,
           val_dataset_uids,  # TokenCDC
-          key_token_pool_size,  # TokenCDC
-          freeze_model,  # TokenCDC
+          # TokenCDC-specific settings
+          key_token_pool_size,  
+          freeze_model,  
+          domain_incremental,
+          task_agnostic,
           # Replay settings
           #  replay_batch_size,
           #  replay_crop_shapes,
@@ -1148,6 +1151,7 @@ def train(train_image_paths,
                     pose0to2=pose0to2,
                     queries=queries,
                     keys=keys,
+                    domain_incremental=domain_incremental,
                     supervision_type=supervision_type,
                     w_losses=w_losses,
                     frozen_model=frozen_model)

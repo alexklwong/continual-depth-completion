@@ -57,6 +57,10 @@ parser.add_argument('--key_token_pool_size',
     type=int, default=30, help='Size of each key/token pool')
 parser.add_argument('--freeze_model',
     action='store_true', default=False, help='Use flag to freeze model and only learn tokens')
+parser.add_argument('--domain_incremental',
+    action='store_true', default=False, help='Use flag to evaluate on domain-incremental setting')
+parser.add_argument('--task_agnostic',
+    action='store_true', default=False, help='Use flag to evaluate on task-agnostic setting')
 
 # Replay settings
 # parser.add_argument('--replay_batch_size',
@@ -227,8 +231,11 @@ if __name__ == '__main__':
         val_intrinsics_paths=args.val_intrinsics_paths,
         val_ground_truth_paths=args.val_ground_truth_paths,
         val_dataset_uids=args.val_dataset_uids,  # TokenCDC: Added val dataset IDs
-        key_token_pool_size=args.key_token_pool_size,  # TokenCDC: Key/token pool size
-        freeze_model=args.freeze_model,  # TokenCDC: Freeze model or not
+        # TokenCDC-specific settings
+        key_token_pool_size=args.key_token_pool_size,
+        freeze_model=args.freeze_model,
+        domain_incremental=args.domain_incremental,
+        task_agnostic=args.task_agnostic,
         # Replay settings
         # replay_batch_size=args.replay_batch_size,
         # replay_crop_shapes=args.replay_crop_shapes,

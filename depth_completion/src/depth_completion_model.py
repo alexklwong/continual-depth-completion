@@ -257,6 +257,7 @@ class DepthCompletionModel(object):
                      pose0to2,
                      queries,
                      keys,
+                     domain_incremental,
                      ground_truth0=None,
                      supervision_type='unsupervised',
                      w_losses={},
@@ -328,7 +329,8 @@ class DepthCompletionModel(object):
                             queries=queries,
                             keys=keys,
                             key_pools=self.key_pools,
-                            lambda_token=w_losses['w_token'])
+                            lambda_token=w_losses['w_token'],
+                            domain_incremental=domain_incremental)
 
             loss += loss_token
             loss_info['loss_token'] = loss_token
@@ -469,7 +471,7 @@ class DepthCompletionModel(object):
         #     self.prev_fisher = torch.load(restore_paths[-1])
 
         # TokenCDC: Restore key and token pools; must be the LAST PATH
-        if 'token' in self.network_modules:
+        if 'token' in self.network_modules and 'new_pool_size' not in self.network_modules:
             checkpoint = torch.load(restore_paths[-1], map_location=self.device)
             key_pools_state_dict = checkpoint['key_pools']
             token_pools_state_dict = checkpoint['token_pools']

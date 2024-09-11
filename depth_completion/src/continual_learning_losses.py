@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 
-def token_loss(queries, keys, key_pools, lambda_token):
+def token_loss(queries, keys, key_pools, lambda_token, domain_incremental):
     '''
     Calculate the loss between queries/keys and between keys in the key pool
 
@@ -21,14 +21,15 @@ def token_loss(queries, keys, key_pools, lambda_token):
     loss_qk = 1 - cosine_sim_qk.mean()
     loss += loss_qk
 
-    loss_kk = 0.0
-    for key_pool_i in key_pools.values():
-        for key_pool_j in key_pools.values():
-            if key_pool_i is not key_pool_j:
-                cosine_sim_kk = F.cosine_similarity(key_pool_i, key_pool_j, dim=1)
-                loss_kk += cosine_sim_kk.mean()
-    if len(key_pools) * (len(key_pools) - 1) > 0:
-        loss += loss_kk / (len(key_pools) * (len(key_pools) - 1))  # Normalize by number of key pools
+    if domain_incremental:
+        loss_kk = 0.0
+        for key_pool_i in key_pools.values():
+            for key_pool_j in key_pools.values():
+                if key_pool_i is not key_pool_j:
+                    cosine_sim_kk = F.cosine_similarity(key_pool_i, key_pool_j, dim=1)
+                    loss_kk += cosine_sim_kk.mean()
+        if len(key_pools) * (len(key_pools) - 1) > 0:
+            loss += loss_kk / (len(key_pools) * (len(key_pools) - 1))  # Normalize by number of key pools
 
     return lambda_token * loss
 
