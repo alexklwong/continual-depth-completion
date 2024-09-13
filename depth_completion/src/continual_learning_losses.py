@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 
-def token_loss(queries, keys, key_pools, lambda_token, domain_incremental):
+def token_loss(queries, keys, key_pools, lambda_token, domain_incremental=False):
     '''
     Calculate the loss between queries/keys and between keys in the key pool
 

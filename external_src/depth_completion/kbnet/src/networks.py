@@ -312,6 +312,8 @@ class KBNetEncoder(torch.nn.Module):
         Returns:
             torch.Tensor[float32] : N x K x h x w output tensor
             list[torch.Tensor[float32]] : list of skip connections
+            torch.Tensor[float32] : N x C0 x H x W image features
+            torch.Tensor[float32] : N x C0 x H x W depth features
         '''
 
         def camera_coordinates(batch, height, width, k):
@@ -364,6 +366,10 @@ class KBNetEncoder(torch.nn.Module):
             conv0_image = self.conv0_image(image)
             conv0_depth = self.conv0_depth(depth)
 
+            # TokenCDC: Detach image and depth features to be used to create queries
+            image_features = conv0_image.detach().clone()
+            depth_features = conv0_depth.detach().clone()
+
             # Calibrated backprojection
             conv1_image, conv1_depth, conv1_fused = self.calibrated_backprojection1(
                 image=conv0_image,
@@ -376,6 +382,9 @@ class KBNetEncoder(torch.nn.Module):
             conv1_image = self.conv1_image(image)
             conv1_depth = self.conv1_depth(depth)
             conv1_fused = None
+
+            image_features = None
+            depth_features = None
 
             skips1 = [conv1_image, conv1_depth]
 
@@ -530,7 +539,7 @@ class KBNetEncoder(torch.nn.Module):
         # Store as skip connection
         layers.append(torch.cat(skips5, dim=1))
 
-        return layers[-1], layers[0:-1]
+        return layers[-1], layers[0:-1], image_features, depth_features
 
 
 class PoseEncoder(torch.nn.Module):

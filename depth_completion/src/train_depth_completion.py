@@ -30,16 +30,6 @@ parser.add_argument('--train_ground_truth_paths',
 parser.add_argument('--train_dataset_uids',
     nargs='+', type=str, default=None, help='Unique dataset ID string for each training dataset')
 
-# TODO: Add replay filepaths
-# parser.add_argument('--replay_image_paths',
-#     nargs='+', type=str, default=None, help='Paths to list of replay image paths')
-# parser.add_argument('--replay_sparse_depth_paths',
-#     nargs='+', type=str, default=None, help='Paths to list of replay sparse depth paths')
-# parser.add_argument('--replay_intrinsics_paths',
-#     nargs='+', type=str, default=None, help='Paths to list of replay camera intrinsics paths')
-# parser.add_argument('--replay_ground_truth_paths',
-#     nargs='+', type=str, default=None, help='Paths to list of replay ground_truth paths')
-
 # Validation filepaths
 parser.add_argument('--val_image_paths',
     nargs='+', type=str, default=None, help='Path to list of validation image paths')
@@ -55,22 +45,12 @@ parser.add_argument('--val_dataset_uids',
 # TokenCDC settings
 parser.add_argument('--key_token_pool_size',
     type=int, default=30, help='Size of each key/token pool')
-parser.add_argument('--freeze_model',
+parser.add_argument('--unfreeze_model',
     action='store_true', default=False, help='Use flag to freeze model and only learn tokens')
 parser.add_argument('--domain_incremental',
     action='store_true', default=False, help='Use flag to evaluate on domain-incremental setting')
 parser.add_argument('--task_agnostic',
     action='store_true', default=False, help='Use flag to evaluate on task-agnostic setting')
-
-# Replay settings
-# parser.add_argument('--replay_batch_size',
-#     type=int, default=8, help='Number of samples per batch (divisible by number of datasets)')
-# parser.add_argument('--replay_crop_shapes',
-#     nargs='+', type=int, default=[480, 640], help='List of (height, width) crop shapes for training data')
-# parser.add_argument('--replay_dataset_size',
-#     type=int, default=64, help='Number of samples to use per dataset')
-# parser.add_argument('--replay_seed',
-#     type=int, default=8667, help='Seed for randomly choosing the samples in the replay buffer')
 
 # Depth network settings
 parser.add_argument('--model_name',
@@ -220,11 +200,6 @@ if __name__ == '__main__':
         train_intrinsics_paths=args.train_intrinsics_paths,
         train_ground_truth_paths=args.train_ground_truth_paths,
         train_dataset_uids=args.train_dataset_uids,  # TokenCDC: Added train dataset IDs
-        # Replay filepaths
-        # replay_image_paths=args.replay_image_paths,
-        # replay_sparse_depth_paths=args.replay_sparse_depth_paths,
-        # replay_intrinsics_paths=args.replay_intrinsics_paths,
-        # replay_ground_truth_paths=args.replay_ground_truth_paths,
         # Validation filepaths
         val_image_paths=args.val_image_paths,
         val_sparse_depth_paths=args.val_sparse_depth_paths,
@@ -233,15 +208,9 @@ if __name__ == '__main__':
         val_dataset_uids=args.val_dataset_uids,  # TokenCDC: Added val dataset IDs
         # TokenCDC-specific settings
         key_token_pool_size=args.key_token_pool_size,
-        freeze_model=args.freeze_model,
+        unfreeze_model=args.unfreeze_model,
         domain_incremental=args.domain_incremental,
         task_agnostic=args.task_agnostic,
-        # Replay settings
-        # replay_batch_size=args.replay_batch_size,
-        # replay_crop_shapes=args.replay_crop_shapes,
-        # replay_dataset_size=args.replay_dataset_size,
-        # replay_seed=args.replay_seed,
-        # Depth network settings
         model_name=args.model_name,
         network_modules=args.network_modules,
         min_predict_depth=args.min_predict_depth,

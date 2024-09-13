@@ -42,6 +42,9 @@ class KBNetModel(object):
         else:
             raise ValueError('Unsupported dataset settings: {}'.format(dataset_name))
 
+        N_FILTERS_IMAGE = [48, 96, 192, 384, 384]
+        N_FILTERS_DEPTH = [16, 32, 64, 128, 128]
+
         self.model_depth = KBNet(
             input_channels_image=3,
             input_channels_depth=2,
@@ -49,8 +52,8 @@ class KBNetModel(object):
             max_pool_sizes_sparse_to_dense_pool=max_pool_sizes_sparse_to_dense_pool,
             n_convolution_sparse_to_dense_pool=3,
             n_filter_sparse_to_dense_pool=8,
-            n_filters_encoder_image=[48, 96, 192, 384, 384],
-            n_filters_encoder_depth=[16, 32, 64, 128, 128],
+            n_filters_encoder_image=N_FILTERS_IMAGE,
+            n_filters_encoder_depth=N_FILTERS_DEPTH,
             resolutions_backprojection=[0, 1, 2, 3],
             n_filters_decoder=[256, 128, 128, 64, 12],
             deconv_type='up',
@@ -124,7 +127,11 @@ class KBNetModel(object):
             return_all_outputs : bool
                 if set, then return list of all outputs
         Returns:
-            torch.Tensor[float32] : N x 1 x H x W dense depth map
+            torch.Tensor[float32] : N x C x H x W latent representation
+            list[torch.Tensor[float32]] : list of skip connections
+            tuple[int] : shape of latent representation
+            torch.Tensor[float32] : N x C0 x H x W image features
+            torch.Tensor[float32] : N x C0 x H x W depth features
         '''
         image, \
             sparse_depth, \
@@ -133,13 +140,13 @@ class KBNetModel(object):
                 sparse_depth=sparse_depth,
                 validity_map=validity_map)
 
-        latent, skips, shape = self.model_depth.forward_encoder(
+        latent, skips, shape, image_features, depth_features = self.model_depth.forward_encoder(
             image=image,
             sparse_depth=sparse_depth,
             validity_map_depth=filtered_validity_map,
             intrinsics=intrinsics)
         
-        return latent, skips, shape
+        return latent, skips, shape, image_features, depth_features
     
     def forward_depth_decoder(self, latent, skips, shape, return_all_outputs=False):
         '''

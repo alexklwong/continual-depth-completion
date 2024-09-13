@@ -29,14 +29,15 @@ class DepthCompletionModel(object):
                  min_predict_depth,
                  max_predict_depth,
                  key_token_pool_size,
-                 frozen=False,
+                 unfrozen=False,
                  device=torch.device('cuda')):
 
         self.model_name = model_name
         self.network_modules = network_modules
         self.min_predict_depth = min_predict_depth
         self.max_predict_depth = max_predict_depth
-        self.key_token_pool_size = key_token_pool_size
+        self.key_token_pool_size = key_token_pool_size  # TokenCDC
+        self.frozen = not unfrozen  # TokenCDC: freeze model if unfrozen=False
         self.device = device
 
         # Parse dataset name
@@ -104,46 +105,57 @@ class DepthCompletionModel(object):
         else:
             self.calculate_fisher_enabled = False
 
-        # TokenCDC: Freeze depth model parameters if frozen=True
-        if frozen:
+        # TokenCDC: Freeze depth model parameters if unfrozen=False
+        if self.frozen:
             for param in self.model.parameters_depth():
                 param.requires_grad = False
             for param in self.model.parameters_pose():
                 param.requires_grad = False
 
         # TokenCDC: initialize two ParameterDicts to store learnable key & token POOLS for each dataset
-        self.key_pools = torch.nn.ParameterDict() 
+        self.image_key_weights = torch.nn.ParameterDict() 
+        self.depth_key_weights = torch.nn.ParameterDict() 
         self.token_pools = torch.nn.ParameterDict() 
         self.new_params = []  # to add to the optimizer
  
 
-    def add_new_key_token_pool(self, dataset_uid, key_dim, token_dim):
+    def add_new_key_token_pool(self, dataset_uid, image_key_dim, depth_key_dim, token_dim):
         '''
         Add and return token for a new unseen dataset
 
         Arg(s):
             dataset_uid : str
                 unique id of dataset
-            latent_dim : torch.Tensor[float32]
-                dim of both key and token (for now)
+            n_keys : int
+                number of keys/tokens in the pool
+            key_dim : int
+                dimension of image/depth features
+            token_dim : int
+                dimension of fused latent space
         Returns:
             torch.Tensor[float32] : added token
         '''
-        new_key_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, key_dim),
+        new_image_key_weight = torch.nn.Parameter(torch.zeros((image_key_dim, token_dim),
+                                        device=self.device),
+                                        requires_grad=True)
+        new_depth_key_weight = torch.nn.Parameter(torch.zeros((depth_key_dim, token_dim),
                                         device=self.device),
                                         requires_grad=True)
         new_token_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, token_dim),
                                         device=self.device),
                                         requires_grad=True)
         
-        self.key_pools[dataset_uid] = new_key_pool
+        self.image_key_weights[dataset_uid] = new_image_key_weight
+        self.depth_key_weights[dataset_uid] = new_depth_key_weight
         self.token_pools[dataset_uid] = new_token_pool
 
-        self.new_params.append(new_key_pool)  # to be added to the optimizer
+        self.new_params.append(new_image_key_weight)  # to be added to the optimizer
+        self.new_params.append(new_depth_key_weight)  # to be added to the optimizer
         self.new_params.append(new_token_pool)  # to be added to the optimizer
 
-        assert set(self.key_pools.keys()) == set(self.token_pools.keys()), "Key and Token pools must have the same keys!"
-        return new_key_pool, new_token_pool
+        assert set(self.image_key_weights.keys()) == set(self.depth_key_weights.keys()), "Image/Depth Key pools must have same keys!"
+        assert set(self.image_key_weights.keys()) == set(self.token_pools.keys()), "Key and Token pools must have same keys!"
+        return new_image_key_weight, new_depth_key_weight, new_token_pool
 
 
     def forward_depth(self, 
@@ -174,7 +186,7 @@ class DepthCompletionModel(object):
         '''
 
         # Encoder Forward Pass
-        latent, skips, shape = self.model.forward_depth_encoder(
+        latent, skips, shape, image_features, depth_features = self.model.forward_depth_encoder(
             image, 
             sparse_depth, 
             validity_map, 
@@ -184,48 +196,70 @@ class DepthCompletionModel(object):
 
         # TokenCDC TEST: number of learnable params
         # count = 0
-        # count += sum(p.numel() for p in self.tokens.values() if p.requires_grad)
+        # count += sum(p.numel() for p in self.token_pools.values() if p.requires_grad)
         # count += sum(p.numel() for p in self.model.parameters_depth() if p.requires_grad)
         # print("Learnable parameters in the model: {}".format(count))
-        # print("Current token keys: {}".format(self.tokens.keys()))
+        # print("Current token keys: {}".format(self.token_pools.keys()))
 
-        # Get dimensions and pools
-        N, key_dim, H, W = latent.shape
-        token_dim = latent.shape[1]
-        if dataset_uid not in self.key_pools:
-            curr_key_pool, curr_token_pool = self.add_new_key_token_pool(dataset_uid, key_dim, token_dim)
+        # QUERY function (deterministic and frozen) for both image and depth features
+        Ni, image_key_dim, Hi, Wi = image_features.shape
+        Nd, depth_key_dim, Hd, Wd = depth_features.shape
+        assert Ni == Nd and Hi == Hd and Wi == Wd, "Image and depth features must have the same non-channel dims!"
+        # Pad to multiple of 32, then average pool
+        DOWNSAMPLE = 32
+        pad_H = (DOWNSAMPLE - Hi % DOWNSAMPLE) if Hi % DOWNSAMPLE != 0 else 0
+        pad_W = (DOWNSAMPLE - Wi % DOWNSAMPLE) if Wi % DOWNSAMPLE != 0 else 0
+        pad_left = pad_W // 2
+        pad_right = pad_W - pad_left
+        pad_top = pad_H // 2
+        pad_bottom = pad_H - pad_top
+        padded_image_features = F.pad(image_features, (pad_left, pad_right, pad_top, pad_bottom), mode='replicate')
+        image_queries = F.avg_pool2d(padded_image_features, kernel_size=(DOWNSAMPLE, DOWNSAMPLE), stride=(DOWNSAMPLE, DOWNSAMPLE))
+        padded_depth_features = F.pad(depth_features, (pad_left, pad_right, pad_top, pad_bottom), mode='replicate')
+        depth_queries = F.avg_pool2d(padded_depth_features, kernel_size=(DOWNSAMPLE, DOWNSAMPLE), stride=(DOWNSAMPLE, DOWNSAMPLE))
+        # Flatten spatial dimensions
+        new_H = (Hi + pad_H) // DOWNSAMPLE
+        new_W = (Wi + pad_W) // DOWNSAMPLE
+        image_queries = image_queries.permute(0, 2, 3, 1).view(Ni, new_H*new_W, image_key_dim)
+        depth_queries = depth_queries.permute(0, 2, 3, 1).view(Nd, new_H*new_W, depth_key_dim)
+
+        # Get key weights/token pools
+        N, token_dim, H, W = latent.shape
+        assert H == new_H and W == new_W, "Latent and query spatial dimensions must match!"
+        if dataset_uid not in self.image_key_weights:
+            curr_image_key_weight, curr_depth_key_weight, curr_token_pool = \
+                self.add_new_key_token_pool(dataset_uid, image_key_dim, depth_key_dim, token_dim)
         else:
-            curr_key_pool, curr_token_pool = self.key_pools[dataset_uid], self.token_pools[dataset_uid]
+            curr_image_key_weight, curr_depth_key_weight, curr_token_pool = \
+                self.image_key_weights[dataset_uid], self.depth_key_weights[dataset_uid], self.token_pools[dataset_uid]
 
-        # Compute cosine similarity between each channel-dim latent (query) and key pool
-        latent_norm = F.normalize(latent, p=2, dim=1)
-        curr_key_pool_norm = F.normalize(curr_key_pool, p=2, dim=1)
-        curr_key_pool_norm = curr_key_pool_norm[:, :, None, None]  # Add singleton dimensions for broadcasting
-        cosine_similarity = torch.einsum('nchw,kchw->nkhw', latent_norm, curr_key_pool_norm)
+        # Compute the KEYS for both image and depth using FROZEN token pool
+        curr_token_pool_no_grad = curr_token_pool.detach().clone()
+        curr_token_pool_no_grad = curr_token_pool_no_grad.transpose(-2, -1)
+        image_keys = torch.matmul(curr_image_key_weight, curr_token_pool_no_grad)
+        depth_keys = torch.matmul(curr_depth_key_weight, curr_token_pool_no_grad)
 
-        # Get tokens from token pool based on top cosine similarity
-        _, idxs = torch.max(cosine_similarity, dim=1)
-        selected_keys = curr_key_pool[idxs]
-        selected_keys = selected_keys.permute(0, 3, 1, 2)  # N x key_dim x H x W
-        selected_tokens = curr_token_pool[idxs]
-        selected_tokens = selected_tokens.permute(0, 3, 1, 2)  # N x token_dim x H x W
+        # Compute TOKENS using attention
+        image_attention = torch.matmul(image_queries, image_keys) / torch.sqrt(torch.tensor(image_key_dim, device=self.device, dtype=torch.float32))
+        image_attention = F.softmax(image_attention, dim=-1)
+        depth_attention = torch.matmul(depth_queries, depth_keys) / torch.sqrt(torch.tensor(depth_key_dim, device=self.device, dtype=torch.float32))
+        depth_attention = F.softmax(depth_attention, dim=-1)
+        attention_scores = (image_attention + depth_attention) / 2.0
+        tokens = torch.matmul(attention_scores, curr_token_pool).view(N, H, W, token_dim).permute(0, 3, 1, 2)
 
         # Add token to latent
-        latent_with_token = latent + selected_tokens
-
-        # Freeze queries
-        queries = latent.detach().clone()
+        latent_with_tokens = latent + tokens
 
         ##### END TokenCDC Implementation
 
         # Decoder Forward Pass
         output = self.model.forward_depth_decoder(
-                    latent_with_token,
+                    latent_with_tokens,
                     skips,
                     shape,
                     return_all_outputs)
 
-        return output, queries, selected_keys
+        return output
 
 
     def forward_pose(self, image0, image1):
@@ -255,9 +289,9 @@ class DepthCompletionModel(object):
                      intrinsics,
                      pose0to1,
                      pose0to2,
-                     queries,
-                     keys,
-                     domain_incremental,
+                     queries=None,
+                     keys=None,
+                     domain_incremental=False,
                      ground_truth0=None,
                      supervision_type='unsupervised',
                      w_losses={},
@@ -323,7 +357,7 @@ class DepthCompletionModel(object):
         else:
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
 
-        # TokenCDC: Loss between queries/keys and between keys in the key pool
+        # LEGACY: Loss between queries/keys and between keys in the key pool
         if 'w_token' in w_losses:
             loss_token = token_loss(
                             queries=queries,
@@ -364,7 +398,7 @@ class DepthCompletionModel(object):
             list[torch.Tensor[float32]] : list of parameters
         '''
 
-        return list(self.model.parameters()) + list(self.tokens.values())
+        return list(self.model.parameters())
 
     def parameters_depth(self):
         '''
@@ -465,36 +499,40 @@ class DepthCompletionModel(object):
             torch.optimizer : optimizer for depth or None if no optimizer is passed in
             torch.optimizer : optimizer for pose or None if no optimizer is passed in
         '''
-        # if self.ewc and self.prev_fisher is None and not frozen_model:
-        #     # Assuming that if ewc we should have fisher information matrix path at the last of restore paths
-        #     assert 'fisher' in restore_paths[-1]
-        #     self.prev_fisher = torch.load(restore_paths[-1])
 
         # TokenCDC: Restore key and token pools; must be the LAST PATH
         if 'token' in self.network_modules and 'new_pool_size' not in self.network_modules:
             checkpoint = torch.load(restore_paths[-1], map_location=self.device)
-            key_pools_state_dict = checkpoint['key_pools']
+            image_key_weights_state_dict = checkpoint['image_key_weights']
+            depth_key_weights_state_dict = checkpoint['depth_key_weights']
             token_pools_state_dict = checkpoint['token_pools']
 
             # Get the keys from the model's param_dicts and the saved state_dicts
-            key_pools_state_dict_keys = set(key_pools_state_dict.keys())
-            key_pools_curr_keys = set(self.key_pools.keys())
+            image_key_weights_state_dict_keys = set(image_key_weights_state_dict.keys())
+            image_key_weights_curr_keys = set(self.image_key_weights.keys())
+            depth_key_weights_state_dict_keys = set(depth_key_weights_state_dict.keys())
+            depth_key_weights_curr_keys = set(self.depth_key_weights.keys())
             token_pools_state_dict_keys = set(token_pools_state_dict.keys())
             token_pools_curr_keys = set(self.token_pools.keys())
 
             # Identify missing keys (keys in state_dict but not in model)
-            key_pools_missing_keys = key_pools_state_dict_keys - key_pools_curr_keys
+            image_key_weights_missing_keys = image_key_weights_state_dict_keys - image_key_weights_curr_keys
+            depth_key_weights_missing_keys = depth_key_weights_state_dict_keys - depth_key_weights_curr_keys
             token_pools_missing_keys = token_pools_state_dict_keys - token_pools_curr_keys
-            assert key_pools_missing_keys == token_pools_missing_keys, "Key and Token pools must have the same keys!"
+            assert image_key_weights_missing_keys == depth_key_weights_missing_keys, "Image/Depth Key pools must have the same keys!"
+            assert image_key_weights_missing_keys == token_pools_missing_keys, "Key and Token pools must have the same keys!"
 
             # Add pools for the missing keys (and add to new_params list to be added to optimizer)
-            for mk in key_pools_missing_keys:
-                self.add_new_key_token_pool(mk, key_pools_state_dict[mk].shape[1], token_pools_state_dict[mk].shape[1])
+            for mk in image_key_weights_missing_keys:
+                self.add_new_key_token_pool(mk, image_key_weights_state_dict[mk].shape[0],
+                                            depth_key_weights_state_dict[mk].shape[0],
+                                            token_pools_state_dict[mk].shape[1])
 
             # Now, load the state dict
-            self.key_pools.load_state_dict(key_pools_state_dict)
+            self.image_key_weights.load_state_dict(image_key_weights_state_dict)
+            self.depth_key_weights.load_state_dict(depth_key_weights_state_dict)
             self.token_pools.load_state_dict(token_pools_state_dict)
-            print("KEY AND TOKEN POOLS RESTORED!\n\n\n\n\n\n")
+            print("KEY WEIGHTS AND TOKEN POOLS RESTORED!\n\n\n\n\n\n")
 
         if 'kbnet' in self.model_name:
             return self.model.restore_model(
@@ -578,59 +616,10 @@ class DepthCompletionModel(object):
 
         # TokenCDC: Save key and token pools
         if 'token' in self.network_modules:
-            torch.save({'key_pools': self.key_pools.state_dict(),
+            torch.save({'image_key_weights': self.image_key_weights.state_dict(),
+                        'depth_key_weights': self.depth_key_weights.state_dict(),
                         'token_pools': self.token_pools.state_dict()},
-                        os.path.join(checkpoint_dirpath, 'pools-{}.pth'.format(step)))
-
-        # if self.calculate_fisher_enabled and self.fisher is not None:
-        #     torch.save(self.fisher, os.path.join(checkpoint_dirpath, 'fisher-info_{}.pth'.format(step)))
-
-
-    # def update_fisher(self):
-    #     '''
-    #     Update fisher information matrix at the end of an epoch
-    #     '''
-    #     self.fisher = self.epoch_fisher
-    #     self.epoch_fisher = net_utils.init_fisher(self.model.parameters_depth())
-
-    # def calculate_fisher(self, normalization):
-    #     '''
-    #     Calculate fisher information matrix at the end of a batch
-
-    #     Arg(s):
-    #         normalization : int
-    #             length of dataset
-    #     '''
-    #     self.epoch_fisher = net_utils.compute_fisher(
-    #                 fisher_info=self.epoch_fisher,
-    #                 parameters=self.model.parameters_depth(),
-    #                 normalization=normalization)
-
-    # TODO add fisher matrix to model save
-    # def save_fisher(self,
-    #                checkpoint_dirpath,
-    #                step,
-    #                fisher_info):
-
-    #     if 'kbnet' in self.model_name:
-    #         checkpoint_path = os.path.join(checkpoint_dirpath, 'kbnet-{}.pth'.format(step))
-    #     elif 'scaffnet' in self.model_name:
-    #          checkpoint_path = os.path.join(checkpoint_dirpath, 'scaffnet-{}.pth'.format(step))
-    #     elif 'fusionnet' in self.model_name:
-    #          checkpoint_path = os.path.join(checkpoint_dirpath, 'fusionnet-{}.pth'.format(step))
-    #     elif 'voiced' in self.model_name:
-    #          checkpoint_path = os.path.join(checkpoint_dirpath, 'voiced-{}.pth'.format(step))
-    #     else:
-    #         raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
-
-    #     if not os.path.exists(checkpoint_path):
-    #         raise FileExistsError('Model checkpoint does not exist {}'.format(checkpoint_dirpath))
-
-    #     checkpoint = torch.load(checkpoint_dirpath)
-
-    #     checkpoint['fisher_info'] = fisher_info
-
-    #     torch.save(checkpoint, checkpoint_dirpath)
+                        os.path.join(checkpoint_dirpath, 'tokens-{}.pth'.format(step)))
 
     def log_summary(self,
                     summary_writer,
