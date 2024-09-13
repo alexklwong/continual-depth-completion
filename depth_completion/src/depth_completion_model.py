@@ -119,18 +119,6 @@ class DepthCompletionModel(object):
         self.image_token_pools = torch.nn.ParameterDict()
         self.depth_token_pools = torch.nn.ParameterDict() 
         self.new_params = []  # LIST OF PARAMS to be added to the depth optimizer!
-
-        # TokenCDC: 1x1 conv to fuse tokens with latent space
-        weight_initializer = net_utils.weight_initializer('kaiming_uniform')
-        activation_func = net_utils.activation_func('leaky_relu')
-        self.conv1x1_latent = net_utils.Conv2d(
-                in_channels=2512,
-                out_channels=512,
-                kernel_size=1,
-                stride=1,
-                weight_initializer=weight_initializer,
-                activation_func=activation_func).to(device)
-        self.new_params.append(self.conv1x1_latent)  # to be added to the optimizer
  
 
     def add_new_key_token_pool(self, dataset_uid, image_key_dim, depth_key_dim, token_dim):
@@ -250,7 +238,8 @@ class DepthCompletionModel(object):
                 self.add_new_key_token_pool(dataset_uid, image_key_dim, depth_key_dim, token_dim)
         else:
             curr_image_key_weight, curr_depth_key_weight, curr_image_token_pool, curr_depth_token_pool = \
-                self.image_key_weights[dataset_uid], self.depth_key_weights[dataset_uid], self.token_pools[dataset_uid]
+                self.image_key_weights[dataset_uid], self.depth_key_weights[dataset_uid], \
+                self.image_token_pools[dataset_uid], self.depth_token_pools[dataset_uid]
 
         # Compute the KEYS for image using FROZEN token pool
         curr_image_token_pool_no_grad = curr_image_token_pool.detach().clone()
@@ -266,12 +255,12 @@ class DepthCompletionModel(object):
         image_attention = F.softmax(image_attention, dim=-1)
         depth_attention = torch.matmul(depth_queries, depth_keys) / torch.sqrt(torch.tensor(depth_key_dim, device=self.device, dtype=torch.float32))
         depth_attention = F.softmax(depth_attention, dim=-1)
-        image_tokens = torch.matmul(attention_scores, curr_token_pool).view(N, H, W, token_dim).permute(0, 3, 1, 2)
-        depth_tokens = torch.matmul(attention_scores, curr_token_pool).view(N, H, W, token_dim).permute(0, 3, 1, 2)
+        image_tokens = torch.matmul(image_attention, curr_image_token_pool).view(N, H, W, token_dim).permute(0, 3, 1, 2)
+        depth_tokens = torch.matmul(depth_attention, curr_depth_token_pool).view(N, H, W, token_dim).permute(0, 3, 1, 2)
+        final_tokens = (image_tokens + depth_tokens) / 2.0
 
         # CONCAT tokens to latent and then 1x1 conv back to latent dims
-        latent_with_tokens = torch.cat((latent, image_tokens, depth_tokens), dim=1)
-        latent_with_tokens = self.conv1x1_latent(latent_with_tokens)
+        latent_with_tokens = latent + final_tokens
 
         ##### END TokenCDC Implementation
 
@@ -411,7 +400,21 @@ class DepthCompletionModel(object):
             loss_info['loss_lwf'] = loss_lwf
 
         return loss, loss_info
-        
+
+
+    def get_new_params(self):
+        '''
+        Returns the list of new parameters added to the model and resets the list
+
+        Returns:
+            list[torch.Tensor[float32]] : list of new parameters
+        '''
+        new_params = self.new_params
+        self.new_params = []  # Clear the list after returning the new params
+        # TokenCDC TEST
+        #print("Number of NEW learnable parameters: {}\n\n\n\n".format(sum(p.numel() for p in new_params)))
+        return new_params
+
 
     def parameters(self):
         '''
@@ -442,21 +445,6 @@ class DepthCompletionModel(object):
         '''
 
         return self.model.parameters_pose()
-
-    def get_new_params(self):
-        '''
-        Returns the list of new parameters added to the model and resets the list
-
-        Returns:
-            list[torch.Tensor[float32]] : list of new parameters
-        '''
-        new_params = self.new_params
-        self.new_params = []  # Clear the list after returning the new params
-
-        # TokenCDC TEST
-        print("Number of NEW learnable parameters: {}\n\n\n\n".format(sum(p.numel() for p in new_params)))
-
-        return new_params
 
 
     def train(self):
@@ -527,39 +515,46 @@ class DepthCompletionModel(object):
             torch.optimizer : optimizer for pose or None if no optimizer is passed in
         '''
 
-        # TokenCDC: Restore key and token pools; must be the LAST PATH
+        # TokenCDC: Restore ALL TokenCDC params
         if 'new_pool_size' not in self.network_modules:
+            # Get state dicts
             checkpoint = torch.load(restore_paths[-1], map_location=self.device)
             image_key_weights_state_dict = checkpoint['image_key_weights']
             depth_key_weights_state_dict = checkpoint['depth_key_weights']
-            token_pools_state_dict = checkpoint['token_pools']
+            image_token_pools_state_dict = checkpoint['image_token_pools']
+            depth_token_pools_state_dict = checkpoint['depth_token_pools']
 
             # Get the keys from the model's param_dicts and the saved state_dicts
             image_key_weights_state_dict_keys = set(image_key_weights_state_dict.keys())
             image_key_weights_curr_keys = set(self.image_key_weights.keys())
             depth_key_weights_state_dict_keys = set(depth_key_weights_state_dict.keys())
             depth_key_weights_curr_keys = set(self.depth_key_weights.keys())
-            token_pools_state_dict_keys = set(token_pools_state_dict.keys())
-            token_pools_curr_keys = set(self.token_pools.keys())
+            image_token_pools_state_dict_keys = set(image_token_pools_state_dict.keys())
+            image_token_pools_curr_keys = set(self.image_token_pools.keys())
+            depth_token_pools_state_dict_keys = set(depth_token_pools_state_dict.keys())
+            depth_token_pools_curr_keys = set(self.depth_token_pools.keys())
 
             # Identify missing keys (keys in state_dict but not in model)
             image_key_weights_missing_keys = image_key_weights_state_dict_keys - image_key_weights_curr_keys
             depth_key_weights_missing_keys = depth_key_weights_state_dict_keys - depth_key_weights_curr_keys
-            token_pools_missing_keys = token_pools_state_dict_keys - token_pools_curr_keys
+            image_token_pools_missing_keys = image_token_pools_state_dict_keys - image_token_pools_curr_keys
+            depth_token_pools_missing_keys = depth_token_pools_state_dict_keys - depth_token_pools_curr_keys
             assert image_key_weights_missing_keys == depth_key_weights_missing_keys, "Image/Depth Key pools must have the same keys!"
-            assert image_key_weights_missing_keys == token_pools_missing_keys, "Key and Token pools must have the same keys!"
+            assert image_key_weights_missing_keys == depth_token_pools_missing_keys, "Key and Token pools must have the same keys!"
 
             # Add pools for the missing keys (and add to new_params list to be added to optimizer)
             for mk in image_key_weights_missing_keys:
-                self.add_new_key_token_pool(mk, image_key_weights_state_dict[mk].shape[0],
+                self.add_new_key_token_pool(mk,
+                                            image_key_weights_state_dict[mk].shape[0],
                                             depth_key_weights_state_dict[mk].shape[0],
-                                            token_pools_state_dict[mk].shape[1])
+                                            image_token_pools_state_dict[mk].shape[1])
 
-            # Now, load the state dict
+            # Now, load the state dicts
             self.image_key_weights.load_state_dict(image_key_weights_state_dict)
             self.depth_key_weights.load_state_dict(depth_key_weights_state_dict)
-            self.token_pools.load_state_dict(token_pools_state_dict)
-            print("KEY WEIGHTS AND TOKEN POOLS RESTORED!\n\n\n\n\n\n")
+            self.image_token_pools.load_state_dict(image_token_pools_state_dict)
+            self.depth_token_pools.load_state_dict(depth_token_pools_state_dict)
+            print("ALL TokenCDC PARAMS RESTORED!\n\n\n\n\n\n")
 
         if 'kbnet' in self.model_name:
             return self.model.restore_model(
@@ -572,7 +567,6 @@ class DepthCompletionModel(object):
                 restore_path=restore_paths[0],
                 optimizer=optimizer_depth)
         elif 'fusionnet' in self.model_name:
-
             if 'initialize_scaffnet' in self.network_modules:
                 self.model.scaffnet_model.restore_model(
                     restore_path=restore_paths[0])
@@ -641,11 +635,13 @@ class DepthCompletionModel(object):
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
 
-        # TokenCDC: Save key and token pools
+        # TokenCDC: Save ALL TokenCDC params
         torch.save({'image_key_weights': self.image_key_weights.state_dict(),
                     'depth_key_weights': self.depth_key_weights.state_dict(),
-                    'token_pools': self.token_pools.state_dict()},
+                    'image_token_pools': self.image_token_pools.state_dict(),
+                    'depth_token_pools': self.depth_token_pools.state_dict()},
                     os.path.join(checkpoint_dirpath, 'tokens-{}.pth'.format(step)))
+
 
     def log_summary(self,
                     summary_writer,
