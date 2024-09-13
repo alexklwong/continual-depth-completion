@@ -820,6 +820,12 @@ def train(train_image_paths,
                     dataset_uid=dataset_uid,
                     return_all_outputs=True)
 
+                # Check if new parameters were added during the forward pass
+                new_params = depth_completion_model.get_new_params()
+                if new_params:
+                    optimizer_depth.add_param_group({'params' : new_params,
+                                                    'weight_decay' : w_weight_decay_depth})
+
                 # TokenCDC TEST: Check that queries are frozen
                 # print("Queries are learnable: {}".format(queries.requires_grad))
                 # print("Keys are learnable: {}".format(keys.requires_grad))
@@ -920,12 +926,6 @@ def train(train_image_paths,
                 optimizer_pose.zero_grad()
 
             loss.backward()
-
-            # Check if new parameters were added during the forward pass
-            new_params = depth_completion_model.get_new_params()
-            if new_params:
-                optimizer_depth.add_param_group({'params' : new_params,
-                                                 'weight_decay' : w_weight_decay_depth})
 
             # TokenCDC TEST: total number of learnable parameters
             # count = sum(p.numel() for group in optimizer_depth.param_groups for p in group['params'] if p.requires_grad)
