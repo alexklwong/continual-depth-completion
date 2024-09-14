@@ -78,7 +78,7 @@ def train(train_image_paths,
           # Evaluation settings
           min_evaluate_depths,  # allows multiple val datasets
           max_evaluate_depths,  # allows multiple val datasets
-          evaluation_protocol,
+          evaluation_protocols,
           # Checkpoint settings
           checkpoint_path,
           n_step_per_checkpoint,
@@ -356,7 +356,10 @@ def train(train_image_paths,
                 [None] * n_val_sample
                 for n_val_sample in n_val_samples
             ]
-
+        
+        # Make sure the number of evalution protocols matches the number of validation datasets
+        assert len(val_image_paths) == len(evaluation_protocols)
+        
         '''
         Setup validation dataloaders
         '''
@@ -548,7 +551,7 @@ def train(train_image_paths,
         log_path,
         min_evaluate_depths=min_evaluate_depths,
         max_evaluate_depths=max_evaluate_depths,
-        evaluation_protocol=evaluation_protocol)
+        evaluation_protocols=evaluation_protocols)
 
     log_system_settings(
         log_path,
@@ -906,7 +909,7 @@ def train(train_image_paths,
                             best_results=best_results,
                             min_evaluate_depths=min_evaluate_depths,
                             max_evaluate_depths=max_evaluate_depths,
-                            evaluation_protocol=evaluation_protocol,
+                            evaluation_protocols=evaluation_protocols,
                             device=device,
                             summary_writer=val_summary_writer,
                             n_image_per_summary=n_image_per_summary,
@@ -940,7 +943,7 @@ def train(train_image_paths,
             best_results=best_results,
             min_evaluate_depths=min_evaluate_depths,
             max_evaluate_depths=max_evaluate_depths,
-            evaluation_protocol=evaluation_protocol,
+            evaluation_protocols=evaluation_protocols,
             device=device,
             summary_writer=val_summary_writer,
             n_image_per_summary=n_image_per_summary,
@@ -959,7 +962,7 @@ def validate(depth_model,
              best_results,
              min_evaluate_depths,
              max_evaluate_depths,
-             evaluation_protocol,
+             evaluation_protocols,
              device,
              summary_writer,
              n_image_per_summary=4,
@@ -1023,15 +1026,20 @@ def validate(depth_model,
             output_depth = np.squeeze(output_depth.cpu().numpy())
             ground_truth = np.squeeze(ground_truth.cpu().numpy())
 
-            if evaluation_protocol == 'vkitti':
+            if evaluation_protocols[dataset_id] in ['kitti', 'vkitti']:
                 # Crop output_depth and ground_truth
                 crop_height = 240
                 crop_width = 1216
                 crop_mask = [crop_height, crop_width]
-            elif evaluation_protocol == 'nuscenes':
+            elif evaluation_protocols[dataset_id] == 'nuscenes':
                 # Crop output_depth and ground_truth
                 crop_height = 540
                 crop_width = 1600
+                crop_mask = [crop_height, crop_width]
+            elif evaluation_protocols[dataset_id] == 'synthia':
+                # Crop output_depth and ground_truth
+                crop_height = 320
+                crop_width = 640
                 crop_mask = [crop_height, crop_width]
             else:
                 crop_mask = None
@@ -1146,7 +1154,7 @@ def run(image_path,
         # Evaluation settings
         min_evaluate_depth,
         max_evaluate_depth,
-        evaluation_protocol,
+        evaluation_protocols,
         # Output settings
         output_path,
         save_outputs,
@@ -1281,9 +1289,9 @@ def run(image_path,
 
     log_evaluation_settings(
         log_path,
-        min_evaluate_depth=min_evaluate_depth,
-        max_evaluate_depth=max_evaluate_depth,
-        evaluation_protocol=evaluation_protocol)
+        min_evaluate_depths=[min_evaluate_depth],
+        max_evaluate_depths=[max_evaluate_depth],
+        evaluation_protocols=evaluation_protocols)
 
     log_system_settings(
         log_path,
@@ -1615,10 +1623,10 @@ def log_loss_func_settings(log_path,
 def log_evaluation_settings(log_path,
                             min_evaluate_depths,
                             max_evaluate_depths,
-                            evaluation_protocol):
+                            evaluation_protocols):
 
     log('Evaluation settings:', log_path)
-    log('evaluation_protocol={}'.format(evaluation_protocol),
+    log('evaluation_protocols={}'.format(evaluation_protocols),
         log_path)
     for i in range(len(min_evaluate_depths)):
         log('Dataset {}: min_evaluate_depth={:.2f}  max_evaluate_depth={:.2f}'.format(
