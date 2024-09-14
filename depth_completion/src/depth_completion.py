@@ -1041,6 +1041,11 @@ def validate(depth_model,
                 crop_height = 320
                 crop_width = 640
                 crop_mask = [crop_height, crop_width]
+            elif evaluation_protocols[dataset_id] == 'waymo':
+                # Crop output_depth and ground_truth
+                crop_height = 768
+                crop_width = 1920
+                crop_mask = [crop_height, crop_width]
             else:
                 crop_mask = None
 
