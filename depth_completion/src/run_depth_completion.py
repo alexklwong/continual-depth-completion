@@ -39,11 +39,11 @@ parser.add_argument('--max_predict_depth',
 
 # Evaluation settings
 parser.add_argument('--min_evaluate_depth',
-    type=float, default=0.20, help='Minimum value of depth to evaluate')
+    type=float, default=[0.20], help='Minimum value of depth to evaluate')
 parser.add_argument('--max_evaluate_depth',
-    type=float, default=5.00, help='Maximum value of depth to evaluate')
-parser.add_argument('--evaluation_protocol',
-    type=str, default='default', help='Evaluation protocol')
+    type=float, default=[5.00], help='Maximum value of depth to evaluate')
+parser.add_argument('--evaluation_protocols',
+    nargs='+', type=str, default=['default'], help='Protocol for evaluation i.e. vkitti, nuscenes, default')
 
 # Output settings
 parser.add_argument('--output_path',
