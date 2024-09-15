@@ -140,13 +140,13 @@ class KBNetModel(object):
                 sparse_depth=sparse_depth,
                 validity_map=validity_map)
 
-        latent, skips, shape, image_features, depth_features = self.model_depth.forward_encoder(
+        latent, skips, shape = self.model_depth.forward_encoder(
             image=image,
             sparse_depth=sparse_depth,
             validity_map_depth=filtered_validity_map,
             intrinsics=intrinsics)
         
-        return latent, skips, shape, image_features, depth_features
+        return latent, skips, shape
     
     def forward_depth_decoder(self, latent, skips, shape, return_all_outputs=False):
         '''

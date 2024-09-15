@@ -183,9 +183,9 @@ class KBNetModel(object):
 
         # Forward through the network
         shape = input_depth.shape[-2:]
-        latent, skips, image_features, depth_features = self.encoder(image, input_depth, intrinsics)
+        latent, skips = self.encoder(image, input_depth, intrinsics)
 
-        return latent, skips, shape, image_features, depth_features
+        return latent, skips, shape
     
     def forward_decoder(self,
                         latent,
