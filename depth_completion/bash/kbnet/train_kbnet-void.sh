@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=3
 
 python depth_completion/src/train_depth_completion.py \
 --train_image_paths \
@@ -22,16 +22,16 @@ python depth_completion/src/train_depth_completion.py \
 --val_dataset_uids \
     void \
 --key_token_pool_size \
-    100 \
+    1000 \
 --model_name kbnet_void \
 --network_modules depth pose new_pool_size \
 --min_predict_depth 0.1 \
 --max_predict_depth 8.0 \
---train_batch_size 4 \
+--train_batch_size 12 \
 --train_crop_shapes \
     416 512 \
---learning_rates 1e-4 5e-5 2.5e-5 \
---learning_schedule 10 15 20 \
+--learning_rates 5e-4 2.5e-4 \
+--learning_schedule 10 50 \
 --augmentation_probabilities 1.0 \
 --augmentation_schedule -1 \
 --augmentation_random_brightness 0.50 1.50 \
@@ -70,6 +70,6 @@ python depth_completion/src/train_depth_completion.py \
     /media/home/pqrim/workspace/token-cdc/trained_completion/!RIT_PRETRAINED/kbnet-370000.pth \
     /media/home/pqrim/workspace/token-cdc/trained_completion/!RIT_PRETRAINED/posenet-370000.pth \
 --checkpoint_path \
-    trained_completion/titan/void-frozen1 \
+    trained_completion/titan/void-frozen4 \
 --device gpu \
 --n_thread 8

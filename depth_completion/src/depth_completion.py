@@ -551,6 +551,10 @@ def train(train_image_paths,
     else:
         optimizer_pose = None
 
+    # Split along batch across multiple GPUs
+    if torch.cuda.device_count() > 1:
+        depth_completion_model.data_parallel()
+
     # Start training
     depth_completion_model.train()
 
@@ -935,7 +939,7 @@ def train(train_image_paths,
 
             # TokenCDC TEST
             # print(depth_completion_model.tokens['nyu_v2'].grad.sum())
-            # print(depth_completion_model.tokens['void'].sum())
+            #print(sum(p.sum() for p in depth_completion_model.model.model_pose.encoder.conv1.parameters()))
 
             if supervision_type == 'unsupervised':
                 optimizer_pose.step()
