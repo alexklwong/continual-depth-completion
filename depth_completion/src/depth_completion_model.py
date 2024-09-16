@@ -93,19 +93,6 @@ class DepthCompletionModel(object):
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(model_name))
 
-        if 'ewc' in network_modules:
-            self.ewc = True
-            self.prev_fisher = None
-        else:
-            self.ewc = False
-
-        if 'fisher' in network_modules:
-            self.calculate_fisher_enabled = True
-            self.fisher = None
-            self.epoch_fisher = net_utils.init_fisher(self.model.parameters_depth())
-        else:
-            self.calculate_fisher_enabled = False
-
         # TokenCDC: Freeze depth model parameters if unfrozen=False
         if self.frozen:
             for param in self.model.parameters_depth():
@@ -114,12 +101,12 @@ class DepthCompletionModel(object):
             #     param.requires_grad = False
 
         # TokenCDC: initialize ParameterDicts to store learnable key & token POOLS for each dataset
-        self.i1_key_pools = torch.nn.ParameterDict() 
-        self.i1_token_pools = torch.nn.ParameterDict()
-        self.i1_linear = torch.nn.ParameterDict()
-        self.d1_key_pools = torch.nn.ParameterDict() 
-        self.d1_token_pools = torch.nn.ParameterDict() 
-        self.d1_linear = torch.nn.ParameterDict()
+        # self.i1_key_pools = torch.nn.ParameterDict() 
+        # self.i1_token_pools = torch.nn.ParameterDict()
+        # self.i1_linear = torch.nn.ParameterDict()
+        # self.d1_key_pools = torch.nn.ParameterDict() 
+        # self.d1_token_pools = torch.nn.ParameterDict() 
+        # self.d1_linear = torch.nn.ParameterDict()
 
         self.i2_key_pools = torch.nn.ParameterDict() 
         self.i2_token_pools = torch.nn.ParameterDict()
@@ -270,15 +257,8 @@ class DepthCompletionModel(object):
 
         assert set(self.i4_key_pools.keys()) == set(self.d4_key_pools.keys()), "Image/Depth Key pools must have same keys!"
         assert set(self.i4_key_pools.keys()) == set(self.i4_token_pools.keys()), "Key and Token pools must have same keys!"
-        #return new_i1_key_pool, new_d1_key_pool, new_i1_token_pool, new_d1_token_pool, \
-        return new_i2_key_pool, new_d2_key_pool, new_i2_token_pool, new_d2_token_pool, \
-                new_i3_key_pool, new_d3_key_pool, new_i3_token_pool, new_d3_token_pool, \
-                new_i4_key_pool, new_d4_key_pool, new_i4_token_pool, new_d4_token_pool, \
-                new_latent_key_pool, new_latent_token_pool
-        assert set(self.i1_key_pools.keys()) == set(self.d1_key_pools.keys()), "Image/Depth Key pools must have same keys!"
-        assert set(self.i1_key_pools.keys()) == set(self.i1_token_pools.keys()), "Key and Token pools must have same keys!"
-        return new_i1_key_pool, new_d1_key_pool, new_i1_token_pool, new_d1_token_pool, new_i1_linear, new_d1_linear, \
-                new_i2_key_pool, new_d2_key_pool, new_i2_token_pool, new_d2_token_pool, new_i2_linear, new_d2_linear, \
+        #return new_i1_key_pool, new_d1_key_pool, new_i1_token_pool, new_d1_token_pool, new_i1_linear, new_d1_linear, \
+        return new_i2_key_pool, new_d2_key_pool, new_i2_token_pool, new_d2_token_pool, new_i2_linear, new_d2_linear, \
                 new_i3_key_pool, new_d3_key_pool, new_i3_token_pool, new_d3_token_pool, new_i3_linear, new_d3_linear, \
                 new_i4_key_pool, new_d4_key_pool, new_i4_token_pool, new_d4_token_pool, new_i4_linear, new_d4_linear, \
                 new_latent_key_pool, new_latent_token_pool, new_latent_linear
@@ -333,31 +313,23 @@ class DepthCompletionModel(object):
                                                                     skips[2][0].shape[1], skips[2][1].shape[1], \
                                                                     skips[3][0].shape[1], skips[3][1].shape[1], \
                                                                     latent.shape[1]
-        if dataset_uid not in self.i1_key_pools:
-            curr_i1_key_pool, curr_d1_key_pool, curr_i1_token_pool, curr_d1_token_pool, curr_i1_linear, curr_d1_linear, \
+        if dataset_uid not in self.i4_key_pools:
+            #curr_i1_key_pool, curr_d1_key_pool, curr_i1_token_pool, curr_d1_token_pool, curr_i1_linear, curr_d1_linear, \
             curr_i2_key_pool, curr_d2_key_pool, curr_i2_token_pool, curr_d2_token_pool, curr_i2_linear, curr_d2_linear, \
             curr_i3_key_pool, curr_d3_key_pool, curr_i3_token_pool, curr_d3_token_pool, curr_i3_linear, curr_d3_linear, \
             curr_i4_key_pool, curr_d4_key_pool, curr_i4_token_pool, curr_d4_token_pool, curr_i4_linear, curr_d4_linear, \
             curr_latent_key_pool, curr_latent_token_pool, curr_latent_linear = \
-                self.add_new_key_token_pool(dataset_uid, i1_C, d1_C, i1_C, d1_C,
+                self.add_new_key_token_pool(dataset_uid, #i1_C, d1_C, i1_C, d1_C,
                                                         i2_C, d2_C, i2_C, d2_C,
                                                         i3_C, d3_C, i3_C, d3_C,
                                                         i4_C, d4_C, i4_C, d4_C,
                                                         latent_C, latent_C)
         else:
-            #curr_i1_key_pool, curr_d1_key_pool, curr_i1_token_pool, curr_d1_token_pool, \
-            curr_i2_key_pool, curr_d2_key_pool, curr_i2_token_pool, curr_d2_token_pool, \
-            curr_i3_key_pool, curr_d3_key_pool, curr_i3_token_pool, curr_d3_token_pool, \
-            curr_i4_key_pool, curr_d4_key_pool, curr_i4_token_pool, curr_d4_token_pool, \
-            curr_latent_key_pool, curr_latent_token_pool = \
-            curr_i1_key_pool, curr_d1_key_pool, curr_i1_token_pool, curr_d1_token_pool, curr_i1_linear, curr_d1_linear, \
+            #curr_i1_key_pool, curr_d1_key_pool, curr_i1_token_pool, curr_d1_token_pool, curr_i1_linear, curr_d1_linear, \
             curr_i2_key_pool, curr_d2_key_pool, curr_i2_token_pool, curr_d2_token_pool, curr_i2_linear, curr_d2_linear, \
             curr_i3_key_pool, curr_d3_key_pool, curr_i3_token_pool, curr_d3_token_pool, curr_i3_linear, curr_d3_linear, \
             curr_i4_key_pool, curr_d4_key_pool, curr_i4_token_pool, curr_d4_token_pool, curr_i4_linear, curr_d4_linear, \
             curr_latent_key_pool, curr_latent_token_pool, curr_latent_linear = \
-                self.i1_key_pools[dataset_uid], self.d1_key_pools[dataset_uid], \
-                self.i1_token_pools[dataset_uid], self.d1_token_pools[dataset_uid], \
-                self.i1_linear[dataset_uid], self.d1_linear[dataset_uid], \
                 self.i2_key_pools[dataset_uid], self.d2_key_pools[dataset_uid], \
                 self.i2_token_pools[dataset_uid], self.d2_token_pools[dataset_uid], \
                 self.i2_linear[dataset_uid], self.d2_linear[dataset_uid], \
@@ -368,26 +340,11 @@ class DepthCompletionModel(object):
                 self.i4_token_pools[dataset_uid], self.d4_token_pools[dataset_uid], \
                 self.i4_linear[dataset_uid], self.d4_linear[dataset_uid], \
                 self.latent_key_pools[dataset_uid], self.latent_token_pools[dataset_uid], self.latent_linear[dataset_uid]
+                # self.i1_key_pools[dataset_uid], self.d1_key_pools[dataset_uid], \
+                # self.i1_token_pools[dataset_uid], self.d1_token_pools[dataset_uid], \
+                # self.i1_linear[dataset_uid], self.d1_linear[dataset_uid], \
 
         ### Skip Conection 1
-        # QUERIES
-        # i1_skip, d1_skip = skips[0][0], skips[0][1]
-        # i1_N, i1_C, i1_H, i1_W = i1_skip.shape
-        # d1_N, d1_C, d1_H, d1_W = d1_skip.shape
-        # assert i1_N == d1_N and i1_H == d1_H and i1_W == d1_W, "Image/depth must have the same non-channel dims!"
-        # i1_queries = i1_skip.permute(0, 2, 3, 1).view(i1_N, i1_H*i1_W, i1_C)
-        # d1_queries = d1_skip.permute(0, 2, 3, 1).view(d1_N, d1_H*d1_W, d1_C)
-        # # Compute TOKENS using attention
-        # i1_scores = torch.matmul(i1_queries, curr_i1_key_pool.transpose(-2, -1)) / torch.sqrt(torch.tensor(i1_C, device=self.device, dtype=torch.float32))
-        # i1_scores = F.softmax(i1_scores, dim=-1)
-        # d1_scores = torch.matmul(d1_queries, curr_d1_key_pool.transpose(-2, -1)) / torch.sqrt(torch.tensor(d1_C, device=self.device, dtype=torch.float32))
-        # d1_scores = F.softmax(d1_scores, dim=-1)
-        # i1_tokens = torch.matmul(i1_scores, curr_i1_token_pool).view(i1_N, i1_H, i1_W, i1_C).permute(0, 3, 1, 2)
-        # d1_tokens = torch.matmul(d1_scores, curr_d1_token_pool).view(d1_N, d1_H, d1_W, d1_C).permute(0, 3, 1, 2)
-        # # CONCAT tokens to skips
-        # i1_skip_with_tokens = i1_skip + i1_tokens
-        # d1_skip_with_tokens = d1_skip + d1_tokens
-        i1_skip_with_tokens, d1_skip_with_tokens = skips[0][0], skips[0][1]
         # # QUERIES
         # i1_skip, d1_skip = skips[0][0], skips[0][1]
         # i1_N, i1_C, i1_H, i1_W = i1_skip.shape
@@ -409,26 +366,25 @@ class DepthCompletionModel(object):
 
         ### Skip Conection 2
         # QUERIES
-        # i2_skip, d2_skip = skips[1][0], skips[1][1]
-        # i2_N, i2_C, i2_H, i2_W = i2_skip.shape
-        # d2_N, d2_C, d2_H, d2_W = d2_skip.shape
-        # assert i2_N == d2_N and i2_H == d2_H and i2_W == d2_W, "Image/depth must have the same non-channel dims!"
-        # i2_queries = i2_skip.permute(0, 2, 3, 1).view(i2_N, i2_H*i2_W, i2_C)
-        # d2_queries = d2_skip.permute(0, 2, 3, 1).view(d2_N, d2_H*d2_W, d2_C)
-        # # Compute TOKENS using attention
-        # i2_scores = torch.matmul(i2_queries, curr_i2_key_pool.transpose(-2, -1)) / torch.sqrt(torch.tensor(i2_C, device=self.device, dtype=torch.float32))
-        # i2_scores = F.softmax(i2_scores, dim=-1)
-        # d2_scores = torch.matmul(d2_queries, curr_d2_key_pool.transpose(-2, -1)) / torch.sqrt(torch.tensor(d2_C, device=self.device, dtype=torch.float32))
-        # d2_scores = F.softmax(d2_scores, dim=-1)
-        # i2_tokens = torch.matmul(i2_scores, curr_i2_token_pool).view(i2_N, i2_H, i2_W, i2_C).permute(0, 3, 1, 2)
-        # d2_tokens = torch.matmul(d2_scores, curr_d2_token_pool).view(d2_N, d2_H, d2_W, d2_C).permute(0, 3, 1, 2)
-        # # Apply linear layer to skips
-        # i2_skip = i2_skip * curr_i2_linear[:, None, None]
-        # d2_skip = d2_skip * curr_d2_linear[:, None, None]
-        # # CONCAT tokens to skips
-        # i2_skip_with_tokens = i2_skip + i2_tokens
-        # d2_skip_with_tokens = d2_skip + d2_tokens
-        i2_skip_with_tokens, d2_skip_with_tokens = skips[1][0], skips[1][1]  # NOT using skip 2 tokens
+        i2_skip, d2_skip = skips[1][0], skips[1][1]
+        i2_N, i2_C, i2_H, i2_W = i2_skip.shape
+        d2_N, d2_C, d2_H, d2_W = d2_skip.shape
+        assert i2_N == d2_N and i2_H == d2_H and i2_W == d2_W, "Image/depth must have the same non-channel dims!"
+        i2_queries = i2_skip.permute(0, 2, 3, 1).view(i2_N, i2_H*i2_W, i2_C)
+        d2_queries = d2_skip.permute(0, 2, 3, 1).view(d2_N, d2_H*d2_W, d2_C)
+        # Compute TOKENS using attention
+        i2_scores = torch.matmul(i2_queries, curr_i2_key_pool.transpose(-2, -1)) / torch.sqrt(torch.tensor(i2_C, device=self.device, dtype=torch.float32))
+        i2_scores = F.softmax(i2_scores, dim=-1)
+        d2_scores = torch.matmul(d2_queries, curr_d2_key_pool.transpose(-2, -1)) / torch.sqrt(torch.tensor(d2_C, device=self.device, dtype=torch.float32))
+        d2_scores = F.softmax(d2_scores, dim=-1)
+        i2_tokens = torch.matmul(i2_scores, curr_i2_token_pool).view(i2_N, i2_H, i2_W, i2_C).permute(0, 3, 1, 2)
+        d2_tokens = torch.matmul(d2_scores, curr_d2_token_pool).view(d2_N, d2_H, d2_W, d2_C).permute(0, 3, 1, 2)
+        # Apply linear layer to skips
+        i2_skip = i2_skip * curr_i2_linear[:, None, None]
+        d2_skip = d2_skip * curr_d2_linear[:, None, None]
+        # CONCAT tokens to skips
+        i2_skip_with_tokens = i2_skip + i2_tokens
+        d2_skip_with_tokens = d2_skip + d2_tokens
 
         ### Skip Conection 3
         # QUERIES
@@ -446,8 +402,8 @@ class DepthCompletionModel(object):
         i3_tokens = torch.matmul(i3_scores, curr_i3_token_pool).view(i3_N, i3_H, i3_W, i3_C).permute(0, 3, 1, 2)
         d3_tokens = torch.matmul(d3_scores, curr_d3_token_pool).view(d3_N, d3_H, d3_W, d3_C).permute(0, 3, 1, 2)
         # Apply linear layer to skips
-        # i3_skip = i3_skip * curr_i3_linear[:, None, None]
-        # d3_skip = d3_skip * curr_d3_linear[:, None, None]
+        i3_skip = i3_skip * curr_i3_linear[:, None, None]
+        d3_skip = d3_skip * curr_d3_linear[:, None, None]
         # CONCAT tokens to skips
         i3_skip_with_tokens = i3_skip + i3_tokens
         d3_skip_with_tokens = d3_skip + d3_tokens
@@ -468,8 +424,8 @@ class DepthCompletionModel(object):
         i4_tokens = torch.matmul(i4_scores, curr_i4_token_pool).view(i4_N, i4_H, i4_W, i4_C).permute(0, 3, 1, 2)
         d4_tokens = torch.matmul(d4_scores, curr_d4_token_pool).view(d4_N, d4_H, d4_W, d4_C).permute(0, 3, 1, 2)
         # Apply linear layer to skips
-        # i4_skip = i4_skip * curr_i4_linear[:, None, None]
-        # d4_skip = d4_skip * curr_d4_linear[:, None, None]
+        i4_skip = i4_skip * curr_i4_linear[:, None, None]
+        d4_skip = d4_skip * curr_d4_linear[:, None, None]
         # CONCAT tokens to skips
         i4_skip_with_tokens = i4_skip + i4_tokens
         d4_skip_with_tokens = d4_skip + d4_tokens
@@ -482,7 +438,7 @@ class DepthCompletionModel(object):
         latent_scores = F.softmax(latent_scores, dim=-1)
         latent_tokens = torch.matmul(latent_scores, curr_latent_token_pool).view(latent.shape[0], latent.shape[2], latent.shape[3], latent.shape[1]).permute(0, 3, 1, 2)
         # Apply linear layer to latent
-        # latent = latent * curr_latent_linear[:, None, None]
+        latent = latent * curr_latent_linear[:, None, None]
         # CONCAT tokens to latent
         latent_with_tokens = latent + latent_tokens
 
@@ -611,24 +567,6 @@ class DepthCompletionModel(object):
             loss += loss_token
             loss_info['loss_token'] = loss_token
 
-        if 'w_ewc' in w_losses:
-            loss_ewc = ewc_loss(
-                current_parameters=self.model.parameters_depth(),
-                frozen_parameters=frozen_model.parameters_depth(),
-                lambda_ewc=w_losses['w_ewc'],
-                fisher_info=self.prev_fisher)
-
-            loss += loss_ewc
-            loss_info['loss_ewc'] = loss_ewc
-
-        if 'w_lwf' in w_losses:
-            #to debug this, I modified a few lines in random crop, need to fix back later
-            frozen_model_output_depth0 = frozen_model.forward_depth(image0, sparse_depth0, validity_map_depth0, intrinsics, return_all_outputs=True)
-
-            loss_lwf = lwf_loss(output_depth0, frozen_model_output_depth0, w_losses['w_lwf'])
-            loss += loss_lwf
-            loss_info['loss_lwf'] = loss_lwf
-
         return loss, loss_info
 
 
@@ -641,8 +579,10 @@ class DepthCompletionModel(object):
         '''
         new_params = self.new_params
         self.new_params = []  # Clear the list after returning the new params
-        # TokenCDC TEST
-        #print("Number of NEW learnable parameters: {}\n\n\n\n".format(sum(p.numel() for p in new_params)))
+        # TokenCDC TEST:
+        count = sum(p.numel() for p in new_params)
+        if count > 0:
+            print("Number of NEW learnable parameters: {}\n\n\n\n".format(count))
         return new_params
 
 
@@ -653,7 +593,6 @@ class DepthCompletionModel(object):
         Returns:
             list[torch.Tensor[float32]] : list of parameters
         '''
-
         return list(self.model.parameters())
 
     def parameters_depth(self):
@@ -663,7 +602,6 @@ class DepthCompletionModel(object):
         Returns:
             list[torch.Tensor[float32]] : list of parameters
         '''
-
         return list(self.model.parameters_depth())
 
     def parameters_pose(self):
@@ -673,7 +611,6 @@ class DepthCompletionModel(object):
         Returns:
             list[torch.Tensor[float32]] : list of parameters
         '''
-
         return self.model.parameters_pose()
 
 
@@ -681,14 +618,12 @@ class DepthCompletionModel(object):
         '''
         Sets model to training mode
         '''
-
         self.model.train()
 
     def eval(self):
         '''
         Sets model to evaluation mode
         '''
-
         self.model.eval()
 
     def to(self, device):
@@ -699,7 +634,6 @@ class DepthCompletionModel(object):
             device : torch.device
                 device to use
         '''
-
         self.device = device
         self.model.to(device)
         self.tokens = self.tokens.to(device)
@@ -708,14 +642,12 @@ class DepthCompletionModel(object):
         '''
         Allows multi-gpu split along batch
         '''
-
         self.model.data_parallel()
 
     def distributed_data_parallel(self, rank):
         '''
         Allows multi-gpu split along batch with 'torch.nn.parallel.DistributedDataParallel'
         '''
-
         self.model.distributed_data_parallel(rank)
 
     def convert_syncbn(self):
@@ -723,8 +655,8 @@ class DepthCompletionModel(object):
         Convert BN layers to SyncBN layers.
         SyncBN merge the BN layer weights in every backward step.
         '''
-
         self.model.convert_syncbn()
+
 
     def restore_model(self,
                       restore_paths,
@@ -747,46 +679,63 @@ class DepthCompletionModel(object):
 
         # TokenCDC: Restore ALL TokenCDC params
         if 'new_pool_size' not in self.network_modules:
-            # Get state dicts
             checkpoint = torch.load(restore_paths[-1], map_location=self.device)
-            i1_key_pools_state_dict = checkpoint['i1_key_pools_state_dict']
-            d1_key_pools_state_dict = checkpoint['d1_key_pools_state_dict']
-            i1_token_pools_state_dict = checkpoint['i1_token_pools_state_dict']
-            d1_token_pools_state_dict = checkpoint['d1_token_pools_state_dict']
+            # i1_key_pools_state_dict = checkpoint['i1_key_pools_state_dict']
+            # d1_key_pools_state_dict = checkpoint['d1_key_pools_state_dict']
+            # i1_token_pools_state_dict = checkpoint['i1_token_pools_state_dict']
+            # d1_token_pools_state_dict = checkpoint['d1_token_pools_state_dict']
+            # i1_linear_state_dict = checkpoint['i1_linear_state_dict']
+            # d1_linear_state_dict = checkpoint['d1_linear_state_dict']
             i2_key_pools_state_dict = checkpoint['i2_key_pools_state_dict']
             d2_key_pools_state_dict = checkpoint['d2_key_pools_state_dict']
             i2_token_pools_state_dict = checkpoint['i2_token_pools_state_dict']
             d2_token_pools_state_dict = checkpoint['d2_token_pools_state_dict']
+            i2_linear_state_dict = checkpoint['i2_linear_state_dict']
+            d2_linear_state_dict = checkpoint['d2_linear_state_dict']
             i3_key_pools_state_dict = checkpoint['i3_key_pools_state_dict']
             d3_key_pools_state_dict = checkpoint['d3_key_pools_state_dict']
             i3_token_pools_state_dict = checkpoint['i3_token_pools_state_dict']
             d3_token_pools_state_dict = checkpoint['d3_token_pools_state_dict']
+            i3_linear_state_dict = checkpoint['i3_linear_state_dict']
+            d3_linear_state_dict = checkpoint['d3_linear_state_dict']
             i4_key_pools_state_dict = checkpoint['i4_key_pools_state_dict']
             d4_key_pools_state_dict = checkpoint['d4_key_pools_state_dict']
             i4_token_pools_state_dict = checkpoint['i4_token_pools_state_dict']
             d4_token_pools_state_dict = checkpoint['d4_token_pools_state_dict']
+            i4_linear_state_dict = checkpoint['i4_linear_state_dict']
+            d4_linear_state_dict = checkpoint['d4_linear_state_dict']
             latent_key_pools_state_dict = checkpoint['latent_key_pools_state_dict']
             latent_token_pools_state_dict = checkpoint['latent_token_pools_state_dict']
+            latent_linear_state_dict = checkpoint['latent_linear_state_dict']
 
             # Identify missing keys (keys in state_dict but not in model)
             # i1_key_pools_missing_keys = set(i1_key_pools_state_dict.keys()) - self.i1_key_pools.keys()
             # d1_key_pools_missing_keys = set(d1_key_pools_state_dict.keys()) - self.d1_key_pools.keys()
             # i1_token_pools_missing_keys = set(i1_token_pools_state_dict.keys()) - self.i1_token_pools.keys()
             # d1_token_pools_missing_keys = set(d1_token_pools_state_dict.keys()) - self.d1_token_pools.keys()
+            # i1_linear_missing_keys = set(i1_linear_state_dict.keys()) - self.i1_linear.keys()
+            # d1_linear_missing_keys = set(d1_linear_state_dict.keys()) - self.d1_linear.keys()
             i2_key_pools_missing_keys = set(i2_key_pools_state_dict.keys()) - self.i2_key_pools.keys()
             d2_key_pools_missing_keys = set(d2_key_pools_state_dict.keys()) - self.d2_key_pools.keys()
             i2_token_pools_missing_keys = set(i2_token_pools_state_dict.keys()) - self.i2_token_pools.keys()
             d2_token_pools_missing_keys = set(d2_token_pools_state_dict.keys()) - self.d2_token_pools.keys()
+            i2_linear_missing_keys = set(i2_linear_state_dict.keys()) - self.i2_linear.keys()
+            d2_linear_missing_keys = set(d2_linear_state_dict.keys()) - self.d2_linear.keys()
             i3_key_pools_missing_keys = set(i3_key_pools_state_dict.keys()) - self.i3_key_pools.keys()
             d3_key_pools_missing_keys = set(d3_key_pools_state_dict.keys()) - self.d3_key_pools.keys()
             i3_token_pools_missing_keys = set(i3_token_pools_state_dict.keys()) - self.i3_token_pools.keys()
             d3_token_pools_missing_keys = set(d3_token_pools_state_dict.keys()) - self.d3_token_pools.keys()
+            i3_linear_missing_keys = set(i3_linear_state_dict.keys()) - self.i3_linear.keys()
+            d3_linear_missing_keys = set(d3_linear_state_dict.keys()) - self.d3_linear.keys()
             i4_key_pools_missing_keys = set(i4_key_pools_state_dict.keys()) - self.i4_key_pools.keys()
             d4_key_pools_missing_keys = set(d4_key_pools_state_dict.keys()) - self.d4_key_pools.keys()
             i4_token_pools_missing_keys = set(i4_token_pools_state_dict.keys()) - self.i4_token_pools.keys()
             d4_token_pools_missing_keys = set(d4_token_pools_state_dict.keys()) - self.d4_token_pools.keys()
+            i4_linear_missing_keys = set(i4_linear_state_dict.keys()) - self.i4_linear.keys()
+            d4_linear_missing_keys = set(d4_linear_state_dict.keys()) - self.d4_linear.keys()
             latent_key_pools_missing_keys = set(latent_key_pools_state_dict.keys()) - self.latent_key_pools.keys()
             latent_token_pools_missing_keys = set(latent_token_pools_state_dict.keys()) - self.latent_token_pools.keys()
+            latent_linear_missing_keys = set(latent_linear_state_dict.keys()) - self.latent_linear.keys()
             assert i4_key_pools_missing_keys == d4_key_pools_missing_keys, "Image/Depth Key pools must have the same keys!"
             assert i4_key_pools_missing_keys == d4_token_pools_missing_keys, "Key and Token pools must have the same keys!"
 
@@ -817,20 +766,29 @@ class DepthCompletionModel(object):
             # self.d1_key_pools.load_state_dict(d1_key_pools_state_dict)
             # self.i1_token_pools.load_state_dict(i1_token_pools_state_dict)
             # self.d1_token_pools.load_state_dict(d1_token_pools_state_dict)
+            # self.i1_linear.load_state_dict(i1_linear_state_dict)
+            # self.d1_linear.load_state_dict(d1_linear_state_dict)
             self.i2_key_pools.load_state_dict(i2_key_pools_state_dict)
             self.d2_key_pools.load_state_dict(d2_key_pools_state_dict)
             self.i2_token_pools.load_state_dict(i2_token_pools_state_dict)
             self.d2_token_pools.load_state_dict(d2_token_pools_state_dict)
+            self.i2_linear.load_state_dict(i2_linear_state_dict)
+            self.d2_linear.load_state_dict(d2_linear_state_dict)
             self.i3_key_pools.load_state_dict(i3_key_pools_state_dict)
             self.d3_key_pools.load_state_dict(d3_key_pools_state_dict)
             self.i3_token_pools.load_state_dict(i3_token_pools_state_dict)
             self.d3_token_pools.load_state_dict(d3_token_pools_state_dict)
+            self.i3_linear.load_state_dict(i3_linear_state_dict)
+            self.d3_linear.load_state_dict(d3_linear_state_dict)
             self.i4_key_pools.load_state_dict(i4_key_pools_state_dict)
             self.d4_key_pools.load_state_dict(d4_key_pools_state_dict)
             self.i4_token_pools.load_state_dict(i4_token_pools_state_dict)
             self.d4_token_pools.load_state_dict(d4_token_pools_state_dict)
+            self.i4_linear.load_state_dict(i4_linear_state_dict)
+            self.d4_linear.load_state_dict(d4_linear_state_dict)
             self.latent_key_pools.load_state_dict(latent_key_pools_state_dict)
             self.latent_token_pools.load_state_dict(latent_token_pools_state_dict)
+            self.latent_linear.load_state_dict(latent_linear_state_dict)
             print("ALL TokenCDC PARAMS RESTORED!\n\n\n\n\n\n")
 
         if 'kbnet' in self.model_name:
@@ -917,20 +875,29 @@ class DepthCompletionModel(object):
                 # 'd1_key_pools_state_dict': self.d1_key_pools.state_dict(),
                 # 'i1_token_pools_state_dict': self.i1_token_pools.state_dict(),
                 # 'd1_token_pools_state_dict': self.d1_token_pools.state_dict(),
+                # 'i1_linear_state_dict': self.i1_linear.state_dict(),
+                # 'd1_linear_state_dict': self.d1_linear.state_dict(),
                 'i2_key_pools_state_dict': self.i2_key_pools.state_dict(),
                 'd2_key_pools_state_dict': self.d2_key_pools.state_dict(),
                 'i2_token_pools_state_dict': self.i2_token_pools.state_dict(),
                 'd2_token_pools_state_dict': self.d2_token_pools.state_dict(),
+                'i2_linear_state_dict': self.i2_linear.state_dict(),
+                'd2_linear_state_dict': self.d2_linear.state_dict(),
                 'i3_key_pools_state_dict': self.i3_key_pools.state_dict(),
                 'd3_key_pools_state_dict': self.d3_key_pools.state_dict(),
                 'i3_token_pools_state_dict': self.i3_token_pools.state_dict(),
                 'd3_token_pools_state_dict': self.d3_token_pools.state_dict(),
+                'i3_linear_state_dict': self.i3_linear.state_dict(),
+                'd3_linear_state_dict': self.d3_linear.state_dict(),
                 'i4_key_pools_state_dict': self.i4_key_pools.state_dict(),
                 'd4_key_pools_state_dict': self.d4_key_pools.state_dict(),
                 'i4_token_pools_state_dict': self.i4_token_pools.state_dict(),
                 'd4_token_pools_state_dict': self.d4_token_pools.state_dict(),
+                'i4_linear_state_dict': self.i4_linear.state_dict(),
+                'd4_linear_state_dict': self.d4_linear.state_dict(),
                 'latent_key_pools_state_dict': self.latent_key_pools.state_dict(),
-                'latent_token_pools_state_dict': self.latent_token_pools.state_dict()},
+                'latent_token_pools_state_dict': self.latent_token_pools.state_dict(),
+                'latent_linear_state_dict': self.latent_linear.state_dict()},
                 os.path.join(checkpoint_dirpath, 'tokens-{}.pth'.format(step)))
 
 
