@@ -30,8 +30,8 @@ python depth_completion/src/train_depth_completion.py \
 --train_batch_size 12 \
 --train_crop_shapes \
     416 512 \
---learning_rates 5e-4 2.5e-4 \
---learning_schedule 10 50 \
+--learning_rates 5e-5 \
+--learning_schedule 50 \
 --augmentation_probabilities 1.0 \
 --augmentation_schedule -1 \
 --augmentation_random_brightness 0.50 1.50 \
@@ -70,6 +70,6 @@ python depth_completion/src/train_depth_completion.py \
     /media/home/pqrim/workspace/token-cdc/trained_completion/!RIT_PRETRAINED/kbnet-370000.pth \
     /media/home/pqrim/workspace/token-cdc/trained_completion/!RIT_PRETRAINED/posenet-370000.pth \
 --checkpoint_path \
-    trained_completion/titan/void-frozen4 \
+    trained_completion/data1/titan/void-frozen4 \
 --device gpu \
 --n_thread 8
