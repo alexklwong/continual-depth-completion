@@ -416,7 +416,9 @@ class ContinualLearningModel(torch.nn.Module):
         if optimizer is not None:
             try:
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                print("OPTIMIZER RESTORED!\n\n\n\n\n\n")
             except Exception:
+                print("OPTIMIZER NOT RESTORED!\n\n\n\n\n\n")
                 pass
 
         # Return the current step and optimizer
