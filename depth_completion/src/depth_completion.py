@@ -67,8 +67,6 @@ def train(train_image_paths,
           # Loss function settings
           supervision_type,
           w_losses,
-          # TODO: Uncomment to use frozen model for loss
-          frozen_model_paths,
           # Evaluation settings
           min_evaluate_depths,  # allows multiple val datasets
           max_evaluate_depths,  # allows multiple val datasets
@@ -247,13 +245,10 @@ def train(train_image_paths,
         val_sparse_depth_paths is not None and \
         val_ground_truth_paths is not None
 
+    # Extended validation setup to handle multiple datasets (similar to training above)
+    # This is so that we can gauge performance on current and previous datasets
+    # We will keep the validation dataloaders in a list and iterate through them in validation loop
     if is_available_validation:
-
-        # Extended validation setup to handle multiple datasets (similar to training above)
-        # This is so that we can gauge performance on current and previous datasets
-        # We will keep the validation dataloaders in a list and
-        # iterate through them during validation step
-
         # Images <=> Sparse depths
         assert len(val_image_paths) == len(val_sparse_depth_paths)
 
@@ -369,26 +364,12 @@ def train(train_image_paths,
         device=device)
 
     parameters_depth_model = depth_completion_model.parameters_depth()
+    parameters_cl_model = depth_completion_model.parameters_cl()
 
     if supervision_type == 'unsupervised':
         parameters_pose_model = depth_completion_model.parameters_pose()
     else:
         parameters_pose_model = []
-
-    depth_completion_model.train()
-
-    if len(frozen_model_paths) > 0:
-        frozen_model =  DepthCompletionModel(
-            model_name=model_name,
-            network_modules=network_modules,
-            min_predict_depth=min_predict_depth,
-            max_predict_depth=max_predict_depth,
-            device=device)
-
-        frozen_model.restore_model(frozen_model_paths, frozen_model=True)
-        frozen_model.eval()
-    else:
-        frozen_model = None
 
     # Set up tensorboard summary writers
     train_summary_writer = SummaryWriter(event_path + '-train')
@@ -411,7 +392,6 @@ def train(train_image_paths,
         train_input_paths.append([None] * len(train_image_paths))
 
     for dataset_id, paths in enumerate(zip(*train_input_paths)):
-
         log('dataset_id={}'.format(dataset_id))
         for path in paths:
             if path is not None:
@@ -419,7 +399,7 @@ def train(train_image_paths,
 
     log('', log_path)
 
-    # Added multiple dataset support
+    # Added logging for multiple validation datasets
     if is_available_validation:
         log('Validation input paths:', log_path)
         val_input_paths = [
@@ -430,7 +410,6 @@ def train(train_image_paths,
         ]
 
         for dataset_id, paths in enumerate(zip(*val_input_paths)):
-
             log('dataset_id={}'.format(dataset_id))
             for path in paths:
                 if path is not None:
@@ -533,7 +512,7 @@ def train(train_image_paths,
     w_weight_decay_pose = \
          w_losses['w_weight_decay_pose'] if 'w_weight_decay_pose' in w_losses else 0.0
 
-    # TODO: Set allow depth completion model to specify optimizer as a pointer
+    ### SET UP OPTIMIZERS
     optimizer_depth = torch.optim.Adam([
         {
             'params' : parameters_depth_model,
@@ -551,27 +530,43 @@ def train(train_image_paths,
     else:
         optimizer_pose = None
 
+    optimizer_cl = torch.optim.Adam([
+        {
+            'params' : parameters_cl_model,
+            'weight_decay' : w_weight_decay_depth
+        }],
+        lr=learning_rate)
+
     # Split along batch across multiple GPUs
     if torch.cuda.device_count() > 1:
         depth_completion_model.data_parallel()
+        print("SPLIT ACROSS {} GPUS\n\n\n\n".format(torch.cuda.device_count()))
 
-    # Start training
+    # Set to training mode
     depth_completion_model.train()
 
     train_step = 0
 
     if len(restore_paths) > 0:
         try:
-            train_step, optimizer_depth, optimizer_pose = depth_completion_model.restore_model(
+            train_step, optimizer_depth, optimizer_pose, optimizer_cl = depth_completion_model.restore_model(
                 restore_paths,
                 optimizer_depth=optimizer_depth,
-                optimizer_pose=optimizer_pose)
+                optimizer_pose=optimizer_pose,
+                optimizer_cl=optimizer_cl)
         except Exception:
             print('Failed to restore optimizer for depth network: Ignoring...')
             train_step = depth_completion_model.restore_model(
                 restore_paths)
 
         for g in optimizer_depth.param_groups:
+            g['lr'] = learning_rate
+
+        if 'pose' in network_modules:
+            for g in optimizer_pose.param_groups:
+                g['lr'] = learning_rate
+        
+        for g in optimizer_cl.param_groups:
             g['lr'] = learning_rate
 
         n_train_step = n_train_step + train_step
@@ -595,6 +590,9 @@ def train(train_image_paths,
                 # Update optimizer learning rates for pose network
                 for g in optimizer_pose.param_groups:
                     g['lr'] = learning_rate
+            
+            for g in optimizer_cl.param_groups:
+                g['lr'] = learning_rate
 
         # Set augmentation schedule
         if -1 not in augmentation_schedule and epoch > augmentation_schedule[augmentation_schedule_pos]:
@@ -824,10 +822,10 @@ def train(train_image_paths,
                     dataset_uid=dataset_uid,
                     return_all_outputs=True)
 
-                # Check if new parameters were added during the forward pass
+                # TokenCDC: Check if new parameters were added during the forward pass, to add to the optimizer
                 new_params = depth_completion_model.get_new_params()
                 if new_params:
-                    optimizer_depth.add_param_group({'params' : new_params,
+                    optimizer_cl.add_param_group({'params' : new_params,
                                                     'weight_decay' : w_weight_decay_depth})
 
                 # TokenCDC TEST: Check that queries are frozen
@@ -870,8 +868,7 @@ def train(train_image_paths,
                     pose0to2=pose0to2,
                     domain_incremental=domain_incremental,
                     supervision_type=supervision_type,
-                    w_losses=w_losses,
-                    frozen_model=frozen_model)
+                    w_losses=w_losses)
 
                 # Accumulate loss over batches and update loss info
                 loss = loss + loss_batch
@@ -921,32 +918,24 @@ def train(train_image_paths,
                         scalars=loss_info_batch,
                         n_image_per_summary=min(batch_size, n_image_per_summary))
 
-            '''
-            Compute gradient and backpropagate
-            '''
-            optimizer_depth.zero_grad()
-
-            if supervision_type == 'unsupervised':
-                optimizer_pose.zero_grad()
-
-            loss.backward()
-
             # TokenCDC TEST: total number of learnable parameters
             # count = sum(p.numel() for group in optimizer_depth.param_groups for p in group['params'] if p.requires_grad)
             # print("Learnable parameters in the model: {}".format(count))
 
+            '''
+            Compute gradient and BACKPROPAGATE
+            '''
+            optimizer_depth.zero_grad()
+            if supervision_type == 'unsupervised':
+                optimizer_pose.zero_grad()
+            optimizer_cl.zero_grad()
+
+            loss.backward()
+
             optimizer_depth.step()
-
-            # TokenCDC TEST
-            # print(depth_completion_model.tokens['nyu_v2'].grad.sum())
-            #print(sum(p.sum() for p in depth_completion_model.model.model_pose.encoder.conv1.parameters()))
-
             if supervision_type == 'unsupervised':
                 optimizer_pose.step()
-
-            # Compute fisher information for EWC
-            # if calculate_fisher_enabled:
-            #     depth_completion_model.calculate_fisher(normalization=len(train_dataloaders[0].dataset))
+            optimizer_cl.step()
 
             '''
             Log results and save checkpoints
@@ -997,11 +986,8 @@ def train(train_image_paths,
                     checkpoint_dirpath.format(train_step),
                     train_step,
                     optimizer_depth,
-                    optimizer_pose)
-
-        # update fisher at the end of epoch
-        # if calculate_fisher_enabled:
-        #     depth_completion_model.update_fisher()
+                    optimizer_pose,
+                    optimizer_cl)
 
 
     '''
@@ -1028,7 +1014,8 @@ def train(train_image_paths,
         checkpoint_dirpath.format(train_step),
         train_step,
         optimizer_depth,
-        optimizer_pose)
+        optimizer_pose,
+        optimizer_cl)
 
 def validate(depth_model,
              dataloaders,  # multiple dataloaders

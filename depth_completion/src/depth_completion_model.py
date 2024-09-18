@@ -18,6 +18,8 @@ class DepthCompletionModel(object):
             minimum depth to predict
         max_predict_depth : float
             maximum depth to predict
+        key_token_pool_size : int
+            number of keys/tokens in the pool
         frozen : bool
             for TokenCDC, freeze the model if True
         device : torch.device
@@ -97,178 +99,25 @@ class DepthCompletionModel(object):
         if self.frozen:
             for param in self.model.parameters_depth():
                 param.requires_grad = False
-            # for param in self.model.parameters_pose():
-            #     param.requires_grad = False
 
-        # TokenCDC: initialize ParameterDicts to store learnable key & token POOLS for each dataset
-        # self.i1_key_pools = torch.nn.ParameterDict() 
-        # self.i1_token_pools = torch.nn.ParameterDict()
-        # self.i1_linear = torch.nn.ParameterDict()
-        # self.d1_key_pools = torch.nn.ParameterDict() 
-        # self.d1_token_pools = torch.nn.ParameterDict() 
-        # self.d1_linear = torch.nn.ParameterDict()
+        # TokenCDC: Initialize TokenCDC params
+        from continual_learning_model import ContinualLearningModel
+        self.model_cl = ContinualLearningModel(
+            key_token_pool_size=key_token_pool_size,
+            device=device)
 
-        self.i2_key_pools = torch.nn.ParameterDict() 
-        self.i2_token_pools = torch.nn.ParameterDict()
-        self.i2_linear = torch.nn.ParameterDict()
-        self.d2_key_pools = torch.nn.ParameterDict() 
-        self.d2_token_pools = torch.nn.ParameterDict() 
-        self.d2_linear = torch.nn.ParameterDict()
-
-        self.i3_key_pools = torch.nn.ParameterDict() 
-        self.i3_token_pools = torch.nn.ParameterDict()
-        self.i3_linear = torch.nn.ParameterDict()
-        self.d3_key_pools = torch.nn.ParameterDict() 
-        self.d3_token_pools = torch.nn.ParameterDict() 
-        self.d3_linear = torch.nn.ParameterDict()
-
-        self.i4_key_pools = torch.nn.ParameterDict() 
-        self.i4_token_pools = torch.nn.ParameterDict()
-        self.i4_linear = torch.nn.ParameterDict()
-        self.d4_key_pools = torch.nn.ParameterDict() 
-        self.d4_token_pools = torch.nn.ParameterDict() 
-        self.d4_linear = torch.nn.ParameterDict()
-
-        self.latent_key_pools = torch.nn.ParameterDict()
-        self.latent_token_pools = torch.nn.ParameterDict()
-        self.latent_linear = torch.nn.ParameterDict()
-
-        self.new_params = []  # LIST OF PARAMS to be added to the depth optimizer!
- 
-
-    def add_new_key_token_pool(self, dataset_uid, #i1_key_dim, d1_key_dim, i1_token_dim, d1_token_dim,
-                                                i2_key_dim, d2_key_dim, i2_token_dim, d2_token_dim,
-                                                i3_key_dim, d3_key_dim, i3_token_dim, d3_token_dim,
-                                                i4_key_dim, d4_key_dim, i4_token_dim, d4_token_dim,
-                                                latent_key_dim, latent_token_dim):
+    def _get_model_cl(self):
         '''
-        Add and return token for a new unseen dataset
-
-        Arg(s):
-            dataset_uid : str
-                unique id of dataset
-            n_keys : int
-                number of keys/tokens in the pool
-            key_dim : int
-                dimension of image/depth features
-            token_dim : int
-                dimension of fused latent space
-        Returns:
-            torch.Tensor[float32] : added token
+        To be compatible with DataParallel
         '''
-        # CREATE key and token pool
-        # new_i1_key_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, i1_key_dim), device=self.device), requires_grad=True)
-        # new_i1_token_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, i1_token_dim), device=self.device), requires_grad=True)
-        # new_i1_linear = torch.nn.Parameter(torch.zeros((i1_key_dim,), device=self.device), requires_grad=True)
-        # new_d1_key_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, d1_key_dim), device=self.device), requires_grad=True)
-        # new_d1_token_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, d1_token_dim), device=self.device), requires_grad=True)
-        # new_d1_linear = torch.nn.Parameter(torch.zeros((d1_key_dim,), device=self.device), requires_grad=True)
-
-        new_i2_key_pool = torch.nn.Parameter(torch.zeros((i2_token_dim, i2_key_dim), device=self.device), requires_grad=True)
-        new_i2_token_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, i2_token_dim), device=self.device), requires_grad=True)
-        new_i2_linear = torch.nn.Parameter(torch.zeros((i2_key_dim,), device=self.device), requires_grad=True)
-        new_d2_key_pool = torch.nn.Parameter(torch.zeros((d2_token_dim, d2_key_dim), device=self.device), requires_grad=True)
-        new_d2_token_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, d2_token_dim), device=self.device), requires_grad=True)
-        new_d2_linear = torch.nn.Parameter(torch.zeros((d2_key_dim,), device=self.device), requires_grad=True)
-
-        new_i3_key_pool = torch.nn.Parameter(torch.zeros((i3_token_dim, i3_key_dim), device=self.device), requires_grad=True)
-        new_i3_token_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, i3_token_dim), device=self.device), requires_grad=True)
-        new_i3_linear = torch.nn.Parameter(torch.zeros((i3_key_dim,), device=self.device), requires_grad=True)
-        new_d3_key_pool = torch.nn.Parameter(torch.zeros((d3_token_dim, d3_key_dim), device=self.device), requires_grad=True)
-        new_d3_token_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, d3_token_dim), device=self.device), requires_grad=True)
-        new_d3_linear = torch.nn.Parameter(torch.zeros((d3_key_dim,), device=self.device), requires_grad=True)
-
-        new_i4_key_pool = torch.nn.Parameter(torch.zeros((i4_token_dim, i4_key_dim), device=self.device), requires_grad=True)
-        new_i4_token_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, i4_token_dim), device=self.device), requires_grad=True)
-        new_i4_linear = torch.nn.Parameter(torch.zeros((i4_key_dim,), device=self.device), requires_grad=True)
-        new_d4_key_pool = torch.nn.Parameter(torch.zeros((d4_token_dim, d4_key_dim), device=self.device), requires_grad=True)
-        new_d4_token_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, d4_token_dim), device=self.device), requires_grad=True)
-        new_d4_linear = torch.nn.Parameter(torch.zeros((d4_key_dim,), device=self.device), requires_grad=True)
-
-        new_latent_key_pool = torch.nn.Parameter(torch.zeros((latent_token_dim, latent_key_dim), device=self.device), requires_grad=True)
-        new_latent_token_pool = torch.nn.Parameter(torch.zeros((self.key_token_pool_size, latent_token_dim), device=self.device), requires_grad=True)
-        new_latent_linear = torch.nn.Parameter(torch.zeros((latent_key_dim,), device=self.device), requires_grad=True)
-
-        # ADD to the key and token pool dicts
-        # self.i1_key_pools[dataset_uid] = new_i1_key_pool
-        # self.i1_token_pools[dataset_uid] = new_i1_token_pool
-        # self.i1_linear[dataset_uid] = new_i1_linear
-        # self.d1_key_pools[dataset_uid] = new_d1_key_pool
-        # self.d1_token_pools[dataset_uid] = new_d1_token_pool
-        # self.d1_linear[dataset_uid] = new_d1_linear
-        
-        self.i2_key_pools[dataset_uid] = new_i2_key_pool
-        self.i2_token_pools[dataset_uid] = new_i2_token_pool
-        self.i2_linear[dataset_uid] = new_i2_linear
-        self.d2_key_pools[dataset_uid] = new_d2_key_pool
-        self.d2_token_pools[dataset_uid] = new_d2_token_pool
-        self.d2_linear[dataset_uid] = new_d2_linear
-        
-        self.i3_key_pools[dataset_uid] = new_i3_key_pool
-        self.i3_token_pools[dataset_uid] = new_i3_token_pool
-        self.i3_linear[dataset_uid] = new_i3_linear
-        self.d3_key_pools[dataset_uid] = new_d3_key_pool
-        self.d3_token_pools[dataset_uid] = new_d3_token_pool
-        self.d3_linear[dataset_uid] = new_d3_linear
-        
-        self.i4_key_pools[dataset_uid] = new_i4_key_pool
-        self.i4_token_pools[dataset_uid] = new_i4_token_pool
-        self.i4_linear[dataset_uid] = new_i4_linear
-        self.d4_key_pools[dataset_uid] = new_d4_key_pool
-        self.d4_token_pools[dataset_uid] = new_d4_token_pool
-        self.d4_linear[dataset_uid] = new_d4_linear
-        
-        self.latent_key_pools[dataset_uid] = new_latent_key_pool
-        self.latent_token_pools[dataset_uid] = new_latent_token_pool
-        self.latent_linear[dataset_uid] = new_latent_linear
-
-        # Add params to be added the optimizer (in the train loop in depth_completion.py)
-        # self.new_params.append(new_i1_key_pool)
-        # self.new_params.append(new_d1_key_pool)
-        # self.new_params.append(new_i1_linear)
-        # self.new_params.append(new_i1_token_pool)
-        # self.new_params.append(new_d1_token_pool)
-        # self.new_params.append(new_d1_linear)
-        
-        self.new_params.append(new_i2_key_pool)
-        self.new_params.append(new_d2_key_pool)
-        self.new_params.append(new_i2_linear)
-        self.new_params.append(new_i2_token_pool)
-        self.new_params.append(new_d2_token_pool)
-        self.new_params.append(new_d2_linear)
-        
-        self.new_params.append(new_i3_key_pool)
-        self.new_params.append(new_d3_key_pool)
-        self.new_params.append(new_i3_linear)
-        self.new_params.append(new_i3_token_pool)
-        self.new_params.append(new_d3_token_pool)
-        self.new_params.append(new_d3_linear)
-        
-        self.new_params.append(new_i4_key_pool)
-        self.new_params.append(new_d4_key_pool)
-        self.new_params.append(new_i4_linear)
-        self.new_params.append(new_i4_token_pool)
-        self.new_params.append(new_d4_token_pool)
-        self.new_params.append(new_d4_linear)
-        
-        self.new_params.append(new_latent_key_pool)
-        self.new_params.append(new_latent_token_pool)
-        self.new_params.append(new_latent_linear)
-
-        assert set(self.i4_key_pools.keys()) == set(self.d4_key_pools.keys()), "Image/Depth Key pools must have same keys!"
-        assert set(self.i4_key_pools.keys()) == set(self.i4_token_pools.keys()), "Key and Token pools must have same keys!"
-        #return new_i1_key_pool, new_d1_key_pool, new_i1_token_pool, new_d1_token_pool, new_i1_linear, new_d1_linear, \
-        return new_i2_key_pool, new_d2_key_pool, new_i2_token_pool, new_d2_token_pool, new_i2_linear, new_d2_linear, \
-                new_i3_key_pool, new_d3_key_pool, new_i3_token_pool, new_d3_token_pool, new_i3_linear, new_d3_linear, \
-                new_i4_key_pool, new_d4_key_pool, new_i4_token_pool, new_d4_token_pool, new_i4_linear, new_d4_linear, \
-                new_latent_key_pool, new_latent_token_pool, new_latent_linear
+        return self.model_cl.module if isinstance(self.model_cl, torch.nn.DataParallel) else self.model_cl
 
 
     def forward_depth(self, 
                       image, 
                       sparse_depth, 
                       validity_map, 
-                      dataset_uid,
+                      dataset_uid,  # TokenCDC
                       intrinsics=None, 
                       return_all_outputs=False):
         '''
@@ -291,6 +140,13 @@ class DepthCompletionModel(object):
             list[torch.Tensor[float32]] : a single or list of N x 1 x H x W outputs
         '''
 
+        # TokenCDC TEST: print number of learnable params
+        # token_count = 0
+        # depth_count = sum(p.numel() for p in self.model.parameters_depth() if p.requires_grad)
+        # pose_count = sum(p.numel() for p in self.model.parameters_pose() if p.requires_grad)
+        # print("Learnable parameters in the model: Tokens {}, Depth {}, Pose {}".format(token_count, depth_count, pose_count))
+        # print("Current token keys: {}".format(self.token_pools.keys()))
+
         # Encoder Forward Pass
         latent, skips, shape = self.model.forward_depth_encoder(
             image, 
@@ -300,49 +156,15 @@ class DepthCompletionModel(object):
 
         ##### BEGIN TokenCDC Implementation 
 
-        # TokenCDC TEST: number of learnable params
-        # token_count = 0
-        # depth_count = sum(p.numel() for p in self.model.parameters_depth() if p.requires_grad)
-        # pose_count = sum(p.numel() for p in self.model.parameters_pose() if p.requires_grad)
-        # print("Learnable parameters in the model: Tokens {}, Depth {}, Pose {}".format(token_count, depth_count, pose_count))
-        # print("Current token keys: {}".format(self.token_pools.keys()))
-
         # FIRST, get key and token pools
-        i1_C, d1_C, i2_C, d2_C, i3_C, d3_C, i4_C, d4_C, latent_C = skips[0][0].shape[1], skips[0][1].shape[1], \
-                                                                    skips[1][0].shape[1], skips[1][1].shape[1], \
-                                                                    skips[2][0].shape[1], skips[2][1].shape[1], \
-                                                                    skips[3][0].shape[1], skips[3][1].shape[1], \
-                                                                    latent.shape[1]
-        if dataset_uid not in self.i4_key_pools:
-            #curr_i1_key_pool, curr_d1_key_pool, curr_i1_token_pool, curr_d1_token_pool, curr_i1_linear, curr_d1_linear, \
-            curr_i2_key_pool, curr_d2_key_pool, curr_i2_token_pool, curr_d2_token_pool, curr_i2_linear, curr_d2_linear, \
-            curr_i3_key_pool, curr_d3_key_pool, curr_i3_token_pool, curr_d3_token_pool, curr_i3_linear, curr_d3_linear, \
-            curr_i4_key_pool, curr_d4_key_pool, curr_i4_token_pool, curr_d4_token_pool, curr_i4_linear, curr_d4_linear, \
-            curr_latent_key_pool, curr_latent_token_pool, curr_latent_linear = \
-                self.add_new_key_token_pool(dataset_uid, #i1_C, d1_C, i1_C, d1_C,
-                                                        i2_C, d2_C, i2_C, d2_C,
-                                                        i3_C, d3_C, i3_C, d3_C,
-                                                        i4_C, d4_C, i4_C, d4_C,
-                                                        latent_C, latent_C)
-        else:
-            #curr_i1_key_pool, curr_d1_key_pool, curr_i1_token_pool, curr_d1_token_pool, curr_i1_linear, curr_d1_linear, \
-            curr_i2_key_pool, curr_d2_key_pool, curr_i2_token_pool, curr_d2_token_pool, curr_i2_linear, curr_d2_linear, \
-            curr_i3_key_pool, curr_d3_key_pool, curr_i3_token_pool, curr_d3_token_pool, curr_i3_linear, curr_d3_linear, \
-            curr_i4_key_pool, curr_d4_key_pool, curr_i4_token_pool, curr_d4_token_pool, curr_i4_linear, curr_d4_linear, \
-            curr_latent_key_pool, curr_latent_token_pool, curr_latent_linear = \
-                self.i2_key_pools[dataset_uid], self.d2_key_pools[dataset_uid], \
-                self.i2_token_pools[dataset_uid], self.d2_token_pools[dataset_uid], \
-                self.i2_linear[dataset_uid], self.d2_linear[dataset_uid], \
-                self.i3_key_pools[dataset_uid], self.d3_key_pools[dataset_uid], \
-                self.i3_token_pools[dataset_uid], self.d3_token_pools[dataset_uid], \
-                self.i3_linear[dataset_uid], self.d3_linear[dataset_uid], \
-                self.i4_key_pools[dataset_uid], self.d4_key_pools[dataset_uid], \
-                self.i4_token_pools[dataset_uid], self.d4_token_pools[dataset_uid], \
-                self.i4_linear[dataset_uid], self.d4_linear[dataset_uid], \
-                self.latent_key_pools[dataset_uid], self.latent_token_pools[dataset_uid], self.latent_linear[dataset_uid]
-                # self.i1_key_pools[dataset_uid], self.d1_key_pools[dataset_uid], \
-                # self.i1_token_pools[dataset_uid], self.d1_token_pools[dataset_uid], \
-                # self.i1_linear[dataset_uid], self.d1_linear[dataset_uid], \
+        dims = skips[1][0].shape[1], skips[1][1].shape[1], \
+                skips[2][0].shape[1], skips[2][1].shape[1], skips[3][0].shape[1], skips[3][1].shape[1], latent.shape[1]
+        #curr_i1_key_pool, curr_d1_key_pool, curr_i1_token_pool, curr_d1_token_pool, curr_i1_linear, curr_d1_linear, \
+        curr_i2_key_pool, curr_i2_token_pool, curr_i2_linear, curr_d2_key_pool, curr_d2_token_pool, curr_d2_linear, \
+        curr_i3_key_pool, curr_i3_token_pool, curr_i3_linear, curr_d3_key_pool, curr_d3_token_pool, curr_d3_linear, \
+        curr_i4_key_pool, curr_i4_token_pool, curr_i4_linear, curr_d4_key_pool, curr_d4_token_pool, curr_d4_linear, \
+        curr_latent_key_pool, curr_latent_token_pool, curr_latent_linear = \
+            self._get_model_cl().get_key_token_pool(dataset_uid, dims)
 
         ### Skip Conection 1
         # # QUERIES
@@ -382,8 +204,8 @@ class DepthCompletionModel(object):
         i2_tokens = torch.matmul(i2_scores, curr_i2_token_pool).view(i2_N, i2_H, i2_W, i2_C).permute(0, 3, 1, 2)
         d2_tokens = torch.matmul(d2_scores, curr_d2_token_pool).view(d2_N, d2_H, d2_W, d2_C).permute(0, 3, 1, 2)
         # Apply linear layer to skips
-        i2_skip = i2_skip * curr_i2_linear[:, None, None]
-        d2_skip = d2_skip * curr_d2_linear[:, None, None]
+        i2_skip = i2_skip * curr_i2_linear
+        d2_skip = d2_skip * curr_d2_linear
         # CONCAT tokens to skips
         i2_skip_with_tokens = i2_skip + i2_tokens
         d2_skip_with_tokens = d2_skip + d2_tokens
@@ -406,8 +228,8 @@ class DepthCompletionModel(object):
         i3_tokens = torch.matmul(i3_scores, curr_i3_token_pool).view(i3_N, i3_H, i3_W, i3_C).permute(0, 3, 1, 2)
         d3_tokens = torch.matmul(d3_scores, curr_d3_token_pool).view(d3_N, d3_H, d3_W, d3_C).permute(0, 3, 1, 2)
         # Apply linear layer to skips
-        i3_skip = i3_skip * curr_i3_linear[:, None, None]
-        d3_skip = d3_skip * curr_d3_linear[:, None, None]
+        i3_skip = i3_skip * curr_i3_linear
+        d3_skip = d3_skip * curr_d3_linear
         # CONCAT tokens to skips
         i3_skip_with_tokens = i3_skip + i3_tokens
         d3_skip_with_tokens = d3_skip + d3_tokens
@@ -430,22 +252,23 @@ class DepthCompletionModel(object):
         i4_tokens = torch.matmul(i4_scores, curr_i4_token_pool).view(i4_N, i4_H, i4_W, i4_C).permute(0, 3, 1, 2)
         d4_tokens = torch.matmul(d4_scores, curr_d4_token_pool).view(d4_N, d4_H, d4_W, d4_C).permute(0, 3, 1, 2)
         # Apply linear layer to skips
-        i4_skip = i4_skip * curr_i4_linear[:, None, None]
-        d4_skip = d4_skip * curr_d4_linear[:, None, None]
+        i4_skip = i4_skip * curr_i4_linear
+        d4_skip = d4_skip * curr_d4_linear
         # CONCAT tokens to skips
         i4_skip_with_tokens = i4_skip + i4_tokens
         d4_skip_with_tokens = d4_skip + d4_tokens
 
         ### Latent Space
         # QUERIES
-        latent_queries = latent.permute(0, 2, 3, 1).view(latent.shape[0], latent.shape[2]*latent.shape[3], latent.shape[1])
+        latent_N, latent_C, latent_H, latent_W = latent.shape
+        latent_queries = latent.permute(0, 2, 3, 1).view(latent_N, latent_H*latent_W, latent_C)
         # Compute TOKENS using attention
         latent_keys = torch.matmul(curr_latent_key_pool, curr_latent_token_pool.detach().clone().transpose(-2, -1))
         latent_scores = torch.matmul(latent_queries, latent_keys) / torch.sqrt(torch.tensor(latent_C, device=self.device, dtype=torch.float32))
         latent_scores = F.softmax(latent_scores, dim=-1)
         latent_tokens = torch.matmul(latent_scores, curr_latent_token_pool).view(latent.shape[0], latent.shape[2], latent.shape[3], latent.shape[1]).permute(0, 3, 1, 2)
         # Apply linear layer to latent
-        latent = latent * curr_latent_linear[:, None, None]
+        latent = latent * curr_latent_linear
         # CONCAT tokens to latent
         latent_with_tokens = latent + latent_tokens
 
@@ -499,8 +322,7 @@ class DepthCompletionModel(object):
                      domain_incremental=False,
                      ground_truth0=None,
                      supervision_type='unsupervised',
-                     w_losses={},
-                     frozen_model=None):
+                     w_losses={}):
         '''
         Call model's compute loss function
 
@@ -535,8 +357,6 @@ class DepthCompletionModel(object):
                 type of supervision for training
             w_losses : dict[str, float]
                 dictionary of weights for each loss
-            frozen_model : object
-                instance of pretrained model frozen for loss computations
         Returns:
             float : loss averaged over the batch
             dict[str, float] : loss info
@@ -579,18 +399,12 @@ class DepthCompletionModel(object):
 
     def get_new_params(self):
         '''
-        Returns the list of new parameters added to the model and resets the list
+        Returns the list of new parameters added to the model
 
         Returns:
             list[torch.Tensor[float32]] : list of new parameters
         '''
-        new_params = self.new_params
-        self.new_params = []  # Clear the list after returning the new params
-        # TokenCDC TEST:
-        count = sum(p.numel() for p in new_params)
-        if count > 0:
-            print("Number of NEW learnable parameters: {}\n\n\n\n".format(count))
-        return new_params
+        return self._get_model_cl().get_new_params()
 
 
     def parameters(self):
@@ -600,11 +414,11 @@ class DepthCompletionModel(object):
         Returns:
             list[torch.Tensor[float32]] : list of parameters
         '''
-        return list(self.model.parameters())
+        return list(self.model.parameters()) + list(self.model_cl.parameters())
 
     def parameters_depth(self):
         '''
-        Returns the list of parameters in the model
+        Returns the list of parameters in the depthmodel
 
         Returns:
             list[torch.Tensor[float32]] : list of parameters
@@ -613,12 +427,21 @@ class DepthCompletionModel(object):
 
     def parameters_pose(self):
         '''
-        Returns the list of parameters in the model
+        Returns the list of parameters in the pose model
 
         Returns:
             list[torch.Tensor[float32]] : list of parameters
         '''
         return self.model.parameters_pose()
+    
+    def parameters_cl(self):
+        '''
+        Returns the list of parameters in the continual learning model
+
+        Returns:
+            list[torch.Tensor[float32]] : list of parameters
+        '''
+        return self.model_cl.parameters()
 
 
     def train(self):
@@ -626,12 +449,14 @@ class DepthCompletionModel(object):
         Sets model to training mode
         '''
         self.model.train()
+        self.model_cl.train()
 
     def eval(self):
         '''
         Sets model to evaluation mode
         '''
         self.model.eval()
+        self.model_cl.eval()
 
     def to(self, device):
         '''
@@ -643,197 +468,80 @@ class DepthCompletionModel(object):
         '''
         self.device = device
         self.model.to(device)
-        self.tokens = self.tokens.to(device)
+        self._get_model_cl().to(device)
 
     def data_parallel(self):
         '''
         Allows multi-gpu split along batch
         '''
         self.model.data_parallel()
-
-    def distributed_data_parallel(self, rank):
-        '''
-        Allows multi-gpu split along batch with 'torch.nn.parallel.DistributedDataParallel'
-        '''
-        self.model.distributed_data_parallel(rank)
-
-    def convert_syncbn(self):
-        '''
-        Convert BN layers to SyncBN layers.
-        SyncBN merge the BN layer weights in every backward step.
-        '''
-        self.model.convert_syncbn()
+        self.model_cl = torch.nn.DataParallel(self.model_cl)
+        print("TEST ", type(self._get_model_cl().i4_key_pools))
 
 
     def restore_model(self,
                       restore_paths,
                       optimizer_depth=None,
                       optimizer_pose=None,
-                      frozen_model=False):
+                      optimizer_cl=None):
         '''
         Loads weights from checkpoint
 
         Arg(s):
             restore_paths : list[str]
-                path to model weights, 1st for depth model and 2nd for pose model (if exists)
-            optimizer : torch.optimizer or None
-                current optimizer
+                path to model weights, 1st for depth model and 2nd for pose model (if exists), 3rd for continual learning
+            optimizers
+                current optimizers
         Returns:
             int : training step
             torch.optimizer : optimizer for depth or None if no optimizer is passed in
             torch.optimizer : optimizer for pose or None if no optimizer is passed in
+            torch.optimizer : optimizer for continual learning or None if no optimizer is passed in
         '''
 
-        # TokenCDC: Restore ALL TokenCDC params
-        if 'new_pool_size' not in self.network_modules:
-            checkpoint = torch.load(restore_paths[-1], map_location=self.device)
-            # i1_key_pools_state_dict = checkpoint['i1_key_pools_state_dict']
-            # d1_key_pools_state_dict = checkpoint['d1_key_pools_state_dict']
-            # i1_token_pools_state_dict = checkpoint['i1_token_pools_state_dict']
-            # d1_token_pools_state_dict = checkpoint['d1_token_pools_state_dict']
-            # i1_linear_state_dict = checkpoint['i1_linear_state_dict']
-            # d1_linear_state_dict = checkpoint['d1_linear_state_dict']
-            i2_key_pools_state_dict = checkpoint['i2_key_pools_state_dict']
-            d2_key_pools_state_dict = checkpoint['d2_key_pools_state_dict']
-            i2_token_pools_state_dict = checkpoint['i2_token_pools_state_dict']
-            d2_token_pools_state_dict = checkpoint['d2_token_pools_state_dict']
-            i2_linear_state_dict = checkpoint['i2_linear_state_dict']
-            d2_linear_state_dict = checkpoint['d2_linear_state_dict']
-            i3_key_pools_state_dict = checkpoint['i3_key_pools_state_dict']
-            d3_key_pools_state_dict = checkpoint['d3_key_pools_state_dict']
-            i3_token_pools_state_dict = checkpoint['i3_token_pools_state_dict']
-            d3_token_pools_state_dict = checkpoint['d3_token_pools_state_dict']
-            i3_linear_state_dict = checkpoint['i3_linear_state_dict']
-            d3_linear_state_dict = checkpoint['d3_linear_state_dict']
-            i4_key_pools_state_dict = checkpoint['i4_key_pools_state_dict']
-            d4_key_pools_state_dict = checkpoint['d4_key_pools_state_dict']
-            i4_token_pools_state_dict = checkpoint['i4_token_pools_state_dict']
-            d4_token_pools_state_dict = checkpoint['d4_token_pools_state_dict']
-            i4_linear_state_dict = checkpoint['i4_linear_state_dict']
-            d4_linear_state_dict = checkpoint['d4_linear_state_dict']
-            latent_key_pools_state_dict = checkpoint['latent_key_pools_state_dict']
-            latent_token_pools_state_dict = checkpoint['latent_token_pools_state_dict']
-            latent_linear_state_dict = checkpoint['latent_linear_state_dict']
-
-            # Identify missing keys (keys in state_dict but not in model)
-            # i1_key_pools_missing_keys = set(i1_key_pools_state_dict.keys()) - self.i1_key_pools.keys()
-            # d1_key_pools_missing_keys = set(d1_key_pools_state_dict.keys()) - self.d1_key_pools.keys()
-            # i1_token_pools_missing_keys = set(i1_token_pools_state_dict.keys()) - self.i1_token_pools.keys()
-            # d1_token_pools_missing_keys = set(d1_token_pools_state_dict.keys()) - self.d1_token_pools.keys()
-            # i1_linear_missing_keys = set(i1_linear_state_dict.keys()) - self.i1_linear.keys()
-            # d1_linear_missing_keys = set(d1_linear_state_dict.keys()) - self.d1_linear.keys()
-            i2_key_pools_missing_keys = set(i2_key_pools_state_dict.keys()) - self.i2_key_pools.keys()
-            d2_key_pools_missing_keys = set(d2_key_pools_state_dict.keys()) - self.d2_key_pools.keys()
-            i2_token_pools_missing_keys = set(i2_token_pools_state_dict.keys()) - self.i2_token_pools.keys()
-            d2_token_pools_missing_keys = set(d2_token_pools_state_dict.keys()) - self.d2_token_pools.keys()
-            i2_linear_missing_keys = set(i2_linear_state_dict.keys()) - self.i2_linear.keys()
-            d2_linear_missing_keys = set(d2_linear_state_dict.keys()) - self.d2_linear.keys()
-            i3_key_pools_missing_keys = set(i3_key_pools_state_dict.keys()) - self.i3_key_pools.keys()
-            d3_key_pools_missing_keys = set(d3_key_pools_state_dict.keys()) - self.d3_key_pools.keys()
-            i3_token_pools_missing_keys = set(i3_token_pools_state_dict.keys()) - self.i3_token_pools.keys()
-            d3_token_pools_missing_keys = set(d3_token_pools_state_dict.keys()) - self.d3_token_pools.keys()
-            i3_linear_missing_keys = set(i3_linear_state_dict.keys()) - self.i3_linear.keys()
-            d3_linear_missing_keys = set(d3_linear_state_dict.keys()) - self.d3_linear.keys()
-            i4_key_pools_missing_keys = set(i4_key_pools_state_dict.keys()) - self.i4_key_pools.keys()
-            d4_key_pools_missing_keys = set(d4_key_pools_state_dict.keys()) - self.d4_key_pools.keys()
-            i4_token_pools_missing_keys = set(i4_token_pools_state_dict.keys()) - self.i4_token_pools.keys()
-            d4_token_pools_missing_keys = set(d4_token_pools_state_dict.keys()) - self.d4_token_pools.keys()
-            i4_linear_missing_keys = set(i4_linear_state_dict.keys()) - self.i4_linear.keys()
-            d4_linear_missing_keys = set(d4_linear_state_dict.keys()) - self.d4_linear.keys()
-            latent_key_pools_missing_keys = set(latent_key_pools_state_dict.keys()) - self.latent_key_pools.keys()
-            latent_token_pools_missing_keys = set(latent_token_pools_state_dict.keys()) - self.latent_token_pools.keys()
-            latent_linear_missing_keys = set(latent_linear_state_dict.keys()) - self.latent_linear.keys()
-            assert i4_key_pools_missing_keys == d4_key_pools_missing_keys, "Image/Depth Key pools must have the same keys!"
-            assert i4_key_pools_missing_keys == d4_token_pools_missing_keys, "Key and Token pools must have the same keys!"
-
-            # Add pools for the missing keys (and add to new_params list to be added to optimizer)
-            for mk in i4_key_pools_missing_keys:
-                self.add_new_key_token_pool(mk,
-                                            # i1_key_pools_state_dict[mk].shape[1],
-                                            # d1_key_pools_state_dict[mk].shape[1],
-                                            # i1_token_pools_state_dict[mk].shape[1],
-                                            # d1_token_pools_state_dict[mk].shape[1],
-                                            i2_key_pools_state_dict[mk].shape[1],
-                                            d2_key_pools_state_dict[mk].shape[1],
-                                            i2_token_pools_state_dict[mk].shape[1],
-                                            d2_token_pools_state_dict[mk].shape[1],
-                                            i3_key_pools_state_dict[mk].shape[1],
-                                            d3_key_pools_state_dict[mk].shape[1],
-                                            i3_token_pools_state_dict[mk].shape[1],
-                                            d3_token_pools_state_dict[mk].shape[1],
-                                            i4_key_pools_state_dict[mk].shape[1],
-                                            d4_key_pools_state_dict[mk].shape[1],
-                                            i4_token_pools_state_dict[mk].shape[1],
-                                            d4_token_pools_state_dict[mk].shape[1],
-                                            latent_key_pools_state_dict[mk].shape[1],
-                                            latent_token_pools_state_dict[mk].shape[1])
-
-            # Now, load the state dicts
-            # self.i1_key_pools.load_state_dict(i1_key_pools_state_dict)
-            # self.d1_key_pools.load_state_dict(d1_key_pools_state_dict)
-            # self.i1_token_pools.load_state_dict(i1_token_pools_state_dict)
-            # self.d1_token_pools.load_state_dict(d1_token_pools_state_dict)
-            # self.i1_linear.load_state_dict(i1_linear_state_dict)
-            # self.d1_linear.load_state_dict(d1_linear_state_dict)
-            self.i2_key_pools.load_state_dict(i2_key_pools_state_dict)
-            self.d2_key_pools.load_state_dict(d2_key_pools_state_dict)
-            self.i2_token_pools.load_state_dict(i2_token_pools_state_dict)
-            self.d2_token_pools.load_state_dict(d2_token_pools_state_dict)
-            self.i2_linear.load_state_dict(i2_linear_state_dict)
-            self.d2_linear.load_state_dict(d2_linear_state_dict)
-            self.i3_key_pools.load_state_dict(i3_key_pools_state_dict)
-            self.d3_key_pools.load_state_dict(d3_key_pools_state_dict)
-            self.i3_token_pools.load_state_dict(i3_token_pools_state_dict)
-            self.d3_token_pools.load_state_dict(d3_token_pools_state_dict)
-            self.i3_linear.load_state_dict(i3_linear_state_dict)
-            self.d3_linear.load_state_dict(d3_linear_state_dict)
-            self.i4_key_pools.load_state_dict(i4_key_pools_state_dict)
-            self.d4_key_pools.load_state_dict(d4_key_pools_state_dict)
-            self.i4_token_pools.load_state_dict(i4_token_pools_state_dict)
-            self.d4_token_pools.load_state_dict(d4_token_pools_state_dict)
-            self.i4_linear.load_state_dict(i4_linear_state_dict)
-            self.d4_linear.load_state_dict(d4_linear_state_dict)
-            self.latent_key_pools.load_state_dict(latent_key_pools_state_dict)
-            self.latent_token_pools.load_state_dict(latent_token_pools_state_dict)
-            self.latent_linear.load_state_dict(latent_linear_state_dict)
-            print("ALL TokenCDC PARAMS RESTORED!\n\n\n\n\n\n")
-
         if 'kbnet' in self.model_name:
-            return self.model.restore_model(
-                model_depth_restore_path=restore_paths[0],
-                model_pose_restore_path=restore_paths[1] if len(restore_paths) > 1 else None,
-                optimizer_depth=optimizer_depth,
-                optimizer_pose=optimizer_pose)
+            train_step, optimizer_depth, optimizer_pose = self.model.restore_model(
+                                                                model_depth_restore_path=restore_paths[0],
+                                                                model_pose_restore_path=restore_paths[1] if len(restore_paths) > 1 else None,
+                                                                optimizer_depth=optimizer_depth,
+                                                                optimizer_pose=optimizer_pose)
         elif 'scaffnet' in self.model_name:
-            return self.model.restore_model(
-                restore_path=restore_paths[0],
-                optimizer=optimizer_depth)
+            train_step, optimizer_depth, optimizer_pose = self.model.restore_model(
+                                                                restore_path=restore_paths[0],
+                                                                optimizer=optimizer_depth)
         elif 'fusionnet' in self.model_name:
             if 'initialize_scaffnet' in self.network_modules:
                 self.model.scaffnet_model.restore_model(
                     restore_path=restore_paths[0])
-                return 0, optimizer_depth, optimizer_pose
+                train_step, optimizer_depth, optimizer_pose = 0, optimizer_depth, optimizer_pose
             else:
-                return self.model.restore_model(
-                    model_depth_restore_path=restore_paths[0],
-                    model_pose_restore_path=restore_paths[1] if len(restore_paths) > 1 else None,
-                    optimizer_depth=optimizer_depth,
-                    optimizer_pose=optimizer_pose)
+                train_step, optimizer_depth, optimizer_pose = self.model.restore_model(
+                                                                model_depth_restore_path=restore_paths[0],
+                                                                model_pose_restore_path=restore_paths[1] if len(restore_paths) > 1 else None,
+                                                                optimizer_depth=optimizer_depth,
+                                                                optimizer_pose=optimizer_pose)
         elif 'voiced' in self.model_name:
-            return self.model.restore_model(
-                model_depth_restore_path=restore_paths[0],
-                model_pose_restore_path=restore_paths[1] if len(restore_paths) > 1 else None,
-                optimizer_depth=optimizer_depth,
-                optimizer_pose=optimizer_pose)
+            train_step, optimizer_depth, optimizer_pose = self.model.restore_model(
+                                                                model_depth_restore_path=restore_paths[0],
+                                                                model_pose_restore_path=restore_paths[1] if len(restore_paths) > 1 else None,
+                                                                optimizer_depth=optimizer_depth,
+                                                                optimizer_pose=optimizer_pose)
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
+        
+        # TokenCDC: Restore ALL TokenCDC params
+        if 'new_pool_size' not in self.network_modules:
+            _, optimizer_cl = self._get_model_cl().restore_model(restore_paths[2], optimizer_cl)
+
+        return train_step, optimizer_depth, optimizer_pose, optimizer_cl
 
 
     def save_model(self,
                    checkpoint_dirpath,
                    step,
                    optimizer_depth=None,
-                   optimizer_pose=None):
+                   optimizer_pose=None,
+                   optimizer_cl=None):
         '''
         Save weights of the model to checkpoint path
 
@@ -878,34 +586,10 @@ class DepthCompletionModel(object):
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
 
         # TokenCDC: Save ALL TokenCDC params
-        torch.save({#'i1_key_pools_state_dict': self.i1_key_pools.state_dict(),
-                # 'd1_key_pools_state_dict': self.d1_key_pools.state_dict(),
-                # 'i1_token_pools_state_dict': self.i1_token_pools.state_dict(),
-                # 'd1_token_pools_state_dict': self.d1_token_pools.state_dict(),
-                # 'i1_linear_state_dict': self.i1_linear.state_dict(),
-                # 'd1_linear_state_dict': self.d1_linear.state_dict(),
-                'i2_key_pools_state_dict': self.i2_key_pools.state_dict(),
-                'd2_key_pools_state_dict': self.d2_key_pools.state_dict(),
-                'i2_token_pools_state_dict': self.i2_token_pools.state_dict(),
-                'd2_token_pools_state_dict': self.d2_token_pools.state_dict(),
-                'i2_linear_state_dict': self.i2_linear.state_dict(),
-                'd2_linear_state_dict': self.d2_linear.state_dict(),
-                'i3_key_pools_state_dict': self.i3_key_pools.state_dict(),
-                'd3_key_pools_state_dict': self.d3_key_pools.state_dict(),
-                'i3_token_pools_state_dict': self.i3_token_pools.state_dict(),
-                'd3_token_pools_state_dict': self.d3_token_pools.state_dict(),
-                'i3_linear_state_dict': self.i3_linear.state_dict(),
-                'd3_linear_state_dict': self.d3_linear.state_dict(),
-                'i4_key_pools_state_dict': self.i4_key_pools.state_dict(),
-                'd4_key_pools_state_dict': self.d4_key_pools.state_dict(),
-                'i4_token_pools_state_dict': self.i4_token_pools.state_dict(),
-                'd4_token_pools_state_dict': self.d4_token_pools.state_dict(),
-                'i4_linear_state_dict': self.i4_linear.state_dict(),
-                'd4_linear_state_dict': self.d4_linear.state_dict(),
-                'latent_key_pools_state_dict': self.latent_key_pools.state_dict(),
-                'latent_token_pools_state_dict': self.latent_token_pools.state_dict(),
-                'latent_linear_state_dict': self.latent_linear.state_dict()},
-                os.path.join(checkpoint_dirpath, 'tokens-{}.pth'.format(step)))
+        self._get_model_cl().save_model(
+            os.path.join(checkpoint_dirpath, 'tokens-{}.pth'.format(step)),
+            step,
+            optimizer=optimizer_cl)
 
 
     def log_summary(self,

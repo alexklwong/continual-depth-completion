@@ -211,6 +211,7 @@ if __name__ == '__main__':
         unfreeze_model=args.unfreeze_model,
         domain_incremental=args.domain_incremental,
         task_agnostic=args.task_agnostic,
+        # Depth network settings
         model_name=args.model_name,
         network_modules=args.network_modules,
         min_predict_depth=args.min_predict_depth,
@@ -249,8 +250,6 @@ if __name__ == '__main__':
         # Loss function settings
         supervision_type=args.supervision_type,
         w_losses=args.w_losses,
-        # Frozen model paths
-        frozen_model_paths=args.frozen_model_paths,
         # Evaluation settings
         min_evaluate_depths=args.min_evaluate_depths,
         max_evaluate_depths=args.max_evaluate_depths,

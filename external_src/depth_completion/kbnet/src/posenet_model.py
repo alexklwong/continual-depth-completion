@@ -218,6 +218,5 @@ class PoseNetModel(object):
         '''
         Allows multi-gpu split along batch
         '''
-
         self.encoder = torch.nn.DataParallel(self.encoder)
         self.decoder = torch.nn.DataParallel(self.decoder)

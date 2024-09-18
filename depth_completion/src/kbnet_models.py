@@ -365,6 +365,7 @@ class KBNetModel(object):
 
         # KBNet and PoseNet already call data_parallel() in constructor
         self.model_depth.data_parallel()
+        self.model_pose.data_parallel()
 
     def distributed_data_parallel(self, rank):
         '''
