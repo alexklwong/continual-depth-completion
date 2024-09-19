@@ -55,9 +55,6 @@ class ContinualLearningModel(torch.nn.Module):
         self.latent_token_pools = torch.nn.ParameterDict()
         self.latent_linear = torch.nn.ParameterDict()
 
-        # TEMP: MANUALLY add key and token pools for the first dataset
-        self.add_new_key_token_pool("void", (96, 32, 192, 64, 384, 128, 512), manual=True)
-
         # Move to device
         self.to(self.device)
         self.eval()
