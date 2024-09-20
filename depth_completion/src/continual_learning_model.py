@@ -73,7 +73,6 @@ class ContinualLearningModel(torch.nn.Module):
             key and token pools for the dataset
         """ 
         if dataset_uid not in self.dataset_uids:
-            print("SHOULD NOT PRINT\n\n\n")
             return self.add_new_key_token_pool(dataset_uid, dims)
         else:
             # return self.i1_key_pools[dataset_uid], self.i1_token_pools[dataset_uid], self.i1_linear[dataset_uid], \
@@ -109,6 +108,7 @@ class ContinualLearningModel(torch.nn.Module):
             torch.Tensor[float32] : added token
         '''
         # Unpack dimensions
+        print(dims)
         i2_dim, d2_dim, i3_dim, d3_dim, i4_dim, d4_dim, latent_dim = dims
 
         # CREATE key and token pools
@@ -234,7 +234,6 @@ class ContinualLearningModel(torch.nn.Module):
 
         # Add params to be added the optimizer (in the train loop in depth_completion.py)
         if not manual:
-            print("SHOULD NOT PRINT\n\n\n")
             # self.new_params.append(new_i1_key_pool)
             # self.new_params.append(new_i1_token_pool)
             # self.new_params.append(new_i1_linear)
@@ -372,13 +371,16 @@ class ContinualLearningModel(torch.nn.Module):
             self.add_new_key_token_pool(mk,
                                         # i1_key_pools_state_dict[mk].shape[1],
                                         # d1_key_pools_state_dict[mk].shape[1],
-                                        (i2_key_pools_state_dict[mk].shape[1],
-                                            d2_key_pools_state_dict[mk].shape[1],
-                                            i3_key_pools_state_dict[mk].shape[1],
-                                            d3_key_pools_state_dict[mk].shape[1],
-                                            i4_key_pools_state_dict[mk].shape[1],
-                                            d4_key_pools_state_dict[mk].shape[1],
-                                            latent_key_pools_state_dict[mk].shape[1]))
+                                        (i2_key_pools_state_dict[mk].shape[0],
+                                            d2_key_pools_state_dict[mk].shape[0],
+                                            i3_key_pools_state_dict[mk].shape[0],
+                                            d3_key_pools_state_dict[mk].shape[0],
+                                            i4_key_pools_state_dict[mk].shape[0],
+                                            d4_key_pools_state_dict[mk].shape[0],
+                                            latent_key_pools_state_dict[mk].shape[0]))
+            if optimizer is not None:
+                optimizer.add_param_group({'params' : self.get_new_params()})
+                print('NEW PARAMS ADDED TO OPTIMIZER!\n\n')
 
         # Now, load the state dicts
         # self.i1_key_pools.load_state_dict(i1_key_pools_state_dict)
@@ -412,9 +414,11 @@ class ContinualLearningModel(torch.nn.Module):
 
         if optimizer is not None:
             try:
+                print(len(checkpoint['optimizer_state_dict']['param_groups']))
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                 print("OPTIMIZER RESTORED!\n\n\n\n\n\n")
-            except Exception:
+            except Exception as e:
+                print(e)
                 print("OPTIMIZER NOT RESTORED!\n\n\n\n\n\n")
                 pass
 

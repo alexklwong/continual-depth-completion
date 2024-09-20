@@ -536,6 +536,7 @@ def train(train_image_paths,
             'weight_decay' : w_weight_decay_depth
         }],
         lr=learning_rate)
+    optimizer_cl.param_groups.clear()
 
     # Split along batch across multiple GPUs
     if torch.cuda.device_count() > 1:
