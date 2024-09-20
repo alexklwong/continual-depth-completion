@@ -108,9 +108,9 @@ class VOICEDModel(object):
         # Move to device
         self.to(self.device)
 
-    def forward(self, image, sparse_depth, validity_map):
+    def forward_encoder(self, image, sparse_depth, validity_map):
         '''
-        Forwards the inputs through the network
+        Forwards the inputs through the encoder
 
         Arg(s):
             image : torch.Tensor[float32]
@@ -120,7 +120,9 @@ class VOICEDModel(object):
             validity_map : torch.Tensor[float32]
                 N x 1 x H x W validity map of sparse depth
         Returns:
-            torch.Tensor[float32] : N x 1 x H x W output dense depth
+            torch.Tensor[float32] : N x C x H x W latent representation
+            list[torch.Tensor[float32]] : list of skip connections
+            tuple[int] : shape of latent representation
         '''
 
         # Perform scaffolding
@@ -142,17 +144,37 @@ class VOICEDModel(object):
         latent = torch.cat([latent_image, latent_depth], dim=1)
 
         skips = [
-            torch.cat([skip_image, skip_depth], dim=1)
+            [skip_image, skip_depth]  # TokenCDC: Skips should be list of lists
             for skip_image, skip_depth in zip(skips_image, skips_depth)
         ]
+        shape = image.shape[-2:]
 
-        output_depth0 = self.decoder(latent, skips, image.shape[-2:])[-1]
+        return latent, skips, shape
+        
+
+    def forward_decoder(self, latent, skips, shape):
+        '''
+        Forwards the inputs through the decoder
+
+        Arg(s):
+            latent : torch.Tensor[float32]
+                N x C x H x W latent representation
+            skips : list[torch.Tensor[float32]]
+                list of skip connections
+            shape : tuple[int]
+                shape of latent representation
+        Returns:
+            list[torch.Tensor[float32]] : list of output depth maps
+        '''
+
+        output_depth0 = self.decoder(latent, skips, shape)[-1]
 
         # Convert inverse depth to depth
         output_depth0 = \
             self.min_predict_depth / (output_depth0 + self.min_predict_depth / self.max_predict_depth)
 
         return output_depth0
+
 
     def compute_loss(self,
                      image0,

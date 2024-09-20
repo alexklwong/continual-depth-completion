@@ -85,9 +85,10 @@ class VOICEDModel(object):
 
         return image, sparse_depth, validity_map
 
-    def forward_depth(self, image, sparse_depth, validity_map, intrinsics, return_all_outputs=False):
+
+    def forward_depth_encoder(self, image, sparse_depth, validity_map, intrinsics, return_all_outputs=False):
         '''
-        Forwards stereo pair through the network
+        Forwards stereo pair through the encoder
 
         Arg(s):
             image : torch.Tensor[float32]
@@ -101,23 +102,51 @@ class VOICEDModel(object):
             return_all_outputs : bool
                 if set, then return list of all outputs
         Returns:
-            torch.Tensor[float32] : N x 1 x H x W dense depth map
+            torch.Tensor[float32] : N x C x H x W latent representation
+            list[torch.Tensor[float32]] : list of skip connections
+            tuple : shape of the input
         '''
-
+        
         image, sparse_depth, validity_map = self.transform_inputs(
             image=image,
             sparse_depth=sparse_depth,
             validity_map=validity_map)
 
-        output_depth = self.model_depth.forward(
+        latent, skips, shape = self.model_depth.forward_encoder(
             image=image,
             sparse_depth=sparse_depth,
             validity_map=validity_map)
+
+        return latent, skips, shape
+
+
+    def forward_depth_decoder(self, latent, skips, shape, return_all_outputs=False):
+        '''
+        Forwards latent representation through the decoder
+
+        Arg(s):
+            latent : torch.Tensor[float32]
+                N x C x H x W latent representation
+            skips : list[torch.Tensor[float32]]
+                list of skip connections
+            shape : tuple
+                shape of the input
+            return_all_outputs : bool
+                if set, then return list of all outputs
+        Returns:   
+            torch.Tensor[float32] : N x 1 x H x W output depth
+        '''
+
+        output_depth = self.model_depth.forward_decoder(
+            latent=latent,
+            skips=skips,
+            shape=shape)
 
         if return_all_outputs:
             output_depth = [output_depth]
 
         return output_depth
+
 
     def forward_pose(self, image0, image1):
         '''

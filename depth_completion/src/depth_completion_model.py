@@ -2,7 +2,6 @@ import os, torch, torchvision
 import torch.nn.functional as F
 from utils.src import log_utils, net_utils
 from continual_learning_losses import token_loss, ewc_loss, lwf_loss
-import net_utils
 
 
 class DepthCompletionModel(object):
@@ -476,7 +475,6 @@ class DepthCompletionModel(object):
         '''
         self.model.data_parallel()
         self.model_cl = torch.nn.DataParallel(self.model_cl)
-        print("TEST ", type(self._get_model_cl().i4_key_pools))
 
 
     def restore_model(self,

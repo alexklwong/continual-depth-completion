@@ -111,9 +111,10 @@ class KBNetModel(object):
 
         return image, sparse_depth, filtered_validity_map
 
+
     def forward_depth_encoder(self, image, sparse_depth, validity_map, intrinsics):
         '''
-        Forwards stereo pair through the network
+        Forwards stereo pair through the encoder
 
         Arg(s):
             image : torch.Tensor[float32]
@@ -130,8 +131,6 @@ class KBNetModel(object):
             torch.Tensor[float32] : N x C x H x W latent representation
             list[torch.Tensor[float32]] : list of skip connections
             tuple[int] : shape of latent representation
-            torch.Tensor[float32] : N x C0 x H x W image features
-            torch.Tensor[float32] : N x C0 x H x W depth features
         '''
         image, \
             sparse_depth, \
@@ -148,6 +147,7 @@ class KBNetModel(object):
         
         return latent, skips, shape
     
+
     def forward_depth_decoder(self, latent, skips, shape, return_all_outputs=False):
         '''
         Forwards latent representation through the decoder
@@ -172,6 +172,7 @@ class KBNetModel(object):
             output_depth = [output_depth]
 
         return output_depth
+
 
     def forward_pose(self, image0, image1):
         '''

@@ -160,8 +160,6 @@ class KBNetModel(object):
             torch.Tensor[float32] : N x C x H x W latent representation
             list[torch.Tensor[float32]] : list of skip connections
             tuple[int] : shape of latent representation
-            torch.Tensor[float32] : N x C0 x H x W image features
-            torch.Tensor[float32] : N x C0 x H x W depth features
         '''
 
         # Clamp max value of sparse depth
@@ -186,6 +184,7 @@ class KBNetModel(object):
         latent, skips = self.encoder(image, input_depth, intrinsics)
 
         return latent, skips, shape
+
     
     def forward_decoder(self,
                         latent,
@@ -212,6 +211,7 @@ class KBNetModel(object):
             self.min_predict_depth / (output_depth + self.min_predict_depth / self.max_predict_depth)
 
         return output_depth
+        
 
     def compute_loss(self,
                      image0,
