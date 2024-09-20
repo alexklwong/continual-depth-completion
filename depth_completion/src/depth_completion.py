@@ -554,7 +554,8 @@ def train(train_image_paths,
                 optimizer_depth=optimizer_depth,
                 optimizer_pose=optimizer_pose,
                 optimizer_cl=optimizer_cl)
-        except Exception:
+        except Exception as e:
+            print(e)
             print('Failed to restore optimizer for depth network: Ignoring...')
             train_step = depth_completion_model.restore_model(
                 restore_paths)
