@@ -73,7 +73,6 @@ class ContinualLearningModel(torch.nn.Module):
             key and token pools for the dataset
         """ 
         if dataset_uid not in self.dataset_uids:
-            print("SHOULD NOT PRINT\n\n\n")
             return self.add_new_key_token_pool(dataset_uid, dims)
         else:
             # return self.i1_key_pools[dataset_uid], self.i1_token_pools[dataset_uid], self.i1_linear[dataset_uid], \
@@ -235,7 +234,6 @@ class ContinualLearningModel(torch.nn.Module):
 
         # Add params to be added the optimizer (in the train loop in depth_completion.py)
         if not manual:
-            print("SHOULD NOT PRINT2\n\n\n")
             # self.new_params.append(new_i1_key_pool)
             # self.new_params.append(new_i1_token_pool)
             # self.new_params.append(new_i1_linear)
@@ -267,6 +265,8 @@ class ContinualLearningModel(torch.nn.Module):
             self.new_params.append(new_latent_key_pool)
             self.new_params.append(new_latent_token_pool)
             self.new_params.append(new_latent_linear)
+        else:
+            print("SHOULD NOT PRINT: manual adding not currently supported\n\n\n")
 
         #return new_i1_key_pool, new_d1_key_pool, new_i1_token_pool, new_d1_token_pool, new_i1_linear, new_d1_linear, \
         return new_i2_key_pool, new_i2_token_pool, new_i2_linear, new_d2_key_pool, new_d2_token_pool, new_d2_linear, \
@@ -381,7 +381,7 @@ class ContinualLearningModel(torch.nn.Module):
                                             d4_key_pools_state_dict[mk].shape[1],
                                             latent_key_pools_state_dict[mk].shape[1]))
             if optimizer is not None:
-                optimizer.add_param_group({'params' : self.get_new_params()})
+                optimizer.add_param_group({'params' : self.get_new_params()})  # Must also add all restored params to the optimizer!
                 print('NEW PARAMS ADDED TO OPTIMIZER!\n\n')
 
         # Now, load the state dicts
