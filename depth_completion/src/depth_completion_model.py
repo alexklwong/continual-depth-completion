@@ -530,7 +530,7 @@ class DepthCompletionModel(object):
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
         
         # TokenCDC: Restore ALL TokenCDC params
-        if 'new_pool_size' not in self.network_modules:
+        if len(restore_paths) >= 3:
             _, optimizer_cl = self._get_model_cl().restore_model(restore_paths[2], optimizer_cl)
 
         return train_step, optimizer_depth, optimizer_pose, optimizer_cl
