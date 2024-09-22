@@ -106,9 +106,13 @@ class FusionNetModel(object):
         else:
             self.model_pose = None
 
+        # TokenCDC: Must store input_depth as a global variable for FusionNet only
+        self.input_depth = None
+
         # Move to device
         self.device = device
         self.to(self.device)
+
 
     def transform_inputs(self, image, sparse_depth, validity_map):
         '''
@@ -139,9 +143,9 @@ class FusionNetModel(object):
 
         return image, filtered_sparse_depth, filtered_validity_map
 
-    def forward_depth(self, image, sparse_depth, validity_map, intrinsics, return_all_outputs=False):
+    def forward_depth_encoder(self, image, sparse_depth, validity_map, intrinsics, return_all_outputs=False):
         '''
-        Forwards inputs through the network
+        Forwards inputs through the encoder
 
         Arg(s):
             image : torch.Tensor[float32]
@@ -155,7 +159,9 @@ class FusionNetModel(object):
             return_all_outputs : bool
                 if set, return all outputs
         Returns:
-            torch.Tensor[float32] : N x 1 x H x W dense depth map
+            torch.Tensor[float32] : N x C x H x W latent representation
+            list[torch.Tensor[float32]] : list of skip connections
+            tuple[int] : shape of latent representation
         '''
 
         # Forward through ScaffNet
@@ -165,6 +171,7 @@ class FusionNetModel(object):
             validity_map,
             intrinsics,
             return_all_outputs=False)
+        self.input_depth = input_depth
 
         if 'uncertainty' in self.scaffnet_model.decoder_type:
             if return_all_outputs:
@@ -177,11 +184,38 @@ class FusionNetModel(object):
                 sparse_depth=sparse_depth,
                 validity_map=validity_map)
 
-        # Forward through FusionNet
-        output_depth = self.fusionnet_model.forward(
+        # Forward through FusionNet Encoder
+        latent, skips, shape = self.fusionnet_model.forward_encoder(
             image=image,
             input_depth=input_depth,
             sparse_depth=filtered_sparse_depth)
+            
+        return latent, skips, shape
+
+
+    def forward_depth_decoder(self, latent, skips, shape, return_all_outputs=False):
+        '''
+        Forwards latent representation through the decoder
+
+        Arg(s):
+            latent : torch.Tensor[float32]
+                N x C x H x W latent representation
+            skips : list[torch.Tensor[float32]]
+                list of skip connections
+            shape : tuple[int]
+                shape of latent representation
+            return_all_outputs : bool
+                if set, return all outputs
+        Returns:
+            torch.Tensor[float32] : N x 1 x H x W output depth
+            torch.Tensor[float32] : N x 1 x H x W input depth
+        '''
+
+        output_depth = self.fusionnet_model.forward_decoder(
+            latent=latent,
+            skips=skips,
+            shape=shape)
+        input_depth = self.input_depth
 
         if return_all_outputs:
             return [output_depth, input_depth]

@@ -155,12 +155,16 @@ class FusionNetModel(object):
                 use_instance_norm='instance_norm' in decoder_type,
                 deconv_type='up')
 
+        # TokenCDC: Must store input_depth as a global variable for FusionNet only
+        self.input_depth = None
+
         # Move to device
         self.to(self.device)
 
-    def forward(self, image, input_depth, sparse_depth):
+
+    def forward_encoder(self, image, input_depth, sparse_depth):
         '''
-        Forwards the inputs through the network
+        Forwards the inputs through the encoder
 
         Arg(s):
             image : torch.Tensor[float32]
@@ -170,7 +174,9 @@ class FusionNetModel(object):
             sparse_depth : torch.Tensor[float32]
                 N x 1 x H x W sparse depth
         Returns:
-            torch.Tensor[float32] : output dense depth
+            torch.Tensor[float32] : latent representation
+            list[torch.Tensor[float32]] : list of skip connections
+            tuple[int] : shape of input
         '''
 
         sparse_depth = torch.where(
@@ -184,6 +190,7 @@ class FusionNetModel(object):
             sparse_depth=sparse_depth,
             method=self.scale_match_method,
             kernel_size=self.scale_match_kernel_size)
+        self.input_depth = input_depth
 
         # Inputs to network can be include
         # (1) predicted depth, (2) raw sparse depth
@@ -196,14 +203,33 @@ class FusionNetModel(object):
         latent = torch.cat([latent_image, latent_depth], dim=1)
 
         skips = [
-            torch.cat([skip_image, skip_depth], dim=1)
+            [skip_image, skip_depth]  # TokenCDC: Skips should be list of lists
             for skip_image, skip_depth in zip(skips_image, skips_depth)
         ]
+        shape = sparse_depth.shape[-2:]
+
+        return latent, skips, shape
+
+
+    def forward_decoder(self, latent, skips, shape):
+        '''
+        Forwards the inputs through the decoder
+
+        Arg(s):
+            latent : torch.Tensor[float32]
+                N x C x H x W latent representation
+            skips : list[torch.Tensor[float32]]
+                list of skip connections
+            shape : torch.Tensor[float32]
+                shape of input
+        Returns:
+            torch.Tensor[float32] : output depth
+        '''
 
         output = self.decoder(
             x=latent,
             skips=skips,
-            shape=sparse_depth.shape[-2:])[-1]
+            shape=shape)[-1]
 
         # Construct multiplicative and additive residual output
         output_multiplier_depth = torch.unsqueeze(output[:, 0, :, :], dim=1)
@@ -222,6 +248,7 @@ class FusionNetModel(object):
             max=self.max_residual_depth)
 
         # y = alpha * x + beta
+        input_depth = self.input_depth
         output_depth = output_multiplier_depth * input_depth + output_residual_depth
 
         output_depth = torch.clamp(
