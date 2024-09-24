@@ -10,7 +10,7 @@ from utils.src.log_utils import log
 from depth_completion_model import DepthCompletionModel
 from utils.src.transforms import Transforms
 from PIL import Image
-
+from itertools import zip_longest
 
 
 
@@ -1294,12 +1294,12 @@ def validate(depth_model,
              n_interval_per_summary=250,
              log_path=None):
 
-    n_val_steps = min([len(dataloader) for dataloader in dataloaders])
+    n_val_steps = max([len(dataloader) for dataloader in dataloaders])
     n_dataloaders = len(dataloaders)
-    mae = np.zeros((n_dataloaders, n_val_steps))
-    rmse = np.zeros((n_dataloaders, n_val_steps))
-    imae = np.zeros((n_dataloaders, n_val_steps))
-    irmse = np.zeros((n_dataloaders, n_val_steps))
+    mae = np.full((n_dataloaders, n_val_steps), np.nan)
+    rmse = np.full((n_dataloaders, n_val_steps), np.nan)
+    imae = np.full((n_dataloaders, n_val_steps), np.nan)
+    irmse = np.full((n_dataloaders, n_val_steps), np.nan)
 
     image_summary = [[] for _ in range(n_dataloaders)]
     output_depth_summary = [[] for _ in range(n_dataloaders)]
@@ -1308,7 +1308,7 @@ def validate(depth_model,
     ground_truth_summary = [[] for _ in range(n_dataloaders)]
 
     val_dataloaders_epoch = tqdm.tqdm(
-        zip(*dataloaders),
+        zip_longest(*dataloaders, fillvalue=None),
         desc='Batch',
         total=n_val_steps)
 
@@ -1318,96 +1318,98 @@ def validate(depth_model,
         '''
         for dataset_id, val_batch in enumerate(val_batches):
 
-            # Fetch data
-            val_batch = [
-                in_.to(device) for in_ in val_batch
-            ]
+            # Handles val dataloaders of different lengths 
+            if val_batch is not None:
 
-            image, sparse_depth, intrinsics, ground_truth = val_batch
+                # Fetch data
+                val_batch = [
+                    in_.to(device) for in_ in val_batch
+                ]
+                image, sparse_depth, intrinsics, ground_truth = val_batch
 
-            with torch.no_grad():
-                # Validity map is where sparse depth is available
-                validity_map = torch.where(
-                    sparse_depth > 0,
-                    torch.ones_like(sparse_depth),
-                    sparse_depth)
+                with torch.no_grad():
+                    # Validity map is where sparse depth is available
+                    validity_map = torch.where(
+                        sparse_depth > 0,
+                        torch.ones_like(sparse_depth),
+                        sparse_depth)
 
-                # Forward through network
-                output_depth = depth_model.forward_depth(
-                    image=image,
-                    sparse_depth=sparse_depth,
-                    validity_map=validity_map,
-                    intrinsics=intrinsics,
-                    return_all_outputs=False)
+                    # Forward through network
+                    output_depth = depth_model.forward_depth(
+                        image=image,
+                        sparse_depth=sparse_depth,
+                        validity_map=validity_map,
+                        intrinsics=intrinsics,
+                        return_all_outputs=False)
 
-            if (idx % n_interval_per_summary) == 0 and summary_writer is not None:
-                image_summary[dataset_id].append(image)
-                output_depth_summary[dataset_id].append(output_depth)
-                sparse_depth_summary[dataset_id].append(sparse_depth)
-                validity_map_summary[dataset_id].append(validity_map)
-                ground_truth_summary[dataset_id].append(ground_truth)
+                if (idx % n_interval_per_summary) == 0 and summary_writer is not None:
+                    image_summary[dataset_id].append(image)
+                    output_depth_summary[dataset_id].append(output_depth)
+                    sparse_depth_summary[dataset_id].append(sparse_depth)
+                    validity_map_summary[dataset_id].append(validity_map)
+                    ground_truth_summary[dataset_id].append(ground_truth)
 
-            # Convert to numpy to validate
-            output_depth = np.squeeze(output_depth.cpu().numpy())
-            ground_truth = np.squeeze(ground_truth.cpu().numpy())
+                # Convert to numpy to validate
+                output_depth = np.squeeze(output_depth.cpu().numpy())
+                ground_truth = np.squeeze(ground_truth.cpu().numpy())
 
-            if evaluation_protocols[dataset_id] in ['kitti', 'vkitti']:
-                # Crop output_depth and ground_truth
-                crop_height = 240
-                crop_width = 1216
-                crop_mask = [crop_height, crop_width]
-            elif evaluation_protocols[dataset_id] == 'nuscenes':
-                # Crop output_depth and ground_truth
-                crop_height = 540
-                crop_width = 1600
-                crop_mask = [crop_height, crop_width]
-            elif evaluation_protocols[dataset_id] == 'synthia':
-                # Crop output_depth and ground_truth
-                crop_height = 320
-                crop_width = 640
-                crop_mask = [crop_height, crop_width]
-            elif evaluation_protocols[dataset_id] == 'waymo':
-                # Crop output_depth and ground_truth
-                crop_height = 768
-                crop_width = 1920
-                crop_mask = [crop_height, crop_width]
-            else:
-                crop_mask = None
+                if evaluation_protocols[dataset_id] in ['kitti', 'vkitti']:
+                    # Crop output_depth and ground_truth
+                    crop_height = 240
+                    crop_width = 1216
+                    crop_mask = [crop_height, crop_width]
+                elif evaluation_protocols[dataset_id] == 'nuscenes':
+                    # Crop output_depth and ground_truth
+                    crop_height = 540
+                    crop_width = 1600
+                    crop_mask = [crop_height, crop_width]
+                elif evaluation_protocols[dataset_id] == 'synthia':
+                    # Crop output_depth and ground_truth
+                    crop_height = 320
+                    crop_width = 640
+                    crop_mask = [crop_height, crop_width]
+                elif evaluation_protocols[dataset_id] == 'waymo':
+                    # Crop output_depth and ground_truth
+                    crop_height = 768
+                    crop_width = 1920
+                    crop_mask = [crop_height, crop_width]
+                else:
+                    crop_mask = None
 
-            if crop_mask is not None:
-                height, width = ground_truth.shape[-2], ground_truth.shape[-1]
-                center = width // 2
-                start_x = center - crop_width // 2
-                end_x = center + crop_width // 2
-                # bottom crop
-                end_y = height
-                start_y = end_y - crop_height
-                output_depth = output_depth[start_y:end_y, start_x:end_x]
-                ground_truth = ground_truth[start_y:end_y, start_x:end_x]
+                if crop_mask is not None:
+                    height, width = ground_truth.shape[-2], ground_truth.shape[-1]
+                    center = width // 2
+                    start_x = center - crop_width // 2
+                    end_x = center + crop_width // 2
+                    # bottom crop
+                    end_y = height
+                    start_y = end_y - crop_height
+                    output_depth = output_depth[start_y:end_y, start_x:end_x]
+                    ground_truth = ground_truth[start_y:end_y, start_x:end_x]
 
-            # Select valid regions to evaluate
-            validity_mask = np.where(ground_truth > 0, 1, 0)
+                # Select valid regions to evaluate
+                validity_mask = np.where(ground_truth > 0, 1, 0)
 
-            min_max_mask = np.logical_and(
-                ground_truth > min_evaluate_depths[dataset_id],
-                ground_truth < max_evaluate_depths[dataset_id])
+                min_max_mask = np.logical_and(
+                    ground_truth > min_evaluate_depths[dataset_id],
+                    ground_truth < max_evaluate_depths[dataset_id])
 
-            mask = np.where(np.logical_and(validity_mask, min_max_mask) > 0)
+                mask = np.where(np.logical_and(validity_mask, min_max_mask) > 0)
 
-            output_depth = output_depth[mask]
-            ground_truth = ground_truth[mask]
+                output_depth = output_depth[mask]
+                ground_truth = ground_truth[mask]
 
-            # Compute validation metrics
-            mae[dataset_id, idx] = eval_utils.mean_abs_err(1000.0 * output_depth, 1000.0 * ground_truth)
-            rmse[dataset_id, idx] = eval_utils.root_mean_sq_err(1000.0 * output_depth, 1000.0 * ground_truth)
-            imae[dataset_id, idx] = eval_utils.inv_mean_abs_err(0.001 * output_depth, 0.001 * ground_truth)
-            irmse[dataset_id, idx] = eval_utils.inv_root_mean_sq_err(0.001 * output_depth, 0.001 * ground_truth)
+                # Compute validation metrics
+                mae[dataset_id, idx] = eval_utils.mean_abs_err(1000.0 * output_depth, 1000.0 * ground_truth)
+                rmse[dataset_id, idx] = eval_utils.root_mean_sq_err(1000.0 * output_depth, 1000.0 * ground_truth)
+                imae[dataset_id, idx] = eval_utils.inv_mean_abs_err(0.001 * output_depth, 0.001 * ground_truth)
+                irmse[dataset_id, idx] = eval_utils.inv_root_mean_sq_err(0.001 * output_depth, 0.001 * ground_truth)
 
     # Compute mean metrics
-    mae   = np.mean(mae, axis=1)
-    rmse  = np.mean(rmse, axis=1)
-    imae  = np.mean(imae, axis=1)
-    irmse = np.mean(irmse, axis=1)
+    mae   = np.nanmean(mae, axis=1)
+    rmse  = np.nanmean(rmse, axis=1)
+    imae  = np.nanmean(imae, axis=1)
+    irmse = np.nanmean(irmse, axis=1)
 
     # Log for each dataset:
     for dataset_id in range(n_dataloaders):
