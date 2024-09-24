@@ -1059,11 +1059,12 @@ def validate(depth_model,
         '''
         Iterate over batches from different datasets
         '''
-        for dataset_id, val_batch in enumerate(val_batches):
+        for dataset_idx, val_batch in enumerate(val_batches):
 
             # Handles val dataloaders of different lengths 
             if val_batch is not None:
 
+                dataset_uid = dataloaders[dataset_idx].dataset.dataset_uid
                 # Fetch data
                 val_batch = [
                     in_.to(device) for in_ in val_batch
@@ -1083,35 +1084,36 @@ def validate(depth_model,
                         sparse_depth=sparse_depth,
                         validity_map=validity_map,
                         intrinsics=intrinsics,
+                        dataset_uid=dataset_uid,
                         return_all_outputs=False)
 
                 if (idx % n_interval_per_summary) == 0 and summary_writer is not None:
-                    image_summary[dataset_id].append(image)
-                    output_depth_summary[dataset_id].append(output_depth)
-                    sparse_depth_summary[dataset_id].append(sparse_depth)
-                    validity_map_summary[dataset_id].append(validity_map)
-                    ground_truth_summary[dataset_id].append(ground_truth)
+                    image_summary[dataset_idx].append(image)
+                    output_depth_summary[dataset_idx].append(output_depth)
+                    sparse_depth_summary[dataset_idx].append(sparse_depth)
+                    validity_map_summary[dataset_idx].append(validity_map)
+                    ground_truth_summary[dataset_idx].append(ground_truth)
 
                 # Convert to numpy to validate
                 output_depth = np.squeeze(output_depth.cpu().numpy())
                 ground_truth = np.squeeze(ground_truth.cpu().numpy())
 
-                if evaluation_protocols[dataset_id] in ['kitti', 'vkitti']:
+                if evaluation_protocol == 'vkitti':
                     # Crop output_depth and ground_truth
                     crop_height = 240
                     crop_width = 1216
                     crop_mask = [crop_height, crop_width]
-                elif evaluation_protocols[dataset_id] == 'nuscenes':
+                elif evaluation_protocol == 'nuscenes':
                     # Crop output_depth and ground_truth
                     crop_height = 540
                     crop_width = 1600
                     crop_mask = [crop_height, crop_width]
-                elif evaluation_protocols[dataset_id] == 'synthia':
+                elif evaluation_protocol == 'synthia':
                     # Crop output_depth and ground_truth
                     crop_height = 320
                     crop_width = 640
                     crop_mask = [crop_height, crop_width]
-                elif evaluation_protocols[dataset_id] == 'waymo':
+                elif evaluation_protocol == 'waymo':
                     # Crop output_depth and ground_truth
                     crop_height = 768
                     crop_width = 1920
@@ -1134,8 +1136,8 @@ def validate(depth_model,
                 validity_mask = np.where(ground_truth > 0, 1, 0)
 
                 min_max_mask = np.logical_and(
-                    ground_truth > min_evaluate_depths[dataset_id],
-                    ground_truth < max_evaluate_depths[dataset_id])
+                    ground_truth > min_evaluate_depths[dataset_idx],
+                    ground_truth < max_evaluate_depths[dataset_idx])
 
                 mask = np.where(np.logical_and(validity_mask, min_max_mask) > 0)
 
@@ -1143,10 +1145,10 @@ def validate(depth_model,
                 ground_truth = ground_truth[mask]
 
                 # Compute validation metrics
-                mae[dataset_id, idx] = eval_utils.mean_abs_err(1000.0 * output_depth, 1000.0 * ground_truth)
-                rmse[dataset_id, idx] = eval_utils.root_mean_sq_err(1000.0 * output_depth, 1000.0 * ground_truth)
-                imae[dataset_id, idx] = eval_utils.inv_mean_abs_err(0.001 * output_depth, 0.001 * ground_truth)
-                irmse[dataset_id, idx] = eval_utils.inv_root_mean_sq_err(0.001 * output_depth, 0.001 * ground_truth)
+                mae[dataset_idx, idx] = eval_utils.mean_abs_err(1000.0 * output_depth, 1000.0 * ground_truth)
+                rmse[dataset_idx, idx] = eval_utils.root_mean_sq_err(1000.0 * output_depth, 1000.0 * ground_truth)
+                imae[dataset_idx, idx] = eval_utils.inv_mean_abs_err(0.001 * output_depth, 0.001 * ground_truth)
+                irmse[dataset_idx, idx] = eval_utils.inv_root_mean_sq_err(0.001 * output_depth, 0.001 * ground_truth)
 
     # Compute mean metrics
     mae   = np.nanmean(mae, axis=1)
