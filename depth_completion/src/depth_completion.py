@@ -830,6 +830,7 @@ def train(train_image_paths,
                 if new_params:
                     optimizer_cl.add_param_group({'params' : new_params,
                                                     'weight_decay' : w_weight_decay_depth})
+                    print('{} NEW PARAMS ADDED TO OPTIMIZER!\n\n'.format(sum(p.numel() for p in new_params)))
 
                 # TokenCDC TEST: Check that queries are frozen
                 # print("Queries are learnable: {}".format(queries.requires_grad))

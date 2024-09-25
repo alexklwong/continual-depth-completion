@@ -157,7 +157,7 @@ class DepthCompletionModel(object):
 
         if 'control' not in self.network_modules:
             # FIRST, get key and token pools
-            dims = latent.shape[1]
+            dims = latent.shape[1], skips[2][0].shape[1], skips[2][1].shape[1]
             curr_image_key_pool, curr_depth_key_pool, curr_latent_token_pool, curr_latent_linear = \
                 self._get_model_cl().get_key_token_pool(dataset_uid, dims)
 
@@ -175,7 +175,7 @@ class DepthCompletionModel(object):
             Nd, depth_key_dim, Hd, Wd = depth_features.shape
             assert Ni == Nd and Hi == Hd and Wi == Wd, "Image and depth features must have the same non-channel dims!"
             # Pad to multiple of 32, then average pool
-            DOWNSAMPLE = 8
+            DOWNSAMPLE = 4
             pad_H = (DOWNSAMPLE - Hi % DOWNSAMPLE) if Hi % DOWNSAMPLE != 0 else 0
             pad_W = (DOWNSAMPLE - Wi % DOWNSAMPLE) if Wi % DOWNSAMPLE != 0 else 0
             pad_left = pad_W // 2
@@ -189,6 +189,7 @@ class DepthCompletionModel(object):
             # Flatten spatial dimensions
             new_H = (Hi + pad_H) // DOWNSAMPLE
             new_W = (Wi + pad_W) // DOWNSAMPLE
+            assert new_H == latent.shape[2]
             image_queries = image_queries.permute(0, 2, 3, 1).view(Ni, new_H*new_W, image_key_dim)
             depth_queries = depth_queries.permute(0, 2, 3, 1).view(Nd, new_H*new_W, depth_key_dim)
             # Compute TOKENS using attention

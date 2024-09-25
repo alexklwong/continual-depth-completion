@@ -68,10 +68,10 @@ class ContinualLearningModel(torch.nn.Module):
         '''
         print("Added {}\n\n\n\n".format(dataset_uid))
         # Unpack dimensions
-        latent_dim = dims
+        latent_dim, image_dim, depth_dim = dims
 
-        new_image_key_pool = torch.nn.Parameter(torch.empty((latent_dim, latent_dim), device=self.device), requires_grad=True)
-        new_depth_key_pool = torch.nn.Parameter(torch.empty((latent_dim, latent_dim), device=self.device), requires_grad=True)
+        new_image_key_pool = torch.nn.Parameter(torch.empty((image_dim, latent_dim), device=self.device), requires_grad=True)
+        new_depth_key_pool = torch.nn.Parameter(torch.empty((depth_dim, latent_dim), device=self.device), requires_grad=True)
         new_latent_token_pool = torch.nn.Parameter(torch.empty((self.key_token_pool_size, latent_dim), device=self.device), requires_grad=True)
         new_latent_linear = torch.nn.Parameter(torch.empty((latent_dim,1,1), device=self.device), requires_grad=True)
 
@@ -83,12 +83,12 @@ class ContinualLearningModel(torch.nn.Module):
 
         # ADD to the key and token pool dicts
         self.dataset_uids.append(dataset_uid)
-        self.new_image_key_pools[dataset_uid] = new_image_key_pool
-        self.new_depth_key_pools[dataset_uid] = new_depth_key_pool
-        self.new_latent_token_pools[dataset_uid] = new_latent_token_pool
-        self.new_latent_linear[dataset_uid] = new_latent_linear
-        assert set(self.new_image_key_pools.keys()) == set(self.dataset_uids)
-        assert set(self.new_latent_token_pools.keys()) == set(self.dataset_uids)
+        self.image_key_pools[dataset_uid] = new_image_key_pool
+        self.depth_key_pools[dataset_uid] = new_depth_key_pool
+        self.latent_token_pools[dataset_uid] = new_latent_token_pool
+        self.latent_linear[dataset_uid] = new_latent_linear
+        assert set(self.image_key_pools.keys()) == set(self.dataset_uids)
+        assert set(self.latent_token_pools.keys()) == set(self.dataset_uids)
 
         # Add params to be added the optimizer (in the train loop in depth_completion.py)
         self.new_params.append(new_image_key_pool)
@@ -151,8 +151,9 @@ class ContinualLearningModel(torch.nn.Module):
             self.add_new_key_token_pool(mk,
                                         latent_token_pools_state_dict[mk].shape[1])
             if optimizer is not None:
+                new_params = self.get_new_params()
                 optimizer.add_param_group({'params' : self.get_new_params()})  # Must also add all restored params to the optimizer!
-                print('NEW PARAMS ADDED TO OPTIMIZER!\n\n')
+                print('{} NEW PARAMS ADDED TO OPTIMIZER!\n\n'.format(sum(p.numel() for p in new_params)))
 
         # Now, load the state dicts
         self.image_key_pools.load_state_dict(image_key_pools_state_dict)
