@@ -157,116 +157,55 @@ class DepthCompletionModel(object):
 
         if 'control' not in self.network_modules:
             # FIRST, get key and token pools
-            dims = skips[1][0].shape[1], skips[1][1].shape[1], \
-                    skips[2][0].shape[1], skips[2][1].shape[1], skips[3][0].shape[1], skips[3][1].shape[1], latent.shape[1]
-            #curr_i1_key_pool, curr_d1_key_pool, curr_i1_token_pool, curr_d1_token_pool, curr_i1_linear, curr_d1_linear, \
-            curr_i2_key_pool, curr_i2_token_pool, curr_i2_linear, curr_d2_key_pool, curr_d2_token_pool, curr_d2_linear, \
-            curr_i3_key_pool, curr_i3_token_pool, curr_i3_linear, curr_d3_key_pool, curr_d3_token_pool, curr_d3_linear, \
-            curr_i4_key_pool, curr_i4_token_pool, curr_i4_linear, curr_d4_key_pool, curr_d4_token_pool, curr_d4_linear, \
-            curr_latent_key_pool, curr_latent_token_pool, curr_latent_linear = \
+            dims = latent.shape[1]
+            curr_image_key_pool, curr_depth_key_pool, curr_latent_token_pool, curr_latent_linear = \
                 self._get_model_cl().get_key_token_pool(dataset_uid, dims)
 
             ### Skip Conection 1
-            # # QUERIES
-            # i1_skip, d1_skip = skips[0][0], skips[0][1]
-            # i1_N, i1_C, i1_H, i1_W = i1_skip.shape
-            # d1_N, d1_C, d1_H, d1_W = d1_skip.shape
-            # assert i1_N == d1_N and i1_H == d1_H and i1_W == d1_W, "Image/depth must have the same non-channel dims!"
-            # i1_queries = i1_skip.permute(0, 2, 3, 1).view(i1_N, i1_H*i1_W, i1_C)
-            # d1_queries = d1_skip.permute(0, 2, 3, 1).view(d1_N, d1_H*d1_W, d1_C)
-            # # Compute TOKENS using attention
-            # i1_scores = torch.matmul(i1_queries, curr_i1_key_pool.transpose(-2, -1)) / torch.sqrt(torch.tensor(i1_C, device=self.device, dtype=torch.float32))
-            # i1_scores = F.softmax(i1_scores, dim=-1)
-            # d1_scores = torch.matmul(d1_queries, curr_d1_key_pool.transpose(-2, -1)) / torch.sqrt(torch.tensor(d1_C, device=self.device, dtype=torch.float32))
-            # d1_scores = F.softmax(d1_scores, dim=-1)
-            # i1_tokens = torch.matmul(i1_scores, curr_i1_token_pool).view(i1_N, i1_H, i1_W, i1_C).permute(0, 3, 1, 2)
-            # d1_tokens = torch.matmul(d1_scores, curr_d1_token_pool).view(d1_N, d1_H, d1_W, d1_C).permute(0, 3, 1, 2)
-            # # CONCAT tokens to skips
-            # i1_skip_with_tokens = i1_skip + i1_tokens
-            # d1_skip_with_tokens = d1_skip + d1_tokens
             i1_skip_with_tokens, d1_skip_with_tokens = skips[0][0], skips[0][1]  # NOT using skip 1 tokens
 
             ### Skip Conection 2
-            # QUERIES
-            i2_skip, d2_skip = skips[1][0], skips[1][1]
-            i2_N, i2_C, i2_H, i2_W = i2_skip.shape
-            d2_N, d2_C, d2_H, d2_W = d2_skip.shape
-            assert i2_N == d2_N and i2_H == d2_H and i2_W == d2_W, "Image/depth must have the same non-channel dims!"
-            i2_queries = i2_skip.permute(0, 2, 3, 1).view(i2_N, i2_H*i2_W, i2_C)
-            d2_queries = d2_skip.permute(0, 2, 3, 1).view(d2_N, d2_H*d2_W, d2_C)
-            # Compute TOKENS using attention
-            i2_keys = torch.matmul(curr_i2_key_pool, curr_i2_token_pool.detach().clone().transpose(-2, -1))
-            i2_scores = torch.matmul(i2_queries, i2_keys) / torch.sqrt(torch.tensor(i2_C, device=self.device, dtype=torch.float32))
-            i2_scores = F.softmax(i2_scores, dim=-1)
-            d2_keys = torch.matmul(curr_d2_key_pool, curr_d2_token_pool.detach().clone().transpose(-2, -1))
-            d2_scores = torch.matmul(d2_queries, d2_keys) / torch.sqrt(torch.tensor(d2_C, device=self.device, dtype=torch.float32))
-            d2_scores = F.softmax(d2_scores, dim=-1)
-            i2_tokens = torch.matmul(i2_scores, curr_i2_token_pool).view(i2_N, i2_H, i2_W, i2_C).permute(0, 3, 1, 2)
-            d2_tokens = torch.matmul(d2_scores, curr_d2_token_pool).view(d2_N, d2_H, d2_W, d2_C).permute(0, 3, 1, 2)
-            # Apply linear layer to skips
-            i2_skip = i2_skip * curr_i2_linear
-            d2_skip = d2_skip * curr_d2_linear
-            # CONCAT tokens to skips
-            i2_skip_with_tokens = i2_skip + i2_tokens
-            d2_skip_with_tokens = d2_skip + d2_tokens
+            i2_skip_with_tokens, d2_skip_with_tokens = skips[1][0], skips[1][1]  # NOT using skip 2 tokens
 
             ### Skip Conection 3
-            # QUERIES
-            i3_skip, d3_skip = skips[2][0], skips[2][1]
-            i3_N, i3_C, i3_H, i3_W = i3_skip.shape
-            d3_N, d3_C, d3_H, d3_W = d3_skip.shape
-            assert i3_N == d3_N and i3_H == d3_H and i3_W == d3_W, "Image/depth must have the same non-channel dims!"
-            i3_queries = i3_skip.permute(0, 2, 3, 1).view(i3_N, i3_H*i3_W, i3_C)
-            d3_queries = d3_skip.permute(0, 2, 3, 1).view(d3_N, d3_H*d3_W, d3_C)
+            i3_skip_with_tokens, d3_skip_with_tokens = skips[2][0], skips[2][1]  # NOT using skip 3 tokens
+            # QUERY function (deterministic and frozen) for both image and depth features
+            image_features, depth_features = skips[2][0], skips[2][1]
+            Ni, image_key_dim, Hi, Wi = image_features.shape
+            Nd, depth_key_dim, Hd, Wd = depth_features.shape
+            assert Ni == Nd and Hi == Hd and Wi == Wd, "Image and depth features must have the same non-channel dims!"
+            # Pad to multiple of 32, then average pool
+            DOWNSAMPLE = 8
+            pad_H = (DOWNSAMPLE - Hi % DOWNSAMPLE) if Hi % DOWNSAMPLE != 0 else 0
+            pad_W = (DOWNSAMPLE - Wi % DOWNSAMPLE) if Wi % DOWNSAMPLE != 0 else 0
+            pad_left = pad_W // 2
+            pad_right = pad_W - pad_left
+            pad_top = pad_H // 2
+            pad_bottom = pad_H - pad_top
+            padded_image_features = F.pad(image_features, (pad_left, pad_right, pad_top, pad_bottom), mode='replicate')
+            image_queries = F.avg_pool2d(padded_image_features, kernel_size=(DOWNSAMPLE, DOWNSAMPLE), stride=(DOWNSAMPLE, DOWNSAMPLE))
+            padded_depth_features = F.pad(depth_features, (pad_left, pad_right, pad_top, pad_bottom), mode='replicate')
+            depth_queries = F.avg_pool2d(padded_depth_features, kernel_size=(DOWNSAMPLE, DOWNSAMPLE), stride=(DOWNSAMPLE, DOWNSAMPLE))
+            # Flatten spatial dimensions
+            new_H = (Hi + pad_H) // DOWNSAMPLE
+            new_W = (Wi + pad_W) // DOWNSAMPLE
+            image_queries = image_queries.permute(0, 2, 3, 1).view(Ni, new_H*new_W, image_key_dim)
+            depth_queries = depth_queries.permute(0, 2, 3, 1).view(Nd, new_H*new_W, depth_key_dim)
             # Compute TOKENS using attention
-            i3_keys = torch.matmul(curr_i3_key_pool, curr_i3_token_pool.detach().clone().transpose(-2, -1))
-            i3_scores = torch.matmul(i3_queries, i3_keys) / torch.sqrt(torch.tensor(i3_C, device=self.device, dtype=torch.float32))
-            i3_scores = F.softmax(i3_scores, dim=-1)
-            d3_keys = torch.matmul(curr_d3_key_pool, curr_d3_token_pool.detach().clone().transpose(-2, -1))
-            d3_scores = torch.matmul(d3_queries, d3_keys) / torch.sqrt(torch.tensor(d3_C, device=self.device, dtype=torch.float32))
-            d3_scores = F.softmax(d3_scores, dim=-1)
-            i3_tokens = torch.matmul(i3_scores, curr_i3_token_pool).view(i3_N, i3_H, i3_W, i3_C).permute(0, 3, 1, 2)
-            d3_tokens = torch.matmul(d3_scores, curr_d3_token_pool).view(d3_N, d3_H, d3_W, d3_C).permute(0, 3, 1, 2)
-            # Apply linear layer to skips
-            i3_skip = i3_skip * curr_i3_linear
-            d3_skip = d3_skip * curr_d3_linear
-            # CONCAT tokens to skips
-            i3_skip_with_tokens = i3_skip + i3_tokens
-            d3_skip_with_tokens = d3_skip + d3_tokens
-            
+            curr_latent_token_pool_no_grad = curr_latent_token_pool.detach().clone().transpose(-2, -1)
+            image_keys = torch.matmul(curr_image_key_pool, curr_latent_token_pool_no_grad)
+            image_scores = torch.matmul(image_queries, image_keys) / torch.sqrt(torch.tensor(image_key_dim, device=self.device, dtype=torch.float32))
+            image_scores = F.softmax(image_scores, dim=-1)
+            depth_keys = torch.matmul(curr_depth_key_pool, curr_latent_token_pool_no_grad)
+            depth_scores = torch.matmul(depth_queries, depth_keys) / torch.sqrt(torch.tensor(depth_key_dim, device=self.device, dtype=torch.float32))
+            depth_scores = F.softmax(depth_scores, dim=-1)
+            combined_scores = (image_scores + depth_scores) / 2.0
+
             ### Skip Conection 4
-            # QUERIES
-            i4_skip, d4_skip = skips[3][0], skips[3][1]
-            i4_N, i4_C, i4_H, i4_W = i4_skip.shape
-            d4_N, d4_C, d4_H, d4_W = d4_skip.shape
-            assert i4_N == d4_N and i4_H == d4_H and i4_W == d4_W, "Image/depth must have the same non-channel dims!"
-            i4_queries = i4_skip.permute(0, 2, 3, 1).view(i4_N, i4_H*i4_W, i4_C)
-            d4_queries = d4_skip.permute(0, 2, 3, 1).view(d4_N, d4_H*d4_W, d4_C)
-            # Compute TOKENS using attention
-            i4_keys = torch.matmul(curr_i4_key_pool, curr_i4_token_pool.detach().clone().transpose(-2, -1))
-            i4_scores = torch.matmul(i4_queries, i4_keys) / torch.sqrt(torch.tensor(i4_C, device=self.device, dtype=torch.float32))
-            i4_scores = F.softmax(i4_scores, dim=-1)
-            d4_keys = torch.matmul(curr_d4_key_pool, curr_d4_token_pool.detach().clone().transpose(-2, -1))
-            d4_scores = torch.matmul(d4_queries, d4_keys) / torch.sqrt(torch.tensor(d4_C, device=self.device, dtype=torch.float32))
-            d4_scores = F.softmax(d4_scores, dim=-1)
-            i4_tokens = torch.matmul(i4_scores, curr_i4_token_pool).view(i4_N, i4_H, i4_W, i4_C).permute(0, 3, 1, 2)
-            d4_tokens = torch.matmul(d4_scores, curr_d4_token_pool).view(d4_N, d4_H, d4_W, d4_C).permute(0, 3, 1, 2)
-            # Apply linear layer to skips
-            i4_skip = i4_skip * curr_i4_linear
-            d4_skip = d4_skip * curr_d4_linear
-            # CONCAT tokens to skips
-            i4_skip_with_tokens = i4_skip + i4_tokens
-            d4_skip_with_tokens = d4_skip + d4_tokens
+            i4_skip_with_tokens, d4_skip_with_tokens = skips[3][0], skips[3][1]  # NOT using skip 4 tokens
 
             ### Latent Space
-            # QUERIES
-            latent_N, latent_C, latent_H, latent_W = latent.shape
-            latent_queries = latent.permute(0, 2, 3, 1).view(latent_N, latent_H*latent_W, latent_C)
-            # Compute TOKENS using attention
-            latent_keys = torch.matmul(curr_latent_key_pool, curr_latent_token_pool.detach().clone().transpose(-2, -1))
-            latent_scores = torch.matmul(latent_queries, latent_keys) / torch.sqrt(torch.tensor(latent_C, device=self.device, dtype=torch.float32))
-            latent_scores = F.softmax(latent_scores, dim=-1)
-            latent_tokens = torch.matmul(latent_scores, curr_latent_token_pool).view(latent.shape[0], latent.shape[2], latent.shape[3], latent.shape[1]).permute(0, 3, 1, 2)
+            latent_tokens = torch.matmul(combined_scores, curr_latent_token_pool).view(latent.shape[0], latent.shape[2], latent.shape[3], latent.shape[1]).permute(0, 3, 1, 2)
             # Apply linear layer to latent
             latent = latent * curr_latent_linear
             # CONCAT tokens to latent
