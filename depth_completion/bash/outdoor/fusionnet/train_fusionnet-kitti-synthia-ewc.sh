@@ -22,13 +22,13 @@ python depth_completion/src/train_depth_completion.py \
     validation/kitti/kitti_val_ground_truth.txt \
     testing/synthia-kitti-person/synthia_test_ground_truth.txt \
 --model_name fusionnet_kitti \
---network_modules ewc depth pose spatial_pyramid_pool fisher \
---min_predict_depth 0.0 \
---max_predict_depth 90.0 \
---train_batch_size 20 \
+--network_modules depth pose spatial_pyramid_pool fisher ewc \
+--min_predict_depth 1.5 \
+--max_predict_depth 100.0 \
+--train_batch_size 8 \
 --train_crop_shapes \
         320 640 \
---learning_rates 5e-5 2.5e-5 \
+--learning_rates 1e-4 5e-5 \
 --learning_schedule 3 6 \
 --augmentation_probabilities 1.0 \
 --augmentation_schedule -1 \
@@ -40,16 +40,16 @@ python depth_completion/src/train_depth_completion.py \
 --augmentation_random_noise_type none \
 --augmentation_random_noise_spread -1 \
 --augmentation_padding_mode edge \
---augmentation_random_crop_type horizontal vertical \
---augmentation_random_flip_type horizontal vertical \
---augmentation_random_rotate_max 25 \
---augmentation_random_crop_and_pad 0.90 1.00 \
+--augmentation_random_crop_type horizontal bottom \
+--augmentation_random_flip_type horizontal \
+--augmentation_random_rotate_max -1 \
+--augmentation_random_crop_and_pad -1 -1 \
 --augmentation_random_resize_and_pad 0.60 1.00 \
 --augmentation_random_resize_and_crop -1 -1 \
---augmentation_random_remove_patch_percent_range_image 1e-3 5e-3 \
---augmentation_random_remove_patch_size_image 5 5 \
---augmentation_random_remove_patch_percent_range_depth 0.60 0.70 \
---augmentation_random_remove_patch_size_depth 1 1 \
+--augmentation_random_remove_patch_percent_range_image -1 -1 \
+--augmentation_random_remove_patch_size_image -1 -1 \
+--augmentation_random_remove_patch_percent_range_depth -1 -1 \
+--augmentation_random_remove_patch_size_depth -1 -1 \
 --supervision_type unsupervised \
 --w_losses \
     w_ewc=1.0 \
@@ -59,12 +59,12 @@ python depth_completion/src/train_depth_completion.py \
     w_smoothness=2.0 \
     w_weight_decay_depth=0.0 \
     w_weight_decay_pose=0.0 \
---min_evaluate_depth 0.0 1e-3 \
+--min_evaluate_depth 1e-3 1e-3 \
 --max_evaluate_depth 100.0 90.0 \
---evaluation_protocol kitti synthia \
---n_step_per_summary 10 \
---n_step_per_checkpoint 10 \
---start_step_validation 10 \
+--evaluation_protocols kitti synthia \
+--n_step_per_summary 2500 \
+--n_step_per_checkpoint 2500 \
+--start_step_validation 2500 \
 --restore_paths \
     trained_completion/kitti_pretrained/fusionnet/fusionnet-kitti.pth \
     trained_completion/kitti_pretrained/fusionnet/posenet-kitti.pth \

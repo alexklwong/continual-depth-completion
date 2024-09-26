@@ -52,7 +52,7 @@ python depth_completion/src/train_depth_completion.py \
     w_weight_decay_pose=0.0 \
 --min_evaluate_depth 0.0 \
 --max_evaluate_depth 100.0 \
---evaluation_protocol default \
+--evaluation_protocols kitti \
 --n_step_per_summary 1000 \
 --n_step_per_checkpoint 1000 \
 --start_step_validation 1000 \

@@ -4,24 +4,32 @@ export CUDA_VISIBLE_DEVICES=1
 
 python depth_completion/src/train_depth_completion.py \
 --train_image_paths \
-    training/kitti/unsupervised/kitti_train_nonstatic_images.txt \
+    out_training/synthia-kitti-person/unsupervised/synthia_train_images.txt \
 --train_sparse_depth_path \
-    training/kitti/unsupervised/kitti_train_nonstatic_sparse_depth.txt \
+    out_training/synthia-kitti-person/unsupervised/synthia_train_sparse_depth.txt \
 --train_intrinsics_path \
-    training/kitti/unsupervised/kitti_train_nonstatic_intrinsics.txt \
---val_image_path validation/kitti/kitti_val_image.txt \
---val_sparse_depth_path validation/kitti/kitti_val_sparse_depth.txt \
---val_intrinsics_path validation/kitti/kitti_val_intrinsics.txt \
---val_ground_truth_path validation/kitti/kitti_val_ground_truth.txt \
---model_name fusionnet_kitti \
---network_modules depth pose spatial_pyramid_pool fisher \
+    out_training/synthia-kitti-person/unsupervised/synthia_train_intrinsics.txt \
+--val_image_paths \
+    out_validation/kitti/kitti_val_image.txt \
+    out_testing/synthia-kitti-person/synthia_test_image.txt \
+--val_sparse_depth_paths \
+    out_validation/kitti/kitti_val_sparse_depth.txt \
+    out_testing/synthia-kitti-person/synthia_test_sparse_depth.txt \
+--val_intrinsics_paths \
+    out_validation/kitti/kitti_val_intrinsics.txt \
+    out_testing/synthia-kitti-person/synthia_test_intrinsics.txt \
+--val_ground_truth_paths \
+    out_validation/kitti/kitti_val_ground_truth.txt \
+    out_testing/synthia-kitti-person/synthia_test_ground_truth.txt \
+--model_name kbnet_kitti \
+--network_modules depth pose \
 --min_predict_depth 1.5 \
 --max_predict_depth 100.0 \
---train_batch_size 8 \
+--train_batch_size 12 \
 --train_crop_shapes \
-        320 768 \
---learning_rates 0 \
---learning_schedule 1 \
+        320 640 \
+--learning_rates 1e-4 5e-5 \
+--learning_schedule 3 6 \
 --augmentation_probabilities 1.0 \
 --augmentation_schedule -1 \
 --augmentation_random_brightness 0.50 1.50 \
@@ -50,16 +58,16 @@ python depth_completion/src/train_depth_completion.py \
     w_smoothness=2.0 \
     w_weight_decay_depth=0.0 \
     w_weight_decay_pose=0.0 \
---min_evaluate_depth 1e-3 \
---max_evaluate_depth 100.0 \
---evaluation_protocols kitti \
---n_step_per_summary 1000 \
---n_step_per_checkpoint 1000 \
---start_step_validation 1000 \
+--min_evaluate_depth 1e-3 1e-3 \
+--max_evaluate_depth 100.0 100.0 \
+--evaluation_protocols kitti synthia \
+--n_step_per_summary 2500 \
+--n_step_per_checkpoint 2500 \
+--start_step_validation 2500 \
 --restore_paths \
-    trained_completion/kitti_pretrained/fusionnet/fusionnet-kitti.pth \
-    trained_completion/kitti_pretrained/fusionnet/posenet-kitti.pth \
+    trained_completion/kitti_pretrained/kbnet/kbnet-kitti.pth \
+    trained_completion/kitti_pretrained/kbnet/posenet-kitti.pth \
 --checkpoint_path \
-    trained_completion/outdoor/kitti/fusionnet/fusionnet_kitti_fisher \
+    trained_completion/outdoor/kbnet/synthia/kbnet_kitti_synthia \
 --device gpu \
---n_thread 8
+--n_thread 1

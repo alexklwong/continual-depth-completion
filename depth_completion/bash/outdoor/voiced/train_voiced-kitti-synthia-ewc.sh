@@ -21,11 +21,11 @@ python depth_completion/src/train_depth_completion.py \
 --val_ground_truth_paths \
     validation/kitti/kitti_val_ground_truth.txt \
     testing/synthia-kitti-person/synthia_test_ground_truth.txt \
---model_name kbnet_kitti \
+--model_name voiced_kitti \
 --network_modules depth pose fisher ewc \
 --min_predict_depth 1.5 \
 --max_predict_depth 100.0 \
---train_batch_size 12 \
+--train_batch_size 8 \
 --train_crop_shapes \
         320 640 \
 --learning_rates 1e-4 5e-5 \
@@ -66,13 +66,13 @@ python depth_completion/src/train_depth_completion.py \
 --n_step_per_checkpoint 2500 \
 --start_step_validation 2500 \
 --restore_paths \
-    trained_completion/kitti_pretrained/kbnet/kbnet-kitti.pth \
-    trained_completion/kitti_pretrained/kbnet/posenet-kitti.pth \
-    trained_completion/outdoor/kitti/kbnet/kbnet_kitti_fisher/checkpoints_kbnet_kitti-486033/fisher-info_486033.pth \
+    trained_completion/kitti_pretrained/voiced/voiced-kitti.pth \
+    trained_completion/kitti_pretrained/voiced/posenet-kitti.pth \
+    trained_completion/outdoor/kitti/voiced/voiced_kitti_fisher/checkpoints_voiced_kitti-244050/fisher-info_244050.pth \
 --frozen_model_paths \
-    trained_completion/kitti_pretrained/kbnet/kbnet-kitti.pth \
-    trained_completion/kitti_pretrained/kbnet/posenet-kitti.pth \
+    trained_completion/kitti_pretrained/voiced/voiced-kitti.pth \
+    trained_completion/kitti_pretrained/voiced/posenet-kitti.pth \
 --checkpoint_path \
-    trained_completion/outdoor/synthia/kbnet/kbnet_kitti_synthia_ewc \
+    trained_completion/outdoor/synthia/voiced/voiced_kitti_synthia_ewc \
 --device gpu \
 --n_thread 8
