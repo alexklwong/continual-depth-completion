@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 python depth_completion/src/train_depth_completion.py \
 --train_image_paths \
@@ -14,14 +14,14 @@ python depth_completion/src/train_depth_completion.py \
 --val_intrinsics_path testing/nyu_v2/nyu_v2_test_intrinsics_corner.txt \
 --val_ground_truth_path testing/nyu_v2/nyu_v2_test_ground_truth_corner.txt \
 --model_name fusionnet_void \
---network_modules depth pose initialize_scaffnet spatial_pyramid_pool fisher \
+--network_modules depth pose spatial_pyramid_pool fisher \
 --min_predict_depth 0.1 \
 --max_predict_depth 8.0 \
 --train_batch_size 12 \
 --train_crop_shapes \
     416 576 \
---learning_rates 1e-4 5e-5 2.5e-5 \
---learning_schedule 3 6 9 \
+--learning_rates 2.5e-5 1.25e-5 \
+--learning_schedule 3 6 \
 --augmentation_probabilities 1.0 \
 --augmentation_schedule -1 \
 --augmentation_random_brightness 0.50 1.50 \
@@ -46,8 +46,8 @@ python depth_completion/src/train_depth_completion.py \
 --w_losses \
     w_color=0.20 \
     w_structure=0.80 \
-    w_sparse_depth=1.0 \
-    w_smoothness=1.0 \
+    w_sparse_depth=2.0 \
+    w_smoothness=2.0 \
     threshold_prior_depth=0.30 \
     w_prior_depth=0.10 \
     w_weight_decay_depth=0.0 \
@@ -59,10 +59,9 @@ python depth_completion/src/train_depth_completion.py \
 --n_step_per_checkpoint 1000 \
 --start_step_validation 1000 \
 --restore_path \
-    external_models/scaffnet/scenenet/scaffnet-scenenet_v2.pth \
-    trained_completion/fusionnet/nyu_v2/fusionnet_nyu_pretrained2/checkpoints_fusionnet_void-95000/fusionnet-95000.pth \
-    trained_completion/fusionnet/nyu_v2/fusionnet_nyu_pretrained2/checkpoints_fusionnet_void-95000/posenet-95000.pth \
+    trained_completion/fusionnet/nyu_v2/fusionnet_nyu_pretrained3/checkpoints_fusionnet_void-58000/fusionnet-58000.pth \
+    trained_completion/fusionnet/nyu_v2/fusionnet_nyu_pretrained3/checkpoints_fusionnet_void-58000/posenet-58000.pth \
 --checkpoint_path \
-    trained_completion/fusionnet/nyu_v2/fusionnet_nyu_pretrained7 \
+    trained_completion/fusionnet/nyu_v2/fusionnet_nyu_pretrained9 \
 --device gpu \
 --n_thread 8
