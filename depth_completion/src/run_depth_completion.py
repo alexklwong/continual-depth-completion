@@ -39,9 +39,11 @@ parser.add_argument('--max_predict_depth',
 
 # Evaluation settings
 parser.add_argument('--min_evaluate_depth',
-    type=float, default=0.20, help='Minimum value of depth to evaluate')
+    type=float, default=[0.20], help='Minimum value of depth to evaluate')
 parser.add_argument('--max_evaluate_depth',
-    type=float, default=5.00, help='Maximum value of depth to evaluate')
+    type=float, default=[5.00], help='Maximum value of depth to evaluate')
+parser.add_argument('--evaluation_protocols',
+    nargs='+', type=str, default=['default'], help='Protocol for evaluation i.e. vkitti, nuscenes, default')
 
 # Output settings
 parser.add_argument('--output_path',
@@ -77,9 +79,9 @@ if __name__ == '__main__':
         # Restore path settings
         restore_paths=args.restore_paths,
         # Input settings
-        input_channels_image=args.input_channels_image,
-        input_channels_depth=args.input_channels_depth,
-        normalized_image_range=args.normalized_image_range,
+        # input_channels_image=args.input_channels_image,
+        # input_channels_depth=args.input_channels_depth,
+        # normalized_image_range=args.normalized_image_range,
         # Depth network settings
         model_name=args.model_name,
         network_modules=args.network_modules,
@@ -88,6 +90,7 @@ if __name__ == '__main__':
         # Evaluation settings
         min_evaluate_depth=args.min_evaluate_depth,
         max_evaluate_depth=args.max_evaluate_depth,
+        evaluation_protocols=args.evaluation_protocols,
         # Output settings
         output_path=args.output_path,
         save_outputs=args.save_outputs,
