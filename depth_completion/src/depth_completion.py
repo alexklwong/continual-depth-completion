@@ -25,7 +25,7 @@ def train(train_image_paths,
           val_ground_truth_paths,
           val_dataset_uids,  # TokenCDC
           # TokenCDC-specific settings
-          key_token_pool_size,  
+          key_token_pool_size,
           unfreeze_model,  # store_true
           domain_incremental,  # store_true
           task_agnostic,  # store_true
@@ -168,7 +168,7 @@ def train(train_image_paths,
 
     '''
     Setup training dataloaders
-    '''    
+    '''
     # Get number of train samples and training step
     # Note: zipping up iterators will pad based on largest one
     max_train_sample = max(n_train_samples)
@@ -568,7 +568,7 @@ def train(train_image_paths,
         if 'pose' in network_modules:
             for g in optimizer_pose.param_groups:
                 g['lr'] = learning_rate
-        
+
         for g in optimizer_cl.param_groups:
             g['lr'] = learning_rate
 
@@ -593,7 +593,7 @@ def train(train_image_paths,
                 # Update optimizer learning rates for pose network
                 for g in optimizer_pose.param_groups:
                     g['lr'] = learning_rate
-            
+
             for g in optimizer_cl.param_groups:
                 g['lr'] = learning_rate
 
@@ -626,7 +626,7 @@ def train(train_image_paths,
                 ground_truth_paths, \
                 multiplier_sample_padding,\
                 remainder_sample_padding = inputs
-            
+
             # Compute indices to select remainder for this epoch
             idx_remainder = np.random.permutation(range(len(image_paths)))[:remainder_sample_padding]
 
@@ -644,12 +644,12 @@ def train(train_image_paths,
             intrinsics_paths_epoch = intrinsics_paths + \
                 intrinsics_paths * (multiplier_sample_padding - 1) + \
                 (np.array(intrinsics_paths)[idx_remainder]).tolist()
-            
+
             # Extend ground truth paths
             ground_truth_paths_epoch = ground_truth_paths + \
                 ground_truth_paths * (multiplier_sample_padding - 1) + \
                 (np.array(ground_truth_paths)[idx_remainder]).tolist()
-            
+
             # Append extended paths for each dataset
             train_image_paths_arr_epoch.append(image_paths_epoch)
             train_sparse_depth_paths_arr_epoch.append(sparse_depth_paths_epoch)
@@ -664,7 +664,7 @@ def train(train_image_paths,
             train_dataset_uids,
             train_batch_sizes_arr_epoch,
             train_crop_shapes_arr_epoch)
-        
+
         train_dataloaders = []
         # For each dataset
         for inputs in train_input_paths_arr_epoch:
@@ -696,7 +696,7 @@ def train(train_image_paths,
                     random_crop_type=augmentation_random_crop_type)
             else:
                 raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
-            
+
 
             train_dataloader = torch.utils.data.DataLoader(
                 train_dataset,
@@ -817,13 +817,14 @@ def train(train_image_paths,
                 FORWARD THROUGH THE NETWORK
                 '''
                 # Inputs: augmented image, augmented sparse depth map, original (but aligned) validity map
-                output_depth0 = depth_completion_model.forward_depth(
-                    image=input_image0,
-                    sparse_depth=input_sparse_depth0,
-                    validity_map=input_validity_map0,
-                    intrinsics=input_intrinsics,
-                    dataset_uid=dataset_uid,
-                    return_all_outputs=True)
+                output_depth0, selector_query, selector_key_idx, dataset_selectors = \
+                    depth_completion_model.forward_depth(
+                        image=input_image0,
+                        sparse_depth=input_sparse_depth0,
+                        validity_map=input_validity_map0,
+                        intrinsics=input_intrinsics,
+                        dataset_uid=dataset_uid,
+                        return_all_outputs=True)
 
                 # TokenCDC: Check if new parameters were added during the forward pass, to add to the optimizer
                 new_params = depth_completion_model.get_new_params()
@@ -869,7 +870,9 @@ def train(train_image_paths,
                     intrinsics=intrinsics,
                     pose0to1=pose0to1,
                     pose0to2=pose0to2,
-                    domain_incremental=domain_incremental,
+                    queries=selector_query,
+                    key_idx=selector_key_idx,
+                    key_list=dataset_selectors,
                     supervision_type=supervision_type,
                     w_losses=w_losses)
 
@@ -979,6 +982,7 @@ def train(train_image_paths,
                             device=device,
                             summary_writer=val_summary_writer,
                             n_image_per_summary=n_image_per_summary,
+                            domain_incremental=domain_incremental,
                             log_path=log_path)
 
                     # Switch back to training
@@ -1010,6 +1014,7 @@ def train(train_image_paths,
             device=device,
             summary_writer=val_summary_writer,
             n_image_per_summary=n_image_per_summary,
+            domain_incremental=domain_incremental,
             log_path=log_path)
 
     # Save checkpoints
@@ -1031,6 +1036,7 @@ def validate(depth_model,
              summary_writer,
              n_image_per_summary=4,
              n_interval_per_summary=250,
+             domain_incremental=False,
              log_path=None):
 
     # TokenCDC TEST: Sanity check number of key and token parameters
@@ -1061,7 +1067,7 @@ def validate(depth_model,
         '''
         for dataset_idx, val_batch in enumerate(val_batches):
 
-            # Handles val dataloaders of different lengths 
+            # Handles val dataloaders of different lengths
             if val_batch is not None:
 
                 dataset_uid = dataloaders[dataset_idx].dataset.dataset_uid
@@ -1079,13 +1085,14 @@ def validate(depth_model,
                         sparse_depth)
 
                     # Forward through network
-                    output_depth = depth_model.forward_depth(
+                    output_depth, _, _, _ = depth_model.forward_depth(
                         image=image,
                         sparse_depth=sparse_depth,
                         validity_map=validity_map,
                         intrinsics=intrinsics,
                         dataset_uid=dataset_uid,
-                        return_all_outputs=False)
+                        return_all_outputs=False,
+                        domain_incremental=domain_incremental)
 
                 if (idx % n_interval_per_summary) == 0 and summary_writer is not None:
                     image_summary[dataset_idx].append(image)

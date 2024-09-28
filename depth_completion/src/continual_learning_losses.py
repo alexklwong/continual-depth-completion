@@ -2,36 +2,37 @@ import torch
 import torch.nn.functional as F
 
 
-def token_loss(queries, keys, key_pools, lambda_token, domain_incremental=False):
+def dominc_loss(queries, key_idx, key_list, lambda_dominc):
     '''
-    Calculate the loss between queries/keys and between keys in the key pool
+    Calculate the loss between query/key and between keys in the selector key list
 
     Args:
         queries : torch.Tensor[float32]
-            Queries tensor [N, C, H, W]
-        keys : torch.Tensor[float32]
-            Keys tensor [N, C, H, W]
-        key_pools : torch.Tensor[float32]
-            Key pools ParameterDict
-        lambda_token : float
-            Token loss weight
+            Query vector [N, C]
+        key_idx : int
+            Index of the key in the key list
+        key_list : torch.Tensor[float32]
+            Key list K x [N]
+
+        lambda_dominc : float
+            Domain incremental loss weight
     '''
     loss = 0.0
-    cosine_sim_qk = F.cosine_similarity(queries, keys, dim=1)
+    selected_key = key_list[key_idx]
+    cosine_sim_qk = F.cosine_similarity(queries, selected_key.transpose(-2,-1), dim=1)
     loss_qk = 1 - cosine_sim_qk.mean()
     loss += loss_qk
 
-    if domain_incremental:
-        loss_kk = 0.0
-        for key_pool_i in key_pools.values():
-            for key_pool_j in key_pools.values():
-                if key_pool_i is not key_pool_j:
-                    cosine_sim_kk = F.cosine_similarity(key_pool_i, key_pool_j, dim=1)
-                    loss_kk += cosine_sim_kk.mean()
-        if len(key_pools) * (len(key_pools) - 1) > 0:
-            loss += loss_kk / (len(key_pools) * (len(key_pools) - 1))  # Normalize by number of key pools
+    loss_kk = 0.0
+    for i in range(len(key_list)):
+        if i != key_idx:
+            cosine_sim_kk = F.cosine_similarity(selected_key, key_list[i])  # should be a scalar!
+            loss_kk += cosine_sim_kk
+    if len(key_list) > 1:
+        loss += loss_kk / (len(key_list) - 1)  # Normalize by number of key pools
 
-    return lambda_token * loss
+    print("Domain Incremental Loss: ", loss)
+    return lambda_dominc * loss
 
 
 def ewc_loss(current_parameters, frozen_parameters, fisher_info, lambda_ewc):
@@ -51,7 +52,7 @@ def ewc_loss(current_parameters, frozen_parameters, fisher_info, lambda_ewc):
         loss += torch.sum(fisher * (old - curr)**2)
 
     return (lambda_ewc / 2) * loss
-    
+
 def lwf_loss(output_depth0, output_frozen_depth0, lambda_lwf):
     """
     Compute the LwF loss for unsupervised learning scenarios based on depth prediction.

@@ -1,7 +1,7 @@
 import os, torch, torchvision
 import torch.nn.functional as F
 from utils.src import log_utils, net_utils
-from continual_learning_losses import token_loss, ewc_loss, lwf_loss
+from continual_learning_losses import dominc_loss, ewc_loss, lwf_loss
 
 
 class DepthCompletionModel(object):
@@ -112,13 +112,14 @@ class DepthCompletionModel(object):
         return self.model_cl.module if isinstance(self.model_cl, torch.nn.DataParallel) else self.model_cl
 
 
-    def forward_depth(self, 
-                      image, 
-                      sparse_depth, 
-                      validity_map, 
+    def forward_depth(self,
+                      image,
+                      sparse_depth,
+                      validity_map,
                       dataset_uid,  # TokenCDC
-                      intrinsics=None, 
-                      return_all_outputs=False):
+                      intrinsics=None,
+                      return_all_outputs=False,
+                      domain_incremental=False):
         '''
         Forwards stereo pair through network
 
@@ -148,15 +149,27 @@ class DepthCompletionModel(object):
 
         # Encoder Forward Pass
         latent, skips, shape = self.model.forward_depth_encoder(
-            image, 
-            sparse_depth, 
-            validity_map, 
+            image,
+            sparse_depth,
+            validity_map,
             intrinsics)
 
-        ##### BEGIN TokenCDC Implementation 
+        ##### BEGIN TokenCDC Implementation
 
         if 'control' not in self.network_modules:
-            # FIRST, get key and token pools
+            ### Selector Query
+            selector_query = F.adaptive_avg_pool2d(latent, (1, 1)).view(latent.shape[0], -1)
+            dataset_selectors = self._get_model_cl().dataset_selectors
+            if domain_incremental:  # Domain-incremental EVALUATION only!
+                with torch.no_grad():
+                    selector_query_norm = F.normalize(selector_query, p=2, dim=1)
+                    selector_key_matrix = torch.cat(dataset_selectors, dim=1)
+                    selector_key_matrix_norm = F.normalize(selector_key_matrix, p=2, dim=0)
+                    cosine_sim = selector_query_norm @ selector_key_matrix_norm
+                    selector_key_idx = torch.argmax(cosine_sim.mean(dim=0)).item()
+                    dataset_uid = self._get_model_cl().dataset_uids[selector_key_idx]  # OVERWRITE dataset_uid!
+
+            # Get key and token pools
             dims = skips[1][0].shape[1], skips[1][1].shape[1], \
                     skips[2][0].shape[1], skips[2][1].shape[1], skips[3][0].shape[1], skips[3][1].shape[1], latent.shape[1]
             #curr_i1_key_pool, curr_d1_key_pool, curr_i1_token_pool, curr_d1_token_pool, curr_i1_linear, curr_d1_linear, \
@@ -165,25 +178,9 @@ class DepthCompletionModel(object):
             curr_i4_key_pool, curr_i4_token_pool, curr_i4_linear, curr_d4_key_pool, curr_d4_token_pool, curr_d4_linear, \
             curr_latent_key_pool, curr_latent_token_pool, curr_latent_linear = \
                 self._get_model_cl().get_key_token_pool(dataset_uid, dims)
+            selector_key_idx = self._get_model_cl().get_selector_key_idx(dataset_uid)
 
             ### Skip Conection 1
-            # # QUERIES
-            # i1_skip, d1_skip = skips[0][0], skips[0][1]
-            # i1_N, i1_C, i1_H, i1_W = i1_skip.shape
-            # d1_N, d1_C, d1_H, d1_W = d1_skip.shape
-            # assert i1_N == d1_N and i1_H == d1_H and i1_W == d1_W, "Image/depth must have the same non-channel dims!"
-            # i1_queries = i1_skip.permute(0, 2, 3, 1).view(i1_N, i1_H*i1_W, i1_C)
-            # d1_queries = d1_skip.permute(0, 2, 3, 1).view(d1_N, d1_H*d1_W, d1_C)
-            # # Compute TOKENS using attention
-            # i1_scores = torch.matmul(i1_queries, curr_i1_key_pool.transpose(-2, -1)) / torch.sqrt(torch.tensor(i1_C, device=self.device, dtype=torch.float32))
-            # i1_scores = F.softmax(i1_scores, dim=-1)
-            # d1_scores = torch.matmul(d1_queries, curr_d1_key_pool.transpose(-2, -1)) / torch.sqrt(torch.tensor(d1_C, device=self.device, dtype=torch.float32))
-            # d1_scores = F.softmax(d1_scores, dim=-1)
-            # i1_tokens = torch.matmul(i1_scores, curr_i1_token_pool).view(i1_N, i1_H, i1_W, i1_C).permute(0, 3, 1, 2)
-            # d1_tokens = torch.matmul(d1_scores, curr_d1_token_pool).view(d1_N, d1_H, d1_W, d1_C).permute(0, 3, 1, 2)
-            # # CONCAT tokens to skips
-            # i1_skip_with_tokens = i1_skip + i1_tokens
-            # d1_skip_with_tokens = d1_skip + d1_tokens
             i1_skip_with_tokens, d1_skip_with_tokens = skips[0][0], skips[0][1]  # NOT using skip 1 tokens
 
             ### Skip Conection 2
@@ -233,7 +230,7 @@ class DepthCompletionModel(object):
             # CONCAT tokens to skips
             i3_skip_with_tokens = i3_skip + i3_tokens
             d3_skip_with_tokens = d3_skip + d3_tokens
-            
+
             ### Skip Conection 4
             # QUERIES
             i4_skip, d4_skip = skips[3][0], skips[3][1]
@@ -273,17 +270,20 @@ class DepthCompletionModel(object):
             latent_with_tokens = latent + latent_tokens
 
             ### Combine all skip connections
-            skips_with_tokens = [torch.cat([i1_skip_with_tokens, d1_skip_with_tokens], dim=1), 
+            skips_with_tokens = [torch.cat([i1_skip_with_tokens, d1_skip_with_tokens], dim=1),
                                     torch.cat([i2_skip_with_tokens, d2_skip_with_tokens], dim=1),
                                     torch.cat([i3_skip_with_tokens, d3_skip_with_tokens], dim=1),
                                     torch.cat([i4_skip_with_tokens, d4_skip_with_tokens], dim=1)]
         else:
             print("\n\n\nWARNING: TokenCDC NOT being used!!!\n\n\n")
             latent_with_tokens = latent
-            skips_with_tokens = [torch.cat([skips[0][0], skips[0][1]], dim=1), 
+            skips_with_tokens = [torch.cat([skips[0][0], skips[0][1]], dim=1),
                                     torch.cat([skips[1][0], skips[1][1]], dim=1),
                                     torch.cat([skips[2][0], skips[2][1]], dim=1),
                                     torch.cat([skips[3][0], skips[3][1]], dim=1)]
+            selector_query = None
+            selector_key_idx = None
+            dataset_selectors = None
 
         ##### END TokenCDC Implementation
 
@@ -294,7 +294,7 @@ class DepthCompletionModel(object):
                     shape,
                     return_all_outputs)
 
-        return output
+        return output, selector_query, selector_key_idx, dataset_selectors
 
 
     def forward_pose(self, image0, image1):
@@ -325,8 +325,8 @@ class DepthCompletionModel(object):
                      pose0to1,
                      pose0to2,
                      queries=None,
-                     keys=None,
-                     domain_incremental=False,
+                     key_idx=None,
+                     key_list=None,
                      ground_truth0=None,
                      supervision_type='unsupervised',
                      w_losses={}):
@@ -355,9 +355,11 @@ class DepthCompletionModel(object):
             pose0to2 : torch.Tensor[float32]
                 N x 4 x 4 relative pose from image at time t to t+1
             queries : torch.Tensor[float32]
-                N x key_dim x H x W queries (FROZEN)
-            keys : torch.Tensor[float32]
-                N x key_dim x H x W keys
+                N x latent_dim queries (FROZEN)
+            key_idx : torch.Tensor[int64]
+                N key index
+            key_list : torch.Tensor[float32]
+                latent_dim x K keys (LEARNABLE)
             ground_truth0 : torch.Tensor[float32]
                 N x 1 x H x W ground truth depth at time t
             supervision_type : str
@@ -389,17 +391,14 @@ class DepthCompletionModel(object):
         else:
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
 
-        # TokenCDC LEGACY: Loss between queries/keys and between keys in the key pool
-        if 'w_token' in w_losses:
-            loss_token = token_loss(
-                            queries=queries,
-                            keys=keys,
-                            key_pools=self.key_pools,
-                            lambda_token=w_losses['w_token'],
-                            domain_incremental=domain_incremental)
-
-            loss += loss_token
-            loss_info['loss_token'] = loss_token
+        # Loss between selector query/key and between keys in the selector key matrix
+        loss_dominc = dominc_loss(
+                        queries=queries,
+                        key_idx=key_idx,
+                        key_list=key_list,
+                        lambda_dominc=w_losses['w_dominc'])
+        loss += loss_dominc
+        loss_info['loss_dominc'] = loss_dominc
 
         return loss, loss_info
 
@@ -440,7 +439,7 @@ class DepthCompletionModel(object):
             list[torch.Tensor[float32]] : list of parameters
         '''
         return self.model.parameters_pose()
-    
+
     def parameters_cl(self):
         '''
         Returns the list of parameters in the continual learning model
@@ -534,7 +533,7 @@ class DepthCompletionModel(object):
                                                                 optimizer_pose=optimizer_pose)
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
-        
+
         # TokenCDC: Restore ALL TokenCDC params
         if len(restore_paths) >= 3:
             _, optimizer_cl = self._get_model_cl().restore_model(restore_paths[2], optimizer_cl)
