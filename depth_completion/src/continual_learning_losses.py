@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 
-def dominc_loss(queries, key_idx, key_list, lambda_dominc):
+def dominc_loss(queries, key_idx, key_list, lambda_dominc, lambda_kk):
     '''
     Calculate the loss between query/key and between keys in the selector key list
 
@@ -16,22 +16,26 @@ def dominc_loss(queries, key_idx, key_list, lambda_dominc):
 
         lambda_dominc : float
             Domain incremental loss weight
+        lambda_kk : float
+            Key-key loss weight
     '''
     loss = 0.0
     selected_key = key_list[key_idx]
     cosine_sim_qk = F.cosine_similarity(queries, selected_key.transpose(-2,-1), dim=1)
     loss_qk = 1 - cosine_sim_qk.mean()
     loss += loss_qk
+    print("QK Loss: ", loss_qk)
 
     loss_kk = 0.0
     for i in range(len(key_list)):
         if i != key_idx:
-            cosine_sim_kk = F.cosine_similarity(selected_key, key_list[i])  # should be a scalar!
+            key_list_i = key_list[i].detach().clone()
+            cosine_sim_kk = F.cosine_similarity(selected_key, key_list_i, dim=0).squeeze()  # should be a scalar!
             loss_kk += cosine_sim_kk
     if len(key_list) > 1:
-        loss += loss_kk / (len(key_list) - 1)  # Normalize by number of key pools
+        loss += lambda_kk * loss_kk / (len(key_list) - 1)  # Normalize by number of key pools
+    print("KK Loss: ", loss_kk)
 
-    print("Domain Incremental Loss: ", loss)
     return lambda_dominc * loss
 
 

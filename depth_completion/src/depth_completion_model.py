@@ -168,6 +168,7 @@ class DepthCompletionModel(object):
                     cosine_sim = selector_query_norm @ selector_key_matrix_norm
                     selector_key_idx = torch.argmax(cosine_sim.mean(dim=0)).item()
                     dataset_uid = self._get_model_cl().dataset_uids[selector_key_idx]  # OVERWRITE dataset_uid!
+                    print(cosine_sim)
 
             # Get key and token pools
             dims = skips[1][0].shape[1], skips[1][1].shape[1], \
@@ -396,7 +397,8 @@ class DepthCompletionModel(object):
                         queries=queries,
                         key_idx=key_idx,
                         key_list=key_list,
-                        lambda_dominc=w_losses['w_dominc'])
+                        lambda_dominc=w_losses['w_dominc'],
+                        lambda_kk=w_losses['w_kk'])
         loss += loss_dominc
         loss_info['loss_dominc'] = loss_dominc
 

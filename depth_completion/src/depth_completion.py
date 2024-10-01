@@ -925,8 +925,8 @@ def train(train_image_paths,
                         n_image_per_summary=min(batch_size, n_image_per_summary))
 
             # TokenCDC TEST: total number of learnable parameters
-            # count = sum(p.numel() for group in optimizer_depth.param_groups for p in group['params'] if p.requires_grad)
-            # print("Learnable parameters in the model: {}".format(count))
+            count = sum(p.numel() for group in optimizer_cl.param_groups for p in group['params'] if p.requires_grad)
+            print("Learnable parameters in the CL optimizer: {}".format(count))
 
             '''
             Compute gradient and BACKPROPAGATE
