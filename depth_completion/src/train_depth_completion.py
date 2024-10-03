@@ -142,7 +142,7 @@ parser.add_argument('--min_evaluate_depths',
 parser.add_argument('--max_evaluate_depths',
     nargs='+', type=float, default=[5.00], help='Maximum value of depth to evaluate')
 parser.add_argument('--evaluation_protocol',
-    type=str, default='default', help='Protocol for evaluation i.e. vkitti, nuscenes, default')
+    nargs='+', type=str, default=['default'], help='Protocol for evaluation i.e. vkitti, nuscenes, default')
 
 # Checkpoint settings
 parser.add_argument('--checkpoint_path',
