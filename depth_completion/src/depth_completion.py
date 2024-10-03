@@ -1105,22 +1105,22 @@ def validate(depth_model,
                 output_depth = np.squeeze(output_depth.cpu().numpy())
                 ground_truth = np.squeeze(ground_truth.cpu().numpy())
 
-                if evaluation_protocol == 'vkitti':
+                if evaluation_protocol[dataset_idx] == 'vkitti':
                     # Crop output_depth and ground_truth
                     crop_height = 240
                     crop_width = 1216
                     crop_mask = [crop_height, crop_width]
-                elif evaluation_protocol == 'nuscenes':
+                elif evaluation_protocol[dataset_idx] == 'nuscenes':
                     # Crop output_depth and ground_truth
                     crop_height = 540
                     crop_width = 1600
                     crop_mask = [crop_height, crop_width]
-                elif evaluation_protocol == 'synthia':
+                elif evaluation_protocol[dataset_idx] == 'synthia':
                     # Crop output_depth and ground_truth
                     crop_height = 320
                     crop_width = 640
                     crop_mask = [crop_height, crop_width]
-                elif evaluation_protocol == 'waymo':
+                elif evaluation_protocol[dataset_idx] == 'waymo':
                     # Crop output_depth and ground_truth
                     crop_height = 768
                     crop_width = 1920
