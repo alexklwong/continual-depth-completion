@@ -330,7 +330,8 @@ class DepthCompletionModel(object):
                      key_list=None,
                      ground_truth0=None,
                      supervision_type='unsupervised',
-                     w_losses={}):
+                     w_losses={},
+                     domain_incremental=False):
         '''
         Call model's compute loss function
 
@@ -393,14 +394,15 @@ class DepthCompletionModel(object):
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
 
         # Loss between selector query/key and between keys in the selector key matrix
-        loss_dominc = dominc_loss(
-                        queries=queries,
-                        key_idx=key_idx,
-                        key_list=key_list,
-                        lambda_dominc=w_losses['w_dominc'],
-                        lambda_kk=w_losses['w_kk'])
-        loss += loss_dominc
-        loss_info['loss_dominc'] = loss_dominc
+        if domain_incremental:
+            loss_dominc = dominc_loss(
+                            queries=queries,
+                            key_idx=key_idx,
+                            key_list=key_list,
+                            lambda_dominc=w_losses['w_dominc'],
+                            lambda_kk=w_losses['w_kk'])
+            loss += loss_dominc
+            loss_info['loss_dominc'] = loss_dominc
 
         return loss, loss_info
 

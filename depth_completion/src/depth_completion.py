@@ -874,7 +874,8 @@ def train(train_image_paths,
                     key_idx=selector_key_idx,
                     key_list=dataset_selectors,
                     supervision_type=supervision_type,
-                    w_losses=w_losses)
+                    w_losses=w_losses,
+                    domain_incremental=domain_incremental)
 
                 # Accumulate loss over batches and update loss info
                 loss = loss + loss_batch
