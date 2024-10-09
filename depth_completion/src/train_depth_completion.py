@@ -141,7 +141,7 @@ parser.add_argument('--min_evaluate_depths',
     nargs='+', type=float, default=[0.20], help='Minimum value of depth to evaluate')
 parser.add_argument('--max_evaluate_depths',
     nargs='+', type=float, default=[5.00], help='Maximum value of depth to evaluate')
-parser.add_argument('--evaluation_protocol',
+parser.add_argument('--evaluation_protocols',
     nargs='+', type=str, default=['default'], help='Protocol for evaluation i.e. vkitti, nuscenes, default')
 
 # Checkpoint settings
@@ -253,7 +253,7 @@ if __name__ == '__main__':
         # Evaluation settings
         min_evaluate_depths=args.min_evaluate_depths,
         max_evaluate_depths=args.max_evaluate_depths,
-        evaluation_protocol=args.evaluation_protocol,
+        evaluation_protocols=args.evaluation_protocols,
         # Checkpoint settings
         checkpoint_path=args.checkpoint_path,
         n_step_per_checkpoint=args.n_step_per_checkpoint,
