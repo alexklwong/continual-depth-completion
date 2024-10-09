@@ -746,6 +746,9 @@ def train(train_image_paths,
         for g in optimizer_depth.param_groups:
             g['lr'] = learning_rate
 
+        for g in optimizer_pose.param_groups:
+            g['lr'] = learning_rate
+
         n_train_step = n_train_step + train_step
 
     time_start = time.time()
