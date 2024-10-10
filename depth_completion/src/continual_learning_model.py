@@ -60,7 +60,7 @@ class ContinualLearningModel(torch.nn.Module):
         self.eval()
  
     
-    def get_key_token_pool(self, dataset_uid, dims):
+    def get_key_token_pool(self, dataset_uid, dims, moe=False):
         """
         Get key and token pools for a dataset given its uid
         
@@ -69,14 +69,38 @@ class ContinualLearningModel(torch.nn.Module):
                 unique id of dataset
             dims: tuple
                 tuple of dimensions for the key and token pools
+            moe: bool
+                if True, return the concatenated key and token pools for the MOE model
         Returns:
             key and token pools for the dataset
         """ 
+        if moe:
+            return torch.cat([self.i2_key_pools[key] @ self.i2_token_pools[key].transpose(-2, -1) for key in self.i2_key_pools.keys()], dim=1), \
+                    torch.cat([p for p in self.i2_token_pools.values()], dim=0), \
+                    torch.stack([p for p in self.i2_linear.values()], dim=0).mean(dim=0), \
+                    torch.cat([self.d2_key_pools[key] @ self.d2_token_pools[key].transpose(-2, -1) for key in self.d2_key_pools.keys()], dim=1), \
+                    torch.cat([p for p in self.d2_token_pools.values()], dim=0), \
+                    torch.stack([p for p in self.d2_linear.values()], dim=0).mean(dim=0), \
+                    torch.cat([self.i3_key_pools[key] @ self.i3_token_pools[key].transpose(-2, -1) for key in self.i3_key_pools.keys()], dim=1), \
+                    torch.cat([p for p in self.i3_token_pools.values()], dim=0), \
+                    torch.stack([p for p in self.i3_linear.values()], dim=0).mean(dim=0), \
+                    torch.cat([self.d3_key_pools[key] @ self.d3_token_pools[key].transpose(-2, -1) for key in self.d3_key_pools.keys()], dim=1), \
+                    torch.cat([p for p in self.d3_token_pools.values()], dim=0), \
+                    torch.stack([p for p in self.d3_linear.values()], dim=0).mean(dim=0), \
+                    torch.cat([self.i4_key_pools[key] @ self.i4_token_pools[key].transpose(-2, -1) for key in self.i4_key_pools.keys()], dim=1), \
+                    torch.cat([p for p in self.i4_token_pools.values()], dim=0), \
+                    torch.stack([p for p in self.i4_linear.values()], dim=0).mean(dim=0), \
+                    torch.cat([self.d4_key_pools[key] @ self.d4_token_pools[key].transpose(-2, -1) for key in self.d4_key_pools.keys()], dim=1), \
+                    torch.cat([p for p in self.d4_token_pools.values()], dim=0), \
+                    torch.stack([p for p in self.d4_linear.values()], dim=0).mean(dim=0), \
+                    torch.cat([self.latent_key_pools[key] @ self.latent_token_pools[key].transpose(-2, -1) for key in self.latent_key_pools.keys()], dim=1), \
+                    torch.cat([p for p in self.latent_token_pools.values()], dim=0), \
+                    torch.stack([p for p in self.latent_linear.values()], dim=0).mean(dim=0)
+
+
         if dataset_uid not in self.dataset_uids:
             return self.add_new_key_token_pool(dataset_uid, dims)
         else:
-            # return self.i1_key_pools[dataset_uid], self.i1_token_pools[dataset_uid], self.i1_linear[dataset_uid], \
-                # self.d1_key_pools[dataset_uid], self.d1_token_pools[dataset_uid], self.d1_linear[dataset_uid], \
             return self.i2_key_pools[dataset_uid], self.i2_token_pools[dataset_uid], self.i2_linear[dataset_uid], \
                     self.d2_key_pools[dataset_uid], self.d2_token_pools[dataset_uid], self.d2_linear[dataset_uid], \
                     self.i3_key_pools[dataset_uid], self.i3_token_pools[dataset_uid], self.i3_linear[dataset_uid], \
@@ -84,13 +108,6 @@ class ContinualLearningModel(torch.nn.Module):
                     self.i4_key_pools[dataset_uid], self.i4_token_pools[dataset_uid], self.i4_linear[dataset_uid], \
                     self.d4_key_pools[dataset_uid], self.d4_token_pools[dataset_uid], self.d4_linear[dataset_uid], \
                     self.latent_key_pools[dataset_uid], self.latent_token_pools[dataset_uid], self.latent_linear[dataset_uid]
-            # return self.i2_key_pools, self.i2_token_pools, self.i2_linear, \
-            #         self.d2_key_pools, self.d2_token_pools, self.d2_linear, \
-            #         self.i3_key_pools, self.i3_token_pools, self.i3_linear, \
-            #         self.d3_key_pools, self.d3_token_pools, self.d3_linear, \
-            #         self.i4_key_pools, self.i4_token_pools, self.i4_linear, \
-            #         self.d4_key_pools, self.d4_token_pools, self.d4_linear, \
-            #         self.latent_key_pools, self.latent_token_pools, self.latent_linear
 
 
     def add_new_key_token_pool(self, dataset_uid, dims, manual=False):

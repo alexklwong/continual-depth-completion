@@ -29,6 +29,7 @@ def train(train_image_paths,
           unfreeze_model,  # store_true
           domain_incremental,  # store_true
           task_agnostic,  # store_true
+          moe,  # store_true
           # Depth network settings
           model_name,
           network_modules,
@@ -580,6 +581,10 @@ def train(train_image_paths,
 
     for epoch in range(1, learning_schedule[-1] + 1):
 
+        if moe:
+            print("\n\n\nSkipping training... MoE evaluation\n\n\n")
+            break
+
         # Set learning rate schedule
         if epoch > learning_schedule[learning_schedule_pos]:
             learning_schedule_pos = learning_schedule_pos + 1
@@ -976,6 +981,7 @@ def train(train_image_paths,
                             min_evaluate_depths=min_evaluate_depths,
                             max_evaluate_depths=max_evaluate_depths,
                             evaluation_protocols=evaluation_protocols,
+                            moe=moe,
                             device=device,
                             summary_writer=val_summary_writer,
                             n_image_per_summary=n_image_per_summary,
@@ -1007,6 +1013,7 @@ def train(train_image_paths,
             min_evaluate_depths=min_evaluate_depths,
             max_evaluate_depths=max_evaluate_depths,
             evaluation_protocols=evaluation_protocols,
+            moe=moe,
             device=device,
             summary_writer=val_summary_writer,
             n_image_per_summary=n_image_per_summary,
@@ -1027,6 +1034,7 @@ def validate(depth_model,
              min_evaluate_depths,
              max_evaluate_depths,
              evaluation_protocols,
+             moe,
              device,
              summary_writer,
              n_image_per_summary=4,
@@ -1085,6 +1093,7 @@ def validate(depth_model,
                         validity_map=validity_map,
                         intrinsics=intrinsics,
                         dataset_uid=dataset_uid,
+                        moe=moe,
                         return_all_outputs=False)
 
                 if (idx % n_interval_per_summary) == 0 and summary_writer is not None:

@@ -51,6 +51,8 @@ parser.add_argument('--domain_incremental',
     action='store_true', default=False, help='Use flag to evaluate on domain-incremental setting')
 parser.add_argument('--task_agnostic',
     action='store_true', default=False, help='Use flag to evaluate on task-agnostic setting')
+parser.add_argument('--moe',
+    action='store_true', default=False, help='Use flag to evaluate with mixture of experts')
 
 # Depth network settings
 parser.add_argument('--model_name',
@@ -211,6 +213,7 @@ if __name__ == '__main__':
         unfreeze_model=args.unfreeze_model,
         domain_incremental=args.domain_incremental,
         task_agnostic=args.task_agnostic,
+        moe=args.moe,
         # Depth network settings
         model_name=args.model_name,
         network_modules=args.network_modules,
