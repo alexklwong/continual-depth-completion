@@ -38,6 +38,7 @@ def train(train_image_paths,
           train_batch_size,
           train_crop_shapes,
           learning_rates,
+          pose_learning_rates,
           learning_schedule,
           augmentation_probabilities,
           augmentation_schedule,
@@ -504,6 +505,7 @@ def train(train_image_paths,
     # Initialize optimizer with starting learning rate
     learning_schedule_pos = 0
     learning_rate = learning_rates[0]
+    pose_learning_rate = pose_learning_rates[0]
 
     augmentation_schedule_pos = 0
     augmentation_probability = augmentation_probabilities[0]
@@ -527,7 +529,7 @@ def train(train_image_paths,
                 'params' : parameters_pose_model,
                 'weight_decay' : w_weight_decay_pose
             }],
-            lr=learning_rate)
+            lr=pose_learning_rate)
     else:
         optimizer_pose = None
 
@@ -567,7 +569,7 @@ def train(train_image_paths,
 
         if 'pose' in network_modules:
             for g in optimizer_pose.param_groups:
-                g['lr'] = learning_rate
+                g['lr'] = pose_learning_rate
         
         for g in optimizer_cl.param_groups:
             g['lr'] = learning_rate
@@ -584,6 +586,7 @@ def train(train_image_paths,
         if epoch > learning_schedule[learning_schedule_pos]:
             learning_schedule_pos = learning_schedule_pos + 1
             learning_rate = learning_rates[learning_schedule_pos]
+            pose_learning_rate = pose_learning_rates[learning_schedule_pos]
 
             # Update optimizer learning rates for depth network
             for g in optimizer_depth.param_groups:
@@ -592,7 +595,7 @@ def train(train_image_paths,
             if supervision_type == 'unsupervised':
                 # Update optimizer learning rates for pose network
                 for g in optimizer_pose.param_groups:
-                    g['lr'] = learning_rate
+                    g['lr'] = pose_learning_rate
             
             for g in optimizer_cl.param_groups:
                 g['lr'] = learning_rate

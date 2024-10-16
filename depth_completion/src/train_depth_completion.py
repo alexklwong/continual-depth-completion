@@ -69,6 +69,8 @@ parser.add_argument('--train_crop_shapes',
     nargs='+', type=int, default=[480, 640], help='List of (height, width) crop shapes for training data')
 parser.add_argument('--learning_rates',
     nargs='+', type=float, default=[1e-4, 5e-5], help='Space delimited list of learning rates')
+parser.add_argument('--pose_learning_rates',
+    nargs='+', type=float, default=[], help='Space delimited list of PoseNet learning rates')
 parser.add_argument('--learning_schedule',
     nargs='+', type=int, default=[5, 10], help='Space delimited list to change learning rate')
 
@@ -177,6 +179,8 @@ if __name__ == '__main__':
 
     # Training settings
     assert len(args.learning_rates) == len(args.learning_schedule)
+    if len(args.pose_learning_rates) != len(args.learning_schedule):
+        args.pose_learning_rates = args.learning_rates
 
     args.augmentation_random_crop_type = [
         crop_type.lower() for crop_type in args.augmentation_random_crop_type
@@ -220,6 +224,7 @@ if __name__ == '__main__':
         train_batch_size=args.train_batch_size,
         train_crop_shapes=args.train_crop_shapes,
         learning_rates=args.learning_rates,
+        pose_learning_rates=args.pose_learning_rates,
         learning_schedule=args.learning_schedule,
         augmentation_probabilities=args.augmentation_probabilities,
         augmentation_schedule=args.augmentation_schedule,
