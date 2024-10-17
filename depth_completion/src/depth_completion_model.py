@@ -17,8 +17,10 @@ class DepthCompletionModel(object):
             minimum depth to predict
         max_predict_depth : float
             maximum depth to predict
-        key_token_pool_size : int
-            number of keys/tokens in the pool
+        image_pool_size : int
+            size of image pool for TokenCDC
+        depth_pool_size : int
+            size of depth pool for TokenCDC
         frozen : bool
             for TokenCDC, freeze the model if True
         device : torch.device
@@ -30,7 +32,8 @@ class DepthCompletionModel(object):
                  network_modules,
                  min_predict_depth,
                  max_predict_depth,
-                 key_token_pool_size,
+                 image_pool_size,
+                 depth_pool_size,
                  unfrozen=False,
                  device=torch.device('cuda')):
 
@@ -38,7 +41,8 @@ class DepthCompletionModel(object):
         self.network_modules = network_modules
         self.min_predict_depth = min_predict_depth
         self.max_predict_depth = max_predict_depth
-        self.key_token_pool_size = key_token_pool_size  # TokenCDC
+        self.image_pool_size = image_pool_size  # TokenCDC
+        self.depth_pool_size = depth_pool_size
         self.frozen = not unfrozen  # TokenCDC: freeze model if unfrozen=False
         self.device = device
 
@@ -102,7 +106,8 @@ class DepthCompletionModel(object):
         # TokenCDC: Initialize TokenCDC params
         from continual_learning_model import ContinualLearningModel
         self.model_cl = ContinualLearningModel(
-            key_token_pool_size=key_token_pool_size,
+            image_pool_size=image_pool_size,
+            depth_pool_size=depth_pool_size,
             device=device)
 
     def _get_model_cl(self):

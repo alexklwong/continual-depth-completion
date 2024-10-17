@@ -25,7 +25,8 @@ def train(train_image_paths,
           val_ground_truth_paths,
           val_dataset_uids,  # TokenCDC
           # TokenCDC-specific settings
-          key_token_pool_size,  
+          image_pool_size,
+          depth_pool_size,
           unfreeze_model,  # store_true
           domain_incremental,  # store_true
           task_agnostic,  # store_true
@@ -361,7 +362,8 @@ def train(train_image_paths,
         network_modules=network_modules,
         min_predict_depth=min_predict_depth,
         max_predict_depth=max_predict_depth,
-        key_token_pool_size=key_token_pool_size,  # TokenCDC
+        image_pool_size=image_pool_size,  # TokenCDC
+        depth_pool_size=depth_pool_size,  # TokenCDC
         unfrozen=unfreeze_model,  # TokenCDC
         device=device)
 

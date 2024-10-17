@@ -43,8 +43,10 @@ parser.add_argument('--val_dataset_uids',
     nargs='+', type=str, default=None, help='Unique dataset ID string for each validation dataset')
 
 # TokenCDC settings
-parser.add_argument('--key_token_pool_size',
-    type=int, default=30, help='Size of each key/token pool')
+parser.add_argument('--image_pool_size',
+    type=int, default=10, help='Size of each image key/token pool')
+parser.add_argument('--depth_pool_size',
+    type=int, default=10, help='Size of each depth key/token pool')
 parser.add_argument('--unfreeze_model',
     action='store_true', default=False, help='Use flag to freeze model and only learn tokens')
 parser.add_argument('--domain_incremental',
@@ -211,7 +213,8 @@ if __name__ == '__main__':
         val_ground_truth_paths=args.val_ground_truth_paths,
         val_dataset_uids=args.val_dataset_uids,  # TokenCDC: Added val dataset IDs
         # TokenCDC-specific settings
-        key_token_pool_size=args.key_token_pool_size,
+        image_pool_size=args.image_pool_size,
+        depth_pool_size=args.depth_pool_size,
         unfreeze_model=args.unfreeze_model,
         domain_incremental=args.domain_incremental,
         task_agnostic=args.task_agnostic,
