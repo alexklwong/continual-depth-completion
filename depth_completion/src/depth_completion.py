@@ -28,6 +28,7 @@ def train(train_image_paths,
           image_pool_size,
           depth_pool_size,
           unfreeze_model,  # store_true
+          no_latent,  # store_true
           domain_incremental,  # store_true
           task_agnostic,  # store_true
           # Depth network settings
@@ -826,6 +827,7 @@ def train(train_image_paths,
                     image=input_image0,
                     sparse_depth=input_sparse_depth0,
                     validity_map=input_validity_map0,
+                    no_latent=no_latent,
                     intrinsics=input_intrinsics,
                     dataset_uid=dataset_uid,
                     return_all_outputs=True)
@@ -983,6 +985,7 @@ def train(train_image_paths,
                             evaluation_protocols=evaluation_protocols,
                             device=device,
                             summary_writer=val_summary_writer,
+                            no_latent=no_latent,
                             n_image_per_summary=n_image_per_summary,
                             log_path=log_path)
 
@@ -1014,6 +1017,7 @@ def train(train_image_paths,
             evaluation_protocols=evaluation_protocols,
             device=device,
             summary_writer=val_summary_writer,
+            no_latent=no_latent,
             n_image_per_summary=n_image_per_summary,
             log_path=log_path)
 
@@ -1034,6 +1038,7 @@ def validate(depth_model,
              evaluation_protocols,
              device,
              summary_writer,
+             no_latent,
              n_image_per_summary=4,
              n_interval_per_summary=250,
              log_path=None):
@@ -1088,6 +1093,7 @@ def validate(depth_model,
                         image=image,
                         sparse_depth=sparse_depth,
                         validity_map=validity_map,
+                        no_latent=no_latent,
                         intrinsics=intrinsics,
                         dataset_uid=dataset_uid,
                         return_all_outputs=False)

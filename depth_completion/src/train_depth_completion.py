@@ -49,6 +49,8 @@ parser.add_argument('--depth_pool_size',
     type=int, default=10, help='Size of each depth key/token pool')
 parser.add_argument('--unfreeze_model',
     action='store_true', default=False, help='Use flag to freeze model and only learn tokens')
+parser.add_argument('--no_latent',
+    action='store_true', default=False, help='Use flag to NOT use tokens in latent space')
 parser.add_argument('--domain_incremental',
     action='store_true', default=False, help='Use flag to evaluate on domain-incremental setting')
 parser.add_argument('--task_agnostic',
@@ -216,6 +218,7 @@ if __name__ == '__main__':
         image_pool_size=args.image_pool_size,
         depth_pool_size=args.depth_pool_size,
         unfreeze_model=args.unfreeze_model,
+        no_latent=args.no_latent,
         domain_incremental=args.domain_incremental,
         task_agnostic=args.task_agnostic,
         # Depth network settings
