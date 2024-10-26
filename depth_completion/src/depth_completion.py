@@ -29,8 +29,7 @@ def train(train_image_paths,
           depth_pool_size,
           unfreeze_model,  # store_true
           no_latent,  # store_true
-          domain_incremental,  # store_true
-          task_agnostic,  # store_true
+          domain_agnostic,  # store_true
           # Depth network settings
           model_name,
           network_modules,
@@ -823,14 +822,14 @@ def train(train_image_paths,
                 FORWARD THROUGH THE NETWORK
                 '''
                 # Inputs: augmented image, augmented sparse depth map, original (but aligned) validity map
-                output_depth0 = depth_completion_model.forward_depth(
-                    image=input_image0,
-                    sparse_depth=input_sparse_depth0,
-                    validity_map=input_validity_map0,
-                    no_latent=no_latent,
-                    intrinsics=input_intrinsics,
-                    dataset_uid=dataset_uid,
-                    return_all_outputs=True)
+                output_depth0, selector_query, selector_key_idx, dataset_selectors = \
+                    depth_completion_model.forward_depth(
+                        image=input_image0,
+                        sparse_depth=input_sparse_depth0,
+                        validity_map=input_validity_map0,
+                        intrinsics=input_intrinsics,
+                        dataset_uid=dataset_uid,
+                        return_all_outputs=True)
 
                 # TokenCDC: Check if new parameters were added during the forward pass, to add to the optimizer
                 new_params = depth_completion_model.get_new_params()
@@ -876,7 +875,10 @@ def train(train_image_paths,
                     intrinsics=intrinsics,
                     pose0to1=pose0to1,
                     pose0to2=pose0to2,
-                    domain_incremental=domain_incremental,
+                    queries=selector_query,
+                    key_idx=selector_key_idx,
+                    key_list=dataset_selectors,
+                    domain_agnostic=domain_agnostic,
                     supervision_type=supervision_type,
                     w_losses=w_losses)
 
@@ -987,6 +989,7 @@ def train(train_image_paths,
                             summary_writer=val_summary_writer,
                             no_latent=no_latent,
                             n_image_per_summary=n_image_per_summary,
+                            domain_agnostic=domain_agnostic,
                             log_path=log_path)
 
                     # Switch back to training
@@ -1019,6 +1022,7 @@ def train(train_image_paths,
             summary_writer=val_summary_writer,
             no_latent=no_latent,
             n_image_per_summary=n_image_per_summary,
+            domain_agnostic=domain_agnostic,
             log_path=log_path)
 
     # Save checkpoints
@@ -1041,6 +1045,7 @@ def validate(depth_model,
              no_latent,
              n_image_per_summary=4,
              n_interval_per_summary=250,
+             domain_agnostic=False,
              log_path=None):
 
     # TokenCDC TEST: Sanity check number of key and token parameters
@@ -1096,6 +1101,7 @@ def validate(depth_model,
                         no_latent=no_latent,
                         intrinsics=intrinsics,
                         dataset_uid=dataset_uid,
+                        domain_agnostic_eval=domain_agnostic,
                         return_all_outputs=False)
 
                 if (idx % n_interval_per_summary) == 0 and summary_writer is not None:
