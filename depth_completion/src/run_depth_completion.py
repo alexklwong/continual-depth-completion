@@ -42,7 +42,7 @@ parser.add_argument('--min_evaluate_depth',
     type=float, default=[0.20], help='Minimum value of depth to evaluate')
 parser.add_argument('--max_evaluate_depth',
     type=float, default=[5.00], help='Maximum value of depth to evaluate')
-parser.add_argument('--evaluation_protocol',
+parser.add_argument('--evaluation_protocols',
     type=str, default='default', help='Protocol for evaluation i.e. vkitti, nuscenes, default')
 
 # Output settings
@@ -52,6 +52,14 @@ parser.add_argument('--save_outputs',
     action='store_true', help='If set then store inputs and outputs into output path')
 parser.add_argument('--keep_input_filenames',
     action='store_true', help='If set then keep original input filenames')
+
+# Method parameters
+parser.add_argument('--image_pool_size',
+    type=int, default=100, help='Number of images to pool')
+parser.add_argument('--depth_pool_size',    
+    type=int, default=100, help='Number of depths to pool')
+parser.add_argument('--dataset_uid',
+    type=str, default='kitti', help='Dataset unique identifier')
 
 # Hardware settings
 parser.add_argument('--device',
@@ -90,10 +98,14 @@ if __name__ == '__main__':
         # Evaluation settings
         min_evaluate_depth=args.min_evaluate_depth,
         max_evaluate_depth=args.max_evaluate_depth,
-        evaluation_protocol=args.evaluation_protocol,
+        evaluation_protocols=args.evaluation_protocols,
         # Output settings
         output_path=args.output_path,
         save_outputs=args.save_outputs,
         keep_input_filenames=args.keep_input_filenames,
+        # Method parameters
+        image_pool_size=args.image_pool_size,
+        depth_pool_size=args.depth_pool_size,
+        dataset_uid=args.dataset_uid,
         # Hardware settings
         device=args.device)

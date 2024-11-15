@@ -1230,6 +1230,304 @@ def validate(depth_model,
     return best_results
 
 
+def run(image_path,
+        sparse_depth_path,
+        intrinsics_path,
+        ground_truth_path,
+        # Restore path settings
+        restore_paths,
+        # Input settings
+        input_channels_image,
+        input_channels_depth,
+        normalized_image_range,
+        # Depth network settings
+        model_name,
+        network_modules,
+        min_predict_depth,
+        max_predict_depth,
+        # Evaluation settings
+        min_evaluate_depth,
+        max_evaluate_depth,
+        evaluation_protocols,
+        # Output settings
+        output_path,
+        save_outputs,
+        keep_input_filenames,
+        # Method parameters
+        image_pool_size,
+        depth_pool_size,
+        dataset_uid,
+        # Hardware settings
+        device):
+
+    # Select device to run on
+    if device == 'cuda' or device == 'gpu':
+        device = torch.device('cuda')
+    elif device == 'cpu':
+        device = torch.device('cpu')
+    else:
+        raise ValueError('Unsupported device: {}'.format(device))
+
+    '''
+    Set up output paths
+    '''
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    log_path = os.path.join(output_path, 'results.txt')
+    output_dirpath = os.path.join(output_path, 'outputs')
+
+    if save_outputs:
+        # Create output directories
+        image_dirpath = os.path.join(output_dirpath, 'image')
+        output_depth_dirpath = os.path.join(output_dirpath, 'output_depth')
+        sparse_depth_dirpath = os.path.join(output_dirpath, 'sparse_depth')
+        ground_truth_dirpath = os.path.join(output_dirpath, 'ground_truth')
+
+        dirpaths = [
+            output_dirpath,
+            image_dirpath,
+            output_depth_dirpath,
+            sparse_depth_dirpath,
+            ground_truth_dirpath
+        ]
+
+        for dirpath in dirpaths:
+            if not os.path.exists(dirpath):
+                os.makedirs(dirpath)
+
+    '''
+    Load input paths and set up dataloader
+    '''
+    image_paths = data_utils.read_paths(image_path)
+    sparse_depth_paths = data_utils.read_paths(sparse_depth_path)
+    intrinsics_paths = data_utils.read_paths(intrinsics_path)
+
+    is_available_ground_truth = False
+
+    if ground_truth_path is not None and ground_truth_path != '':
+        is_available_ground_truth = True
+        ground_truth_paths = data_utils.read_paths(ground_truth_path)
+    else:
+        ground_truth_paths = None
+
+    n_sample = len(image_paths)
+
+    input_paths = [
+        image_paths,
+        sparse_depth_paths,
+        intrinsics_paths
+    ]
+
+    if is_available_ground_truth:
+        input_paths.append(ground_truth_paths)
+
+    for paths in input_paths:
+        assert n_sample == len(paths)
+
+    # Set up dataloader
+    dataloader = torch.utils.data.DataLoader(
+        datasets.DepthCompletionInferenceDataset(
+            image_paths=image_paths,
+            sparse_depth_paths=sparse_depth_paths,
+            intrinsics_paths=intrinsics_paths,
+            ground_truth_paths=ground_truth_paths,
+            dataset_uid=dataset_uid,
+            load_image_triplets=False),
+        batch_size=1,
+        shuffle=False,
+        num_workers=1,
+        drop_last=False)
+
+    '''
+    Set up the model
+    '''
+    # Build depth completion network
+    depth_model = DepthCompletionModel(
+        model_name=model_name,
+        network_modules=network_modules,
+        min_predict_depth=min_predict_depth,
+        max_predict_depth=max_predict_depth,
+        image_pool_size=image_pool_size,  # TokenCDC
+        depth_pool_size=depth_pool_size,  # TokenCDC
+        device=device)
+
+    # Restore model and set to evaluation mode
+    depth_model.restore_model(restore_paths)
+    depth_model.eval()
+
+    parameters_depth_model = depth_model.parameters_depth()
+
+    '''
+    Log input paths
+    '''
+    log('Input paths:', log_path)
+    input_paths = [
+        image_path,
+        sparse_depth_path,
+        intrinsics_path,
+    ]
+
+    if is_available_ground_truth:
+        input_paths.append(ground_truth_path)
+
+    for path in input_paths:
+        log(path, log_path)
+    log('', log_path)
+
+    '''
+    Log all settings
+    '''
+    log_network_settings(
+        log_path,
+        # Depth network settings
+        model_name=model_name,
+        network_modules=network_modules,
+        min_predict_depth=min_predict_depth,
+        max_predict_depth=max_predict_depth,
+        # Weight settings
+        parameters_depth_model=parameters_depth_model)
+
+    log_evaluation_settings(
+        log_path,
+        min_evaluate_depths=[min_evaluate_depth],
+        max_evaluate_depths=[max_evaluate_depth],
+        evaluation_protocols=evaluation_protocols)
+
+    log_system_settings(
+        log_path,
+        # Checkpoint settings
+        checkpoint_path=output_path,
+        restore_paths=restore_paths,
+        # Hardware settings
+        device=device,
+        n_thread=1)
+
+    '''
+    Run model
+    '''
+    # Set up metrics in case groundtruth is available
+    mae = np.zeros(n_sample)
+    rmse = np.zeros(n_sample)
+    imae = np.zeros(n_sample)
+    irmse = np.zeros(n_sample)
+
+    time_elapse = 0.0
+
+    for idx, inputs in tqdm.tqdm(enumerate(dataloader), total=n_sample):
+
+        # Move inputs to device
+        inputs = [
+            in_.to(device) for in_ in inputs
+        ]
+
+        if dataloader.dataset.is_available_ground_truth:
+            image, sparse_depth, intrinsics, ground_truth = inputs
+        else:
+            image, sparse_depth, intrinsics = inputs
+        # Check if image is normalized
+        #print(torch.max(image))
+        time_start = time.time()
+
+        with torch.no_grad():
+            # Validity map is where sparse depth is available
+            validity_map = torch.where(
+                sparse_depth > 0,
+                torch.ones_like(sparse_depth),
+                sparse_depth)
+
+            # Forward through network
+            output_depth = depth_model.forward_depth(
+                image=image,
+                sparse_depth=sparse_depth,
+                validity_map=validity_map,
+                intrinsics=intrinsics,
+                dataset_uid=dataset_uid,
+                return_all_outputs=False)
+
+        time_elapse = time_elapse + (time.time() - time_start)
+        #print(torch.max(image))
+        # Convert to numpy
+        output_depth = np.squeeze(output_depth.detach().cpu().numpy())
+
+        # Save to output
+        if save_outputs:
+            image = np.transpose(np.squeeze(image.cpu().numpy()), (1, 2, 0))
+            sparse_depth = np.squeeze(sparse_depth.cpu().numpy())
+
+            if keep_input_filenames:
+                filename = os.path.splitext(os.path.basename(image_paths[idx]))[0] + '.png'
+            else:
+                filename = '{:010d}.png'.format(idx)
+            #print(np.max(image))
+            image_path = os.path.join(image_dirpath, filename)
+            #image = (255 * image).astype(np.uint8)
+            Image.fromarray(image.astype(np.uint8)).save(image_path)
+
+            output_depth_path = os.path.join(output_depth_dirpath, filename)
+            data_utils.save_depth(output_depth, output_depth_path)
+
+            sparse_depth_path = os.path.join(sparse_depth_dirpath, filename)
+            data_utils.save_depth(sparse_depth, sparse_depth_path)
+
+        if is_available_ground_truth:
+
+            ground_truth = np.squeeze(ground_truth.cpu().numpy())
+            validity_map = np.where(ground_truth > 0, 1, 0)
+
+            if save_outputs:
+                ground_truth_path = os.path.join(ground_truth_dirpath, filename)
+                data_utils.save_depth(ground_truth, ground_truth_path)
+
+            validity_mask = np.where(validity_map > 0, 1, 0)
+            min_max_mask = np.logical_and(
+                ground_truth > min_evaluate_depth,
+                ground_truth < max_evaluate_depth)
+            mask = np.where(np.logical_and(validity_mask, min_max_mask) > 0)
+
+            output_depth = output_depth[mask]
+            ground_truth = ground_truth[mask]
+
+            mae[idx] = eval_utils.mean_abs_err(1000.0 * output_depth, 1000.0 * ground_truth)
+            rmse[idx] = eval_utils.root_mean_sq_err(1000.0 * output_depth, 1000.0 * ground_truth)
+            imae[idx] = eval_utils.inv_mean_abs_err(0.001 * output_depth, 0.001 * ground_truth)
+            irmse[idx] = eval_utils.inv_root_mean_sq_err(0.001 * output_depth, 0.001 * ground_truth)
+
+    # Compute total time elapse in ms
+    time_elapse = time_elapse * 1000.0
+
+    if is_available_ground_truth:
+        mae_mean   = np.mean(mae)
+        rmse_mean  = np.mean(rmse)
+        imae_mean  = np.mean(imae)
+        irmse_mean = np.mean(irmse)
+
+        mae_std = np.std(mae)
+        rmse_std = np.std(rmse)
+        imae_std = np.std(imae)
+        irmse_std = np.std(irmse)
+
+        # Print evaluation results to console and file
+        log('Evaluation results:', log_path)
+        log('{:>8}  {:>8}  {:>8}  {:>8}'.format(
+            'MAE', 'RMSE', 'iMAE', 'iRMSE'),
+            log_path)
+        log('{:8.3f}  {:8.3f}  {:8.3f}  {:8.3f}'.format(
+            mae_mean, rmse_mean, imae_mean, irmse_mean),
+            log_path)
+
+        log('{:>8}  {:>8}  {:>8}  {:>8}'.format(
+            '+/-', '+/-', '+/-', '+/-'),
+            log_path)
+        log('{:8.3f}  {:8.3f}  {:8.3f}  {:8.3f}'.format(
+            mae_std, rmse_std, imae_std, irmse_std),
+            log_path)
+
+    # Log run time
+    log('Total time: {:.2f} ms  Average time per sample: {:.2f} ms'.format(
+        time_elapse, time_elapse / float(n_sample)))
+
+
 '''
 Helper functions for logging
 '''

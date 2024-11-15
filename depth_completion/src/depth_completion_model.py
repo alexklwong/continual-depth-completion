@@ -122,7 +122,7 @@ class DepthCompletionModel(object):
                       sparse_depth, 
                       validity_map, 
                       dataset_uid,  # TokenCDC
-                      no_latent,
+                      no_latent=False,  # TokenCDC
                       intrinsics=None, 
                       return_all_outputs=False):
         '''

@@ -380,7 +380,7 @@ class VOICEDModel(object):
                 optimizer_pose)
 
         if optimizer_depth is None and optimizer_pose is None:
-            return train_step
+            return train_step, None, None
         else:
             return train_step, optimizer_depth, optimizer_pose
 
