@@ -772,6 +772,9 @@ def train(train_image_paths,
                         padding_modes=padding_modes,
                         interpolation_modes=interpolation_modes,
                         random_transform_probability=augmentation_probability)
+                    
+                # NO TRANSFORMATIONS PERFORMED!
+                transform_performed_geometric = {}
 
                 # TODO: Refactor this as a function inside transforms
                 # Erode to prevent block artifacts from resampling
@@ -851,10 +854,10 @@ def train(train_image_paths,
 
                 # For visualization
                 if (train_step % n_step_per_summary) == 0:
-                    output_depth0_initial = output_depth0[0].detach().clone()
+                    output_depth0_initial = output_depth0.detach().clone()
 
                 output_depth0, validity_map_image0 = train_transforms_geometric.reverse_transform(
-                    images_arr=output_depth0,
+                    images_arr=[output_depth0],
                     transform_performed=transform_performed_geometric,
                     return_all_outputs=True,
                     padding_modes=[padding_modes[0]])

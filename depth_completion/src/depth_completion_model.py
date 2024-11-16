@@ -95,6 +95,14 @@ class DepthCompletionModel(object):
                 min_predict_depth=min_predict_depth,
                 max_predict_depth=max_predict_depth,
                 device=device)
+        elif 'uformer' in model_name:
+            from uformer_model import Uformer_Model
+
+            self.model = Uformer_Model(
+                network_modules=network_modules,
+                min_predict_depth=min_predict_depth,
+                max_predict_depth=max_predict_depth,
+                device=device)
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(model_name))
 
@@ -272,7 +280,6 @@ class DepthCompletionModel(object):
                                     torch.cat([i3_skip_with_tokens, d3_skip_with_tokens], dim=1),
                                     torch.cat([i4_skip_with_tokens, d4_skip_with_tokens], dim=1)]
         else:
-            print("\n\n\nWARNING: TokenCDC NOT being used!!!\n\n\n")
             latent_with_tokens = latent
             skips_with_tokens = [torch.cat([skips[0][0], skips[0][1]], dim=1), 
                                     torch.cat([skips[1][0], skips[1][1]], dim=1),
@@ -526,6 +533,12 @@ class DepthCompletionModel(object):
                                                                 model_pose_restore_path=restore_paths[1] if len(restore_paths) > 1 else None,
                                                                 optimizer_depth=optimizer_depth,
                                                                 optimizer_pose=optimizer_pose)
+        elif 'uformer' in self.model_name:
+            return self.model.restore_model(
+                model_depth_restore_path=restore_paths[0],
+                model_pose_restore_path=restore_paths[1] if len(restore_paths) > 1 else None,
+                optimizer_depth=optimizer_depth,
+                optimizer_pose=optimizer_pose)
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
         
@@ -578,6 +591,13 @@ class DepthCompletionModel(object):
         elif 'voiced' in self.model_name:
             self.model.save_model(
                 os.path.join(checkpoint_dirpath, 'voiced-{}.pth'.format(step)),
+                step,
+                optimizer_depth,
+                model_pose_checkpoint_path=os.path.join(checkpoint_dirpath, 'posenet-{}.pth'.format(step)),
+                optimizer_pose=optimizer_pose)
+        elif 'uformer' in self.model_name:
+            self.model.save_model(
+                os.path.join(checkpoint_dirpath, 'uformer-{}.pth'.format(step)),
                 step,
                 optimizer_depth,
                 model_pose_checkpoint_path=os.path.join(checkpoint_dirpath, 'posenet-{}.pth'.format(step)),
