@@ -116,28 +116,28 @@ class ContinualLearningModel(torch.nn.Module):
         # CREATE key and token pools
         new_i2_key_pool = torch.nn.Parameter(torch.empty((i2_dim, i2_dim), device=self.device), requires_grad=True)
         new_i2_token_pool = torch.nn.Parameter(torch.empty((self.image_pool_size, i2_dim), device=self.device), requires_grad=True)
-        new_i2_linear = torch.nn.Parameter(torch.empty((i2_dim,1,1), device=self.device), requires_grad=True)
+        new_i2_linear = torch.nn.Parameter(torch.empty((1, i2_dim), device=self.device), requires_grad=True)
         new_d2_key_pool = torch.nn.Parameter(torch.empty((d2_dim, d2_dim), device=self.device), requires_grad=True)
         new_d2_token_pool = torch.nn.Parameter(torch.empty((self.depth_pool_size, d2_dim), device=self.device), requires_grad=True)
-        new_d2_linear = torch.nn.Parameter(torch.empty((d2_dim,1,1), device=self.device), requires_grad=True)
+        new_d2_linear = torch.nn.Parameter(torch.empty((1, d2_dim), device=self.device), requires_grad=True)
 
         new_i3_key_pool = torch.nn.Parameter(torch.empty((i3_dim, i3_dim), device=self.device), requires_grad=True)
         new_i3_token_pool = torch.nn.Parameter(torch.empty((self.image_pool_size, i3_dim), device=self.device), requires_grad=True)
-        new_i3_linear = torch.nn.Parameter(torch.empty((i3_dim,1,1), device=self.device), requires_grad=True)
+        new_i3_linear = torch.nn.Parameter(torch.empty((1, i3_dim), device=self.device), requires_grad=True)
         new_d3_key_pool = torch.nn.Parameter(torch.empty((d3_dim, d3_dim), device=self.device), requires_grad=True)
         new_d3_token_pool = torch.nn.Parameter(torch.empty((self.depth_pool_size, d3_dim), device=self.device), requires_grad=True)
-        new_d3_linear = torch.nn.Parameter(torch.empty((d3_dim,1,1), device=self.device), requires_grad=True)
+        new_d3_linear = torch.nn.Parameter(torch.empty((1, d3_dim), device=self.device), requires_grad=True)
 
         new_i4_key_pool = torch.nn.Parameter(torch.empty((i4_dim, i4_dim), device=self.device), requires_grad=True)
         new_i4_token_pool = torch.nn.Parameter(torch.empty((self.image_pool_size, i4_dim), device=self.device), requires_grad=True)
-        new_i4_linear = torch.nn.Parameter(torch.empty((i4_dim,1,1), device=self.device), requires_grad=True)
+        new_i4_linear = torch.nn.Parameter(torch.empty((1, i4_dim), device=self.device), requires_grad=True)
         new_d4_key_pool = torch.nn.Parameter(torch.empty((d4_dim, d4_dim), device=self.device), requires_grad=True)
         new_d4_token_pool = torch.nn.Parameter(torch.empty((self.depth_pool_size, d4_dim), device=self.device), requires_grad=True)
-        new_d4_linear = torch.nn.Parameter(torch.empty((d4_dim,1,1), device=self.device), requires_grad=True)
+        new_d4_linear = torch.nn.Parameter(torch.empty((1, i4_dim), device=self.device), requires_grad=True)
 
         new_latent_key_pool = torch.nn.Parameter(torch.empty((latent_dim, latent_dim), device=self.device), requires_grad=True)
         new_latent_token_pool = torch.nn.Parameter(torch.empty((self.image_pool_size, latent_dim), device=self.device), requires_grad=True)
-        new_latent_linear = torch.nn.Parameter(torch.empty((latent_dim,1,1), device=self.device), requires_grad=True)
+        new_latent_linear = torch.nn.Parameter(torch.empty((1, latent_dim), device=self.device), requires_grad=True)
 
         # Initialize parameters using kaiming_normal_
         torch.nn.init.kaiming_normal_(new_i2_key_pool)

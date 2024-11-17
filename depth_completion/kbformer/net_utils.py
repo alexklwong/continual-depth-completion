@@ -81,7 +81,7 @@ def backproject_to_camera(depth, intrinsics, shape):
     xy_h = xy_h.view(n_batch, 3, -1)
 
     # Reshape depth as N x 1 x (H x W)
-    depth = depth.view(n_batch, 1, -1)
+    depth = depth.reshape(n_batch, 1, -1)
 
     # K^-1 [x, y, 1] z
     points = torch.matmul(torch.inverse(intrinsics), xy_h) * depth

@@ -67,7 +67,7 @@ class Uformer_Model(object):
         self.eval()
 
 
-    def forward_depth(self, image, sparse_depth, validity_map, intrinsics, return_all_outputs=False):
+    def forward_depth_encoder(self, image, sparse_depth, validity_map, intrinsics, return_all_outputs=False):
         '''
         Forwards inputs through the network
 
@@ -98,7 +98,14 @@ class Uformer_Model(object):
         image, sparse_depth, validity_map, intrinsics = \
             self.pad_inputs(image, sparse_depth, validity_map, intrinsics)
 
-        output = self.model_depth.forward(x=torch.cat([image, sparse_depth, validity_map], dim=1), intrinsics=intrinsics)
+        latent, skips, shape = self.model_depth.forward_encoder(x=torch.cat([image, sparse_depth, validity_map], dim=1), n_height=n_height, n_width=n_width, intrinsics=intrinsics)
+        return latent, skips, shape
+    
+        
+    def forward_depth_decoder(self, latent, skips, shape, return_all_outputs=False):
+        
+        output, n_height, n_width = self.model_depth.forward_decoder(latent, skips, shape)
+        
         # Linear output
         if isinstance(output, list):
             for i in range(len(output)):

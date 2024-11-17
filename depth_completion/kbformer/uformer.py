@@ -1149,10 +1149,11 @@ class Uformer(nn.Module):
                 weight_initializer=weight_initializer,
                 activation_func='leaky_relu')
 
-            dd_in = dd_in + n_filter_sparse_to_dense_pool
+            #dd_in = dd_in + n_filter_sparse_to_dense_pool  # image and depth separately
 
         # Input/Output
         self.input_proj = InputProj(in_channel=dd_in, out_channel=embed_dim, kernel_size=14, stride=14, act_layer=nn.LeakyReLU)
+        self.input_depth_proj = InputProj(in_channel=n_filter_sparse_to_dense_pool, out_channel=embed_dim, kernel_size=14, stride=14, act_layer=nn.LeakyReLU)
         self.output_proj = OutputProj(in_channel=2*embed_dim, out_channel=1, kernel_size=3, stride=1)
 
         # Encoder
@@ -1171,6 +1172,22 @@ class Uformer(nn.Module):
                             use_checkpoint=use_checkpoint,
                             token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag)
         self.dowsample_0 = dowsample(embed_dim, embed_dim*2)
+        self.encoderlayer_depth0 = BasicUformerLayer(dim=embed_dim,
+                            output_dim=embed_dim,
+                            input_resolution=(img_size,
+                                                img_size),
+                            depth=depths[0],
+                            num_heads=num_heads[0],
+                            win_size=win_size,
+                            mlp_ratio=self.mlp_ratio,
+                            qkv_bias=qkv_bias, qk_scale=qk_scale,
+                            drop=drop_rate, attn_drop=attn_drop_rate,
+                            drop_path=enc_dpr[sum(depths[:0]):sum(depths[:1])],
+                            norm_layer=norm_layer,
+                            use_checkpoint=use_checkpoint,
+                            token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag)
+        self.dowsample_depth0 = dowsample(embed_dim, embed_dim*2)
+        
         self.encoderlayer_1 = BasicUformerLayer(dim=embed_dim*2,
                             output_dim=embed_dim*2,
                             input_resolution=(img_size // 2,
@@ -1186,6 +1203,22 @@ class Uformer(nn.Module):
                             use_checkpoint=use_checkpoint,
                             token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag)
         self.dowsample_1 = dowsample(embed_dim*2, embed_dim*4)
+        self.encoderlayer_depth1 = BasicUformerLayer(dim=embed_dim*2,
+                            output_dim=embed_dim*2,
+                            input_resolution=(img_size // 2,
+                                                img_size // 2),
+                            depth=depths[1],
+                            num_heads=num_heads[1],
+                            win_size=win_size,
+                            mlp_ratio=self.mlp_ratio,
+                            qkv_bias=qkv_bias, qk_scale=qk_scale,
+                            drop=drop_rate, attn_drop=attn_drop_rate,
+                            drop_path=enc_dpr[sum(depths[:1]):sum(depths[:2])],
+                            norm_layer=norm_layer,
+                            use_checkpoint=use_checkpoint,
+                            token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag)
+        self.dowsample_depth1 = dowsample(embed_dim*2, embed_dim*4)
+        
         self.encoderlayer_2 = BasicUformerLayer(dim=embed_dim*4,
                             output_dim=embed_dim*4,
                             input_resolution=(img_size // (2 ** 2),
@@ -1201,6 +1234,22 @@ class Uformer(nn.Module):
                             use_checkpoint=use_checkpoint,
                             token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag)
         self.dowsample_2 = dowsample(embed_dim*4, embed_dim*8)
+        self.encoderlayer_depth2 = BasicUformerLayer(dim=embed_dim*4,
+                            output_dim=embed_dim*4,
+                            input_resolution=(img_size // (2 ** 2),
+                                                img_size // (2 ** 2)),
+                            depth=depths[2],
+                            num_heads=num_heads[2],
+                            win_size=win_size,
+                            mlp_ratio=self.mlp_ratio,
+                            qkv_bias=qkv_bias, qk_scale=qk_scale,
+                            drop=drop_rate, attn_drop=attn_drop_rate,
+                            drop_path=enc_dpr[sum(depths[:2]):sum(depths[:3])],
+                            norm_layer=norm_layer,
+                            use_checkpoint=use_checkpoint,
+                            token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag)
+        self.dowsample_depth2 = dowsample(embed_dim*4, embed_dim*8)
+        
         self.encoderlayer_3 = BasicUformerLayer(dim=embed_dim*8,
                             output_dim=embed_dim*8,
                             input_resolution=(img_size // (2 ** 3),
@@ -1216,10 +1265,25 @@ class Uformer(nn.Module):
                             use_checkpoint=use_checkpoint,
                             token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag)
         self.dowsample_3 = dowsample(embed_dim*8, embed_dim*16)
+        self.encoderlayer_depth3 = BasicUformerLayer(dim=embed_dim*8,
+                            output_dim=embed_dim*8,
+                            input_resolution=(img_size // (2 ** 3),
+                                                img_size // (2 ** 3)),
+                            depth=depths[3],
+                            num_heads=num_heads[3],
+                            win_size=win_size,
+                            mlp_ratio=self.mlp_ratio,
+                            qkv_bias=qkv_bias, qk_scale=qk_scale,
+                            drop=drop_rate, attn_drop=attn_drop_rate,
+                            drop_path=enc_dpr[sum(depths[:3]):sum(depths[:4])],
+                            norm_layer=norm_layer,
+                            use_checkpoint=use_checkpoint,
+                            token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag)
+        self.dowsample_depth3 = dowsample(embed_dim*8, embed_dim*16)
 
         # Bottleneck
-        self.conv = BasicUformerLayer(dim=embed_dim*16,
-                            output_dim=embed_dim*16,
+        self.conv = BasicUformerLayer(dim=embed_dim*32,
+                            output_dim=embed_dim*32,
                             input_resolution=(img_size // (2 ** 4),
                                                 img_size // (2 ** 4)),
                             depth=depths[4],
@@ -1234,86 +1298,21 @@ class Uformer(nn.Module):
                             token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag)
 
         if conv_dec:
-            self.upsample_0 = UpConv2d(in_channels=embed_dim * 16, out_channels=embed_dim * 8, kernel_size=3, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True))
-            self.decoderlayer_0 = Conv2d(embed_dim * 16, embed_dim * 16, kernel_size=3, stride=1, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True), use_batch_norm=True)
+            self.upsample_0 = UpConv2d(in_channels=embed_dim * 32, out_channels=embed_dim * 8, kernel_size=3, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True))
+            self.decoderlayer_0 = Conv2d(embed_dim * 24, embed_dim * 24, kernel_size=3, stride=1, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True), use_batch_norm=True)
 
-            self.upsample_1 = UpConv2d(in_channels=embed_dim * 16, out_channels=embed_dim * 4, kernel_size=3, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True))
-            self.decoderlayer_1 = Conv2d(embed_dim * 8, embed_dim * 8, kernel_size=3, stride=1, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True), use_batch_norm=True)
+            self.upsample_1 = UpConv2d(in_channels=embed_dim * 24, out_channels=embed_dim * 4, kernel_size=3, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True))
+            self.decoderlayer_1 = Conv2d(embed_dim * 12, embed_dim * 12, kernel_size=3, stride=1, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True), use_batch_norm=True)
 
-            self.upsample_2 = UpConv2d(in_channels=embed_dim * 8, out_channels=embed_dim * 2, kernel_size=3, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True))
-            self.decoderlayer_2 = Conv2d(embed_dim * 4, embed_dim * 4, kernel_size=3, stride=1, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True), use_batch_norm=True)
+            self.upsample_2 = UpConv2d(in_channels=embed_dim * 12, out_channels=embed_dim * 2, kernel_size=3, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True))
+            self.decoderlayer_2 = Conv2d(embed_dim * 6, embed_dim * 6, kernel_size=3, stride=1, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True), use_batch_norm=True)
 
-            self.upsample_3 = UpConv2d(embed_dim * 4, embed_dim, kernel_size=3, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True))
-            self.decoderlayer_3 = Conv2d(embed_dim * 2, embed_dim * 2, kernel_size=3, stride=1, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True), use_batch_norm=True)
+            self.upsample_3 = UpConv2d(in_channels=embed_dim * 6, out_channels=embed_dim, kernel_size=3, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True))
+            self.decoderlayer_3 = Conv2d(embed_dim * 3, embed_dim * 2, kernel_size=3, stride=1, activation_func=torch.nn.LeakyReLU(negative_slope=0.20, inplace=True), use_batch_norm=True)
 
             self.output_proj = UpConv2d(in_channels=embed_dim * 2, out_channels=1, kernel_size=3)
         else:
-            # Decoder
-            self.upsample_0 = upsample(embed_dim*16, embed_dim*8)
-            self.decoderlayer_0 = BasicUformerLayer(dim=embed_dim*16,
-                                output_dim=embed_dim*16,
-                                input_resolution=(img_size // (2 ** 3),
-                                                    img_size // (2 ** 3)),
-                                depth=depths[5],
-                                num_heads=num_heads[5],
-                                win_size=win_size,
-                                mlp_ratio=self.mlp_ratio,
-                                qkv_bias=qkv_bias, qk_scale=qk_scale,
-                                drop=drop_rate, attn_drop=attn_drop_rate,
-                                drop_path=dec_dpr[:depths[5]],
-                                norm_layer=norm_layer,
-                                use_checkpoint=use_checkpoint,
-                                token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag,
-                                modulator=modulator,cross_modulator=cross_modulator)
-            self.upsample_1 = upsample(embed_dim*16, embed_dim*4)
-            self.decoderlayer_1 = BasicUformerLayer(dim=embed_dim*8,
-                                output_dim=embed_dim*8,
-                                input_resolution=(img_size // (2 ** 2),
-                                                    img_size // (2 ** 2)),
-                                depth=depths[6],
-                                num_heads=num_heads[6],
-                                win_size=win_size,
-                                mlp_ratio=self.mlp_ratio,
-                                qkv_bias=qkv_bias, qk_scale=qk_scale,
-                                drop=drop_rate, attn_drop=attn_drop_rate,
-                                drop_path=dec_dpr[sum(depths[5:6]):sum(depths[5:7])],
-                                norm_layer=norm_layer,
-                                use_checkpoint=use_checkpoint,
-                                token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag,
-                                modulator=modulator,cross_modulator=cross_modulator)
-            self.upsample_2 = upsample(embed_dim*8, embed_dim*2)
-            self.decoderlayer_2 = BasicUformerLayer(dim=embed_dim*4,
-                                output_dim=embed_dim*4,
-                                input_resolution=(img_size // 2,
-                                                    img_size // 2),
-                                depth=depths[7],
-                                num_heads=num_heads[7],
-                                win_size=win_size,
-                                mlp_ratio=self.mlp_ratio,
-                                qkv_bias=qkv_bias, qk_scale=qk_scale,
-                                drop=drop_rate, attn_drop=attn_drop_rate,
-                                drop_path=dec_dpr[sum(depths[5:7]):sum(depths[5:8])],
-                                norm_layer=norm_layer,
-                                use_checkpoint=use_checkpoint,
-                                token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag,
-                                modulator=modulator,cross_modulator=cross_modulator)
-            self.upsample_3 = upsample(embed_dim*4, embed_dim)
-            self.decoderlayer_3 = BasicUformerLayer(dim=embed_dim*2,
-                                output_dim=embed_dim*2,
-                                input_resolution=(img_size,
-                                                    img_size),
-                                depth=depths[8],
-                                num_heads=num_heads[8],
-                                win_size=win_size,
-                                mlp_ratio=self.mlp_ratio,
-                                qkv_bias=qkv_bias, qk_scale=qk_scale,
-                                drop=drop_rate, attn_drop=attn_drop_rate,
-                                drop_path=dec_dpr[sum(depths[5:8]):sum(depths[5:9])],
-                                norm_layer=norm_layer,
-                                use_checkpoint=use_checkpoint,
-                                token_projection=token_projection,token_mlp=token_mlp,shift_flag=shift_flag,
-                                modulator=modulator,cross_modulator=cross_modulator)
-            self.output_proj = OutputProj(in_channel=2*(embed_dim + embed_dim_z), out_channel=1, kernel_size=3, stride=1)
+            pass
 
         self.apply(self._init_weights)
 
@@ -1337,7 +1336,7 @@ class Uformer(nn.Module):
     def extra_repr(self) -> str:
         return f"embed_dim={self.embed_dim}, token_projection={self.token_projection}, token_mlp={self.mlp},win_size={self.win_size}"
 
-    def forward(self, x, intrinsics=None, mask=None):
+    def forward_encoder(self, x, n_height, n_width, intrinsics=None, mask=None):
         # Input Projection
         image = x[:, :3, :, :]
         depth = x[:, 3:, :, :]
@@ -1351,25 +1350,50 @@ class Uformer(nn.Module):
         wp = w + pad_w
         
         depth = self.sparse_to_dense_pool(depth)
-        x = torch.cat([image, depth], dim=1)
-        y, H, W = self.input_proj(x)
+        # x = torch.cat([image, depth], dim=1)
+        image_proj, H, W = self.input_proj(image)
+        depth_proj, _, _ = self.input_depth_proj(depth)
+        
         #y = self.pos_drop(y)
         #Encoder
-        conv0 = self.encoderlayer_0(y,mask=mask, input_height=H, input_width=W)
-        pool0 = self.dowsample_0(conv0, input_height=H, input_width=W)
-        conv1 = self.encoderlayer_1(pool0,mask=mask, input_height=H//2, input_width=W//2)
-        pool1 = self.dowsample_1(conv1, input_height=H//2, input_width=W//2)
-        conv2 = self.encoderlayer_2(pool1,mask=mask, input_height=H//4, input_width=W//4)
-        pool2 = self.dowsample_2(conv2, input_height=H//4, input_width=W//4)
-        conv3 = self.encoderlayer_3(pool2,mask=mask, input_height=H//8, input_width=W//8)
-        pool3 = self.dowsample_3(conv3, input_height=H//8, input_width=W//8)
-
+        conv0_image = self.encoderlayer_0(image_proj, mask=mask, input_height=H, input_width=W)
+        pool0_image = self.dowsample_0(conv0_image, input_height=H, input_width=W)
+        conv0_depth = self.encoderlayer_depth0(depth_proj, mask=mask, input_height=H, input_width=W)
+        pool0_depth = self.dowsample_depth0(conv0_depth, input_height=H, input_width=W)
+        
+        conv1_image = self.encoderlayer_1(pool0_image, mask=mask, input_height=H//2, input_width=W//2)
+        pool1_image = self.dowsample_1(conv1_image, input_height=H//2, input_width=W//2)
+        conv1_depth = self.encoderlayer_depth1(pool0_depth, mask=mask, input_height=H//2, input_width=W//2)
+        pool1_depth = self.dowsample_depth1(conv1_depth, input_height=H//2, input_width=W//2)
+        
+        conv2_image = self.encoderlayer_2(pool1_image, mask=mask, input_height=H//4, input_width=W//4)
+        pool2_image = self.dowsample_2(conv2_image, input_height=H//4, input_width=W//4)
+        conv2_depth = self.encoderlayer_depth2(pool1_depth, mask=mask, input_height=H//4, input_width=W//4)
+        pool2_depth = self.dowsample_depth2(conv2_depth, input_height=H//4, input_width=W//4)
+        
+        conv3_image = self.encoderlayer_3(pool2_image, mask=mask, input_height=H//8, input_width=W//8)
+        pool3_image = self.dowsample_3(conv3_image, input_height=H//8, input_width=W//8)
+        conv3_depth = self.encoderlayer_depth3(pool2_depth, mask=mask, input_height=H//8, input_width=W//8)
+        pool3_depth = self.dowsample_depth3(conv3_depth, input_height=H//8, input_width=W//8)
+        
+        # Skip Connections
+        skips = [[conv0_image, conv0_depth], [conv1_image, conv1_depth], [conv2_image, conv2_depth], [conv3_image, conv3_depth]]
         # Bottleneck
-        conv4 = self.conv(pool3, mask=mask, input_height=H//16, input_width=W//16)
+        latent = torch.cat([pool3_image, pool3_depth], dim=2)
+        latent = self.conv(latent, mask=mask, input_height=H//16, input_width=W//16)
+        shape = (H, W, hp, wp, pad_h, pad_w, n_height, n_width)
+        
+        return latent, skips, shape
+    
+    
+    def forward_decoder(self, latent, skips, shape, mask=None):
+        conv0, conv1, conv2, conv3 = skips
+        H, W, hp, wp, pad_h, pad_w, n_height, n_width = shape
+        
         if self.conv_dec:
-            conv4 = rearrange(conv4, ' b (h w) c -> b c h w ', h=H//16, w=W//16).contiguous()
+            latent = rearrange(latent, ' b (h w) c -> b c h w ', h=H//16, w=W//16).contiguous()
 
-            up0 = self.upsample_0(conv4, shape=(H//8, W//8))
+            up0 = self.upsample_0(latent, shape=(H//8, W//8))
             conv3 = rearrange(conv3, ' b (h w) c -> b c h w ', h=H//8, w=W//8).contiguous()
             deconv0 = torch.cat([up0, conv3], 1)
             deconv0 = self.decoderlayer_0(deconv0)
@@ -1394,29 +1418,11 @@ class Uformer(nn.Module):
             # Output Projection
             y = self.output_proj(deconv3, shape=(hp, wp))
             # Undo padding
-            y = y[:, :, pad_h//2:hp-(pad_h-pad_h//2), pad_w//2:wp-(pad_w-pad_w//2)]
-
+            output_depth = y[:, :, pad_h//2:hp-(pad_h-pad_h//2), pad_w//2:wp-(pad_w-pad_w//2)]
         else:
-            #Decoder
-            up0 = self.upsample_0(conv4, input_height=H//16, input_width=W//16)
-            deconv0 = torch.cat([up0,conv3],-1)
-            deconv0 = self.decoderlayer_0(deconv0,mask=mask, input_height=H//8, input_width=W//8)
-
-            up1 = self.upsample_1(deconv0, input_height=H//8, input_width=W//8)
-            deconv1 = torch.cat([up1,conv2],-1)
-            deconv1 = self.decoderlayer_1(deconv1,mask=mask, input_height=H//4, input_width=W//4)
-
-            up2 = self.upsample_2(deconv1, input_height=H//4, input_width=W//4)
-            deconv2 = torch.cat([up2,conv1],-1)
-            deconv2 = self.decoderlayer_2(deconv2,mask=mask, input_height=H//2, input_width=W//2)
-
-            up3 = self.upsample_3(deconv2, input_height=H//2, input_width=W//2)
-            deconv3 = torch.cat([up3,conv0],-1)
-            deconv3 = self.decoderlayer_3(deconv3,mask=mask, input_height=H, input_width=W)
-
-            # Output Projection
-            y = self.output_proj(deconv3, input_height=H, input_width=W)
-        return y
+            pass
+        return output_depth, n_height, n_width
+    
 
     def flops(self):
         flops = 0
