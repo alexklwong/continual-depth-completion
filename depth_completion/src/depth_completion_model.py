@@ -1,7 +1,7 @@
 import os, torch, torchvision
 import torch.nn.functional as F
 from utils.src import log_utils, net_utils
-from continual_learning_losses import token_loss, ewc_loss, lwf_loss
+from continual_learning_losses import token_loss, ewc_loss, lwf_loss, l2p_loss
 
 
 class DepthCompletionModel(object):
@@ -131,6 +131,7 @@ class DepthCompletionModel(object):
                       validity_map, 
                       dataset_uid,  # TokenCDC
                       no_latent=False,  # TokenCDC
+                      n_prompts=5,  # L2P
                       intrinsics=None, 
                       return_all_outputs=False):
         '''
@@ -159,17 +160,54 @@ class DepthCompletionModel(object):
         # pose_count = sum(p.numel() for p in self.model.parameters_pose() if p.requires_grad)
         # print("Learnable parameters in the model: Tokens {}, Depth {}, Pose {}".format(token_count, depth_count, pose_count))
         # print("Current token keys: {}".format(self.token_pools.keys()))
+        
+        
+        if 'l2p' in self.network_modules:
+            with torch.no_grad():
+                # FORWARD TO GET QUERY
+                latent, skips, shape = self.model.forward_depth_encoder(image, sparse_depth, validity_map, intrinsics)
+                skips = [torch.cat([skips[0][0], skips[0][1]], dim=2), 
+                                    torch.cat([skips[1][0], skips[1][1]], dim=2),
+                                    torch.cat([skips[2][0], skips[2][1]], dim=2),
+                                    torch.cat([skips[3][0], skips[3][1]], dim=2)]
+                _, second_last = self.model.forward_depth_decoder(latent, skips, shape, return_all_outputs)
+                queries = second_last[:, :second_last.shape[1]//2, 0, 0].detach().clone()
+                
+                image_key_pool = self._get_model_cl().image_key_pool
+                depth_key_pool = self._get_model_cl().depth_key_pool
+                image_prompt_pool = self._get_model_cl().image_prompt_pool
+                depth_prompt_pool = self._get_model_cl().depth_prompt_pool
+                # Compute cosine similarity between query and keys
+                image_cos_sim = F.cosine_similarity(queries.unsqueeze(1), image_key_pool.unsqueeze(0), dim=-1)
+                depth_cos_sim = F.cosine_similarity(queries.unsqueeze(1), depth_key_pool.unsqueeze(0), dim=-1)
+                # Select top N prompts with highest cosine similarity
+                top_image_indices = torch.topk(image_cos_sim, n_prompts, dim=-1).indices
+                top_depth_indices = torch.topk(depth_cos_sim, n_prompts, dim=-1).indices
+                # Gather the corresponding keys and prompts
+                top_image_keys = image_key_pool[top_image_indices]
+                top_depth_keys = depth_key_pool[top_depth_indices]
+                top_image_prompts = image_prompt_pool[top_image_indices]
+                top_depth_prompts = depth_prompt_pool[top_depth_indices]
 
-        # Encoder Forward Pass
-        latent, skips, shape = self.model.forward_depth_encoder(
-            image, 
-            sparse_depth, 
-            validity_map, 
-            intrinsics)
+            # Encoder Forward Pass
+            latent, skips, shape = self.model.forward_depth_encoder(
+                image, 
+                sparse_depth, 
+                validity_map, 
+                intrinsics,
+                top_image_prompts,
+                top_depth_prompts)
+        else:
+            # Encoder Forward Pass
+            latent, skips, shape = self.model.forward_depth_encoder(
+                image, 
+                sparse_depth, 
+                validity_map, 
+                intrinsics)
 
         ##### BEGIN TokenCDC Implementation 
 
-        if 'control' not in self.network_modules:
+        if 'control' not in self.network_modules and 'l2p' not in self.network_modules:
             # FIRST, get key and token pools
             dims = skips[1][0].shape[2], skips[1][1].shape[2], \
                     skips[2][0].shape[2], skips[2][1].shape[2], skips[3][0].shape[2], skips[3][1].shape[2], latent.shape[2]
@@ -289,13 +327,13 @@ class DepthCompletionModel(object):
         ##### END TokenCDC Implementation
 
         # Decoder Forward Pass
-        output = self.model.forward_depth_decoder(
+        output, _ = self.model.forward_depth_decoder(
                     latent_with_tokens,
                     skips_with_tokens,
                     shape,
                     return_all_outputs)
 
-        return output
+        return output, queries, top_image_keys, top_depth_keys
 
 
     def forward_pose(self, image0, image1):
@@ -326,7 +364,8 @@ class DepthCompletionModel(object):
                      pose0to1,
                      pose0to2,
                      queries=None,
-                     keys=None,
+                     image_keys=None,
+                     depth_keys=None,
                      domain_incremental=False,
                      ground_truth0=None,
                      supervision_type='unsupervised',
@@ -390,17 +429,15 @@ class DepthCompletionModel(object):
         else:
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
 
-        # TokenCDC LEGACY: Loss between queries/keys and between keys in the key pool
-        if 'w_token' in w_losses:
-            loss_token = token_loss(
+        # L2P LOSS
+        if 'w_l2p' in w_losses:
+            loss_l2p = l2p_loss(
                             queries=queries,
-                            keys=keys,
-                            key_pools=self.key_pools,
-                            lambda_token=w_losses['w_token'],
-                            domain_incremental=domain_incremental)
-
-            loss += loss_token
-            loss_info['loss_token'] = loss_token
+                            image_keys=image_keys,
+                            depth_keys=depth_keys,
+                            lambda_l2p=w_losses['w_l2p'])
+            loss += loss_l2p
+            loss_info['loss_l2p'] = loss_l2p
 
         return loss, loss_info
 

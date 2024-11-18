@@ -562,7 +562,8 @@ def train(train_image_paths,
                 optimizer_pose=optimizer_pose,
                 optimizer_cl=optimizer_cl)
         except Exception as e:
-            print(e)
+            import traceback
+            print(e, "\n", traceback.format_exc())
             print('Failed to restore optimizer for depth network: Ignoring...')
             train_step = depth_completion_model.restore_model(
                 restore_paths)
@@ -826,7 +827,7 @@ def train(train_image_paths,
                 FORWARD THROUGH THE NETWORK
                 '''
                 # Inputs: augmented image, augmented sparse depth map, original (but aligned) validity map
-                output_depth0 = depth_completion_model.forward_depth(
+                output_depth0, queries, image_keys, depth_keys = depth_completion_model.forward_depth(
                     image=input_image0,
                     sparse_depth=input_sparse_depth0,
                     validity_map=input_validity_map0,
@@ -879,6 +880,9 @@ def train(train_image_paths,
                     intrinsics=intrinsics,
                     pose0to1=pose0to1,
                     pose0to2=pose0to2,
+                    queries=queries,
+                    image_keys=image_keys,
+                    depth_keys=depth_keys,
                     domain_incremental=domain_incremental,
                     supervision_type=supervision_type,
                     w_losses=w_losses)
@@ -1092,7 +1096,7 @@ def validate(depth_model,
                         sparse_depth)
 
                     # Forward through network
-                    output_depth = depth_model.forward_depth(
+                    output_depth, _, _, _ = depth_model.forward_depth(
                         image=image,
                         sparse_depth=sparse_depth,
                         validity_map=validity_map,
@@ -1440,7 +1444,7 @@ def run(image_path,
                 sparse_depth)
 
             # Forward through network
-            output_depth = depth_model.forward_depth(
+            output_depth, _, _, _ = depth_model.forward_depth(
                 image=image,
                 sparse_depth=sparse_depth,
                 validity_map=validity_map,

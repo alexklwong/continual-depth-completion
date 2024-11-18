@@ -34,6 +34,19 @@ def token_loss(queries, keys, key_pools, lambda_token, domain_incremental=False)
     return lambda_token * loss
 
 
+def l2p_loss(queries, image_keys, depth_keys, lambda_l2p):
+    '''
+    Calculate the L2P loss between queries and image/depth keys
+    '''
+    cosine_sim_image = F.cosine_similarity(queries.unsqueeze(1), image_keys.unsqueeze(0), dim=-1)
+    cosine_sim_depth = F.cosine_similarity(queries.unsqueeze(1), depth_keys.unsqueeze(0), dim=-1)
+    cosine_dis_image = 1 - cosine_sim_image.mean()
+    cosine_dis_depth = 1 - cosine_sim_depth.mean()
+    loss = cosine_dis_image + cosine_dis_depth
+
+    return lambda_l2p * loss
+
+
 def ewc_loss(current_parameters, frozen_parameters, fisher_info, lambda_ewc):
     '''
     Calculate the ewc loss

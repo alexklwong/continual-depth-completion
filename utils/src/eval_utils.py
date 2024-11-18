@@ -58,7 +58,8 @@ def inv_mean_abs_err(src, tgt):
     Returns:
         float : inverse mean absolute error
     '''
-
+    tgt_safe = np.where(tgt == 0, 1e-8, tgt)
+    src_safe = np.where(src == 0, 1e-8, src)
     return np.mean(np.abs((1.0 / tgt) - (1.0 / src)))
 
 def abs_rel_err(src, tgt):

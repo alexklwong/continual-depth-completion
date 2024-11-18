@@ -16,7 +16,9 @@ class ContinualLearningModel(torch.nn.Module):
     def __init__(self,
                  image_pool_size,
                  depth_pool_size,
-                 device):
+                 device,
+                 embed_dim=32,  # L2P
+                 ):
         super(ContinualLearningModel, self).__init__()
         
         self.image_pool_size = image_pool_size
@@ -56,6 +58,16 @@ class ContinualLearningModel(torch.nn.Module):
         self.latent_key_pools = torch.nn.ParameterDict()
         self.latent_token_pools = torch.nn.ParameterDict()
         self.latent_linear = torch.nn.ParameterDict()
+        
+        ### L2P PARAMETERS
+        self.image_key_pool = torch.nn.Parameter(torch.randn((image_pool_size, embed_dim), device=self.device), requires_grad=True)
+        self.depth_key_pool = torch.nn.Parameter(torch.randn((depth_pool_size, embed_dim), device=self.device), requires_grad=True)
+        self.image_prompt_pool = torch.nn.Parameter(torch.randn((image_pool_size, embed_dim), device=self.device), requires_grad=True)
+        self.depth_prompt_pool = torch.nn.Parameter(torch.randn((depth_pool_size, embed_dim), device=self.device), requires_grad=True)
+        self.new_params.append(self.image_key_pool)
+        self.new_params.append(self.depth_key_pool)
+        self.new_params.append(self.image_prompt_pool)
+        self.new_params.append(self.depth_prompt_pool)
 
         # Move to device
         self.to(self.device)
@@ -408,6 +420,19 @@ class ContinualLearningModel(torch.nn.Module):
         self.latent_token_pools.load_state_dict(latent_token_pools_state_dict)
         self.latent_linear.load_state_dict(latent_linear_state_dict)
         print("ALL TokenCDC PARAMS RESTORED!\n\n\n\n\n\n")
+        
+        # RESTORE L2P PARAMETERS
+        self.image_key_pool = torch.nn.Parameter(checkpoint['image_key_pool'])
+        self.depth_key_pool = torch.nn.Parameter(checkpoint['depth_key_pool'])
+        self.image_prompt_pool = torch.nn.Parameter(checkpoint['image_prompt_pool'])
+        self.depth_prompt_pool = torch.nn.Parameter(checkpoint['depth_prompt_pool'])
+        self.new_params.append(self.image_key_pool)
+        self.new_params.append(self.depth_key_pool)
+        self.new_params.append(self.image_prompt_pool)
+        self.new_params.append(self.depth_prompt_pool)
+        if optimizer is not None:
+                optimizer.add_param_group({'params' : self.get_new_params()})  # Must also add all restored params to the optimizer!
+                print('L2P PARAMS ADDED TO OPTIMIZER!\n\n')
 
         if optimizer is not None:
             try:
@@ -465,6 +490,10 @@ class ContinualLearningModel(torch.nn.Module):
                     'd4_linear_state_dict': self.d4_linear.state_dict(),
                     'latent_key_pools_state_dict': self.latent_key_pools.state_dict(),
                     'latent_token_pools_state_dict': self.latent_token_pools.state_dict(),
-                    'latent_linear_state_dict': self.latent_linear.state_dict()
+                    'latent_linear_state_dict': self.latent_linear.state_dict(),
+                    'image_key_pool': self.image_key_pool,
+                    'depth_key_pool': self.depth_key_pool,
+                    'image_prompt_pool': self.image_prompt_pool,
+                    'depth_prompt_pool': self.depth_prompt_pool
                     },
                     checkpoint_path)

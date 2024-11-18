@@ -1336,7 +1336,8 @@ class Uformer(nn.Module):
     def extra_repr(self) -> str:
         return f"embed_dim={self.embed_dim}, token_projection={self.token_projection}, token_mlp={self.mlp},win_size={self.win_size}"
 
-    def forward_encoder(self, x, n_height, n_width, intrinsics=None, mask=None):
+    def forward_encoder(self, x, n_height, n_width, intrinsics=None, mask=None,
+                        image_prompts=None, depth_prompts=None):
         # Input Projection
         image = x[:, :3, :, :]
         depth = x[:, 3:, :, :]
@@ -1354,11 +1355,20 @@ class Uformer(nn.Module):
         image_proj, H, W = self.input_proj(image)
         depth_proj, _, _ = self.input_depth_proj(depth)
         
+        prompt_size = 0
+        if image_prompts is not None:
+            image_proj = torch.cat([image_prompts, image_proj], dim=1)
+            prompt_size = image_prompts.shape[1]
+        if depth_prompts is not None:
+            depth_proj = torch.cat([depth_prompts, depth_proj], dim=1)
+        
         #y = self.pos_drop(y)
         #Encoder
         conv0_image = self.encoderlayer_0(image_proj, mask=mask, input_height=H, input_width=W)
+        conv0_image = conv0_image[:, :conv0_image.shape[1]-prompt_size, :]
         pool0_image = self.dowsample_0(conv0_image, input_height=H, input_width=W)
         conv0_depth = self.encoderlayer_depth0(depth_proj, mask=mask, input_height=H, input_width=W)
+        conv0_depth = conv0_depth[:, :conv0_depth.shape[1]-prompt_size, :]
         pool0_depth = self.dowsample_depth0(conv0_depth, input_height=H, input_width=W)
         
         conv1_image = self.encoderlayer_1(pool0_image, mask=mask, input_height=H//2, input_width=W//2)
@@ -1421,7 +1431,7 @@ class Uformer(nn.Module):
             output_depth = y[:, :, pad_h//2:hp-(pad_h-pad_h//2), pad_w//2:wp-(pad_w-pad_w//2)]
         else:
             pass
-        return output_depth, n_height, n_width
+        return output_depth, n_height, n_width, deconv3
     
 
     def flops(self):
