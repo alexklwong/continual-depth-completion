@@ -534,7 +534,7 @@ class DepthCompletionModel(object):
                                                                 optimizer_depth=optimizer_depth,
                                                                 optimizer_pose=optimizer_pose)
         elif 'uformer' in self.model_name:
-            return self.model.restore_model(
+            train_step, optimizer_depth, optimizer_pose = self.model.restore_model(
                 model_depth_restore_path=restore_paths[0],
                 model_pose_restore_path=restore_paths[1] if len(restore_paths) > 1 else None,
                 optimizer_depth=optimizer_depth,
