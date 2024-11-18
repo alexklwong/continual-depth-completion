@@ -204,6 +204,7 @@ class DepthCompletionModel(object):
                 sparse_depth, 
                 validity_map, 
                 intrinsics)
+            queries, top_image_keys, top_depth_keys = None, None, None
 
         ##### BEGIN TokenCDC Implementation 
 
