@@ -1065,6 +1065,9 @@ def validate(depth_model,
         zip_longest(*dataloaders, fillvalue=None),
         desc='Batch',
         total=n_val_steps)
+    
+    # TO CREATE t-SNE
+    sample_descriptors = np.empty((0, 512))
 
     for idx, val_batches in enumerate(val_dataloaders_epoch):
         '''
@@ -1090,7 +1093,7 @@ def validate(depth_model,
                         sparse_depth)
 
                     # Forward through network
-                    output_depth, _, _, _ = depth_model.forward_depth(
+                    output_depth, selector_query, _, _ = depth_model.forward_depth(
                         image=image,
                         sparse_depth=sparse_depth,
                         validity_map=validity_map,
@@ -1098,6 +1101,9 @@ def validate(depth_model,
                         dataset_uid=dataset_uid,
                         return_all_outputs=False,
                         domain_agnostic_eval=domain_agnostic)
+                    
+                    selector_query_np = selector_query.detach().cpu().numpy()
+                    sample_descriptors = np.append(sample_descriptors, selector_query_np, axis=0)
 
                 if (idx % n_interval_per_summary) == 0 and summary_writer is not None:
                     image_summary[dataset_idx].append(image)
@@ -1161,6 +1167,10 @@ def validate(depth_model,
                 rmse[dataset_idx, idx] = eval_utils.root_mean_sq_err(1000.0 * output_depth, 1000.0 * ground_truth)
                 imae[dataset_idx, idx] = eval_utils.inv_mean_abs_err(0.001 * output_depth, 0.001 * ground_truth)
                 irmse[dataset_idx, idx] = eval_utils.inv_root_mean_sq_err(0.001 * output_depth, 0.001 * ground_truth)
+
+    # t-SNE: Save sample descriptors and domain descriptor as numpy arrays
+    path = log_path.rpartition('/')[0]
+    np.save(os.path.join(path, f'sample_descriptors_{dataset_uid}_{step}.npy'), sample_descriptors)
 
     # Compute mean metrics
     mae   = np.nanmean(mae, axis=1)

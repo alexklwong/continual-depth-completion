@@ -282,7 +282,7 @@ class DepthCompletionModel(object):
                                     torch.cat([skips[1][0], skips[1][1]], dim=1),
                                     torch.cat([skips[2][0], skips[2][1]], dim=1),
                                     torch.cat([skips[3][0], skips[3][1]], dim=1)]
-            selector_query = None
+            selector_query = F.adaptive_avg_pool2d(latent, (1, 1)).view(latent.shape[0], -1)
             selector_key_idx = None
             dataset_selectors = None
 
@@ -539,8 +539,8 @@ class DepthCompletionModel(object):
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
         
         # TokenCDC: Restore ALL TokenCDC params
-        if len(restore_paths) >= 3:
-            _, optimizer_cl = self._get_model_cl().restore_model(restore_paths[2], optimizer_cl)
+        # if len(restore_paths) >= 3:
+        #     _, optimizer_cl = self._get_model_cl().restore_model(restore_paths[2], optimizer_cl)
 
         return train_step, optimizer_depth, optimizer_pose, optimizer_cl
 
