@@ -534,6 +534,22 @@ def train(train_image_paths,
 
         frozen_model.restore_model(frozen_model_paths, frozen_model=True)
         frozen_model.eval()
+        
+        aux_model = DepthCompletionModel(
+            model_name=model_name,
+            network_modules=network_modules,
+            min_predict_depth=min_predict_depth,
+            max_predict_depth=max_predict_depth,
+            device=device)
+        
+        aux_model.restore_model(frozen_model_paths, frozen_model=True)
+        aux_model.train()
+        
+        parameters_aux_model = aux_model.parameters_depth()
+        if supervision_type == 'unsupervised':
+            parameters_aux_model = aux_model.parameters_pose()
+        else:
+            parameters_aux_model = []
     else:
         frozen_model = None
 
@@ -716,6 +732,13 @@ def train(train_image_paths,
             'weight_decay' : w_weight_decay_depth
         }],
         lr=learning_rate)
+    
+    optimizer_aux = torch.optim.Adam([
+        {
+            'params' : parameters_aux_model,
+            'weight_decay' : w_weight_decay_depth
+        }],
+        lr=learning_rate)
 
     if supervision_type == 'unsupervised':
         optimizer_pose = torch.optim.Adam([
@@ -724,11 +747,19 @@ def train(train_image_paths,
                 'weight_decay' : w_weight_decay_pose
             }],
             lr=learning_rate)
+        
+        optimizer_aux_pose = torch.optim.Adam([
+            {
+                'params' : parameters_aux_model,
+                'weight_decay' : w_weight_decay_pose
+            }],
+            lr=learning_rate)
     else:
         optimizer_pose = None
 
     # Start training
     depth_completion_model.train()
+    aux_model.train()
 
     train_step = 0
 
@@ -1097,10 +1128,20 @@ def train(train_image_paths,
                     validity_map=input_validity_map0,
                     intrinsics=input_intrinsics,
                     return_all_outputs=True)
+                
+                output_aux_depth0 = aux_model.forward_depth(
+                    image=input_image0,
+                    sparse_depth=input_sparse_depth0,
+                    validity_map=input_validity_map0,
+                    intrinsics=input_intrinsics,
+                    return_all_outputs=True)
 
                 if supervision_type == 'unsupervised':
                     pose0to1 = depth_completion_model.forward_pose(image0, image1)
                     pose0to2 = depth_completion_model.forward_pose(image0, image2)
+                    
+                    aux_pose0to1 = aux_model.forward_pose(image0, image1)
+                    aux_pose0to2 = aux_model.forward_pose(image0, image2)
                 else:
                     pose0to1 = None
                     pose0to2 = None
@@ -1114,9 +1155,42 @@ def train(train_image_paths,
                     transform_performed=transform_performed_geometric,
                     return_all_outputs=True,
                     padding_modes=[padding_modes[0]])
+                
+                output_aux_depth0, _ = train_transforms_geometric.reverse_transform(
+                    images_arr=output_aux_depth0,
+                    transform_performed=transform_performed_geometric,
+                    return_all_outputs=True,
+                    padding_modes=[padding_modes[0]])
 
                 # Compute loss function
                 validity_map_depth0 = validity_map0
+                
+                # Auxillary network for ANCL
+                loss_aux_batch, loss_info_aux_batch = aux_model.compute_loss(
+                    image0=image0,
+                    image1=image1,
+                    image2=image2,
+                    output_depth0=output_aux_depth0,
+                    sparse_depth0=sparse_depth0,
+                    validity_map_depth0=validity_map_depth0,
+                    validity_map_image0=validity_map_image0,
+                    ground_truth0=ground_truth0,
+                    intrinsics=intrinsics,
+                    pose0to1=aux_pose0to1,
+                    pose0to2=aux_pose0to2,
+                    supervision_type=supervision_type,
+                    w_losses=w_losses)
+
+                optimizer_aux.zero_grad()
+                
+                if supervision_type == 'unsupervised':  
+                    optimizer_aux_pose.zero_grad()
+
+                loss_aux_batch.backward()
+                
+                optimizer_aux.step()
+                if supervision_type == 'unsupervised':
+                    optimizer_aux_pose.step()
 
                 # TODO: Add argument to allow frozen model to be passed in
                 loss_batch, loss_info_batch = depth_completion_model.compute_loss(
@@ -1133,8 +1207,9 @@ def train(train_image_paths,
                     pose0to2=pose0to2,
                     supervision_type=supervision_type,
                     w_losses=w_losses,
-                    frozen_model=frozen_model)
-
+                    frozen_model=frozen_model,
+                    aux_model=aux_model)
+                
                 # Accumulate loss over batches and update loss info
                 loss = loss + loss_batch
 
@@ -1201,6 +1276,7 @@ def train(train_image_paths,
             # Compute fisher information for EWC
             if calculate_fisher_enabled:
                 depth_completion_model.calculate_fisher(normalization=len(train_dataloaders[0].dataset))
+                aux_model.calculate_fisher(normalization=len(train_dataloaders[0].dataset))
 
             '''
             Log results and save checkpoints
@@ -1256,6 +1332,7 @@ def train(train_image_paths,
         # update fisher at the end of epoch
         if calculate_fisher_enabled:
             depth_completion_model.update_fisher()
+            aux_model.update_fisher()
 
 
     '''

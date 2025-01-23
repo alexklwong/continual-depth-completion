@@ -1,6 +1,6 @@
 import os, torch, torchvision
 from utils.src import log_utils, net_utils
-from continual_learning_losses import ewc_loss, lwf_loss
+from continual_learning_losses import ewc_loss, lwf_loss, ancl_loss
 
 
 class DepthCompletionModel(object):
@@ -153,7 +153,8 @@ class DepthCompletionModel(object):
                      ground_truth0=None,
                      supervision_type='unsupervised',
                      w_losses={},
-                     frozen_model=None):
+                     frozen_model=None,
+                     aux_model=None):
         '''
         Call model's compute loss function
 
@@ -213,7 +214,7 @@ class DepthCompletionModel(object):
         else:
             raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
 
-        if 'w_ewc' in w_losses:
+        if frozen_model is not None and 'w_ewc' in w_losses:
             loss_ewc = ewc_loss(
                 current_parameters=self.model.parameters_depth(),
                 frozen_parameters=frozen_model.parameters_depth(),
@@ -222,6 +223,18 @@ class DepthCompletionModel(object):
 
             loss += loss_ewc
             loss_info['loss_ewc'] = loss_ewc
+            
+        if aux_model is not None and 'w_ancl' in w_losses:
+            loss_ancl = ancl_loss(
+                current_parameters=self.model.parameters_depth(),
+                frozen_parameters=frozen_model.parameters_depth(),
+                aux_parameters=aux_model.parameters_depth(),
+                lambda_ewc=w_losses['w_ewc'],
+                lambda_ancl=w_losses['w_ancl'],
+                fisher_info=self.prev_fisher)
+            
+            loss += loss_ancl
+            loss_info['loss_ancl'] = loss_ancl
 
         if 'w_lwf' in w_losses:
             #to debug this, I modified a few lines in random crop, need to fix back later
