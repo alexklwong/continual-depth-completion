@@ -12,7 +12,9 @@ from utils.src.transforms import Transforms
 from PIL import Image
 from itertools import zip_longest
 
-
+import torchvision.models as models
+from torchvision import transforms
+import torchvision.utils as vutils
 
 
 
@@ -105,6 +107,18 @@ def train(train_image_paths,
 
     checkpoint_dirpath = os.path.join(checkpoint_path, 'checkpoints_{}'.format(model_name) + '-{}')
     log_path = os.path.join(checkpoint_path, 'results.txt')
+    
+    image_path = os.path.join(checkpoint_path, 'image.png')
+    new_replay_buffer_images_path = os.path.join(checkpoint_path, 'next_replay_dataset_image_paths.txt')
+    with open(new_replay_buffer_images_path, 'w') as file:
+        pass
+    new_replay_buffer_sparse_depth_path = os.path.join(checkpoint_path, 'next_replay_dataset_sparse_depth_paths.txt')
+    with open(new_replay_buffer_sparse_depth_path, 'w') as file:
+        pass
+    new_replay_buffer_intrinsics_path = os.path.join(checkpoint_path, 'next_replay_dataset_intrinsics_paths.txt')
+    with open(new_replay_buffer_intrinsics_path, 'w') as file:
+        pass
+
     event_path = os.path.join(checkpoint_path, 'tensorboard')
 
     os.makedirs(os.path.join(event_path, 'events-train'), exist_ok=True)
@@ -784,6 +798,7 @@ def train(train_image_paths,
         train_batch_sizes_arr_epoch = train_batch_sizes_arr
         train_crop_shapes_arr_epoch = train_crop_shapes_arr
 
+
         train_input_paths_arr = zip(
             train_image_paths_arr,
             train_sparse_depth_paths_arr,
@@ -801,8 +816,25 @@ def train(train_image_paths,
                 multiplier_sample_padding,\
                 remainder_sample_padding = inputs
             
+            train_shuffled_idx = np.random.permutation(range(len(image_paths)))
+
+            image_paths = np.array(image_paths)[train_shuffled_idx]
+            sparse_depth_paths = np.array(sparse_depth_paths)[train_shuffled_idx]
+            intrinsics_paths = np.array(intrinsics_paths)[train_shuffled_idx]
+            ground_truth_paths = np.array(ground_truth_paths)[train_shuffled_idx]
+
             # Compute indices to select remainder for this epoch
             idx_remainder = np.random.permutation(range(len(image_paths)))[:remainder_sample_padding]
+            
+            saved_image_paths = [image_paths[i:i + batch_size] for i in range(0, len(image_paths), batch_size)]
+            saved_sparse_depth_paths = [sparse_depth_paths[i:i + batch_size] for i in range(0, len(sparse_depth_paths), batch_size)]
+            saved_intrinsics_paths = [intrinsics_paths[i:i + batch_size] for i in range(0, len(intrinsics_paths), batch_size)]
+            print(f"Saved data paths ({len(saved_image_paths)})")
+
+            image_paths = image_paths.tolist()
+            sparse_depth_paths = sparse_depth_paths.tolist()
+            intrinsics_paths = intrinsics_paths.tolist()
+            ground_truth_paths = ground_truth_paths.tolist()
 
             # Extend image paths
             image_paths_epoch = image_paths + \
@@ -872,12 +904,30 @@ def train(train_image_paths,
             train_dataloader = torch.utils.data.DataLoader(
                 train_dataset,
                 batch_size=batch_size,
-                shuffle=True,
+                shuffle=False,
                 num_workers=n_thread,
                 pin_memory=False,
                 drop_last=True)
 
             train_dataloaders.append(train_dataloader)
+
+        # print(saved_image_paths[0][0])
+        # for batch_id, train_batch in enumerate(train_dataloaders[0]):
+        #     # Fetch data
+        #     train_batch = [
+        #         in_.to(device) for in_ in train_batch
+        #     ]
+        #     image0, \
+        #         image1, \
+        #         image2, \
+        #         sparse_depth0, \
+        #         intrinsics = train_batch
+
+        #     ground_truth0 = None
+        #     first_image = image0
+        #     first_image = (first_image - first_image.min()) / (first_image.max() - first_image.min())
+        #     vutils.save_image(first_image, image_path, nrow=2)
+        #     raise ValueError('Done')
 
         # TODO: If replay is available, incorporate it to training loop
         if is_available_replay:
@@ -908,10 +958,14 @@ def train(train_image_paths,
                     ground_truth_paths, \
                     multiplier_sample_padding,\
                     remainder_sample_padding = inputs
+
+
+                
                 
                 # Compute indices to select remainder for this epoch
                 idx_remainder = np.random.permutation(range(len(image_paths)))[:remainder_sample_padding]
 
+                
                 # Extend image paths
                 image_paths_epoch = image_paths + \
                     image_paths * (multiplier_sample_padding - 1) + \
@@ -931,6 +985,17 @@ def train(train_image_paths,
                 ground_truth_paths_epoch = ground_truth_paths + \
                     ground_truth_paths * (multiplier_sample_padding - 1) + \
                     (np.array(ground_truth_paths)[idx_remainder]).tolist()
+                
+                # replay_shuffled_idx = np.random.permutation(range(len(image_paths_epoch)))
+
+                # image_paths_epoch = np.array(image_paths_epoch)[replay_shuffled_idx]
+                # sparse_depth_paths_epoch = np.array(sparse_depth_paths_epoch)[replay_shuffled_idx]
+                # intrinsics_paths_epoch = np.array(intrinsics_paths_epoch)[replay_shuffled_idx]
+                # ground_truth_paths_epoch = np.array(ground_truth_paths_epoch)[replay_shuffled_idx]
+                # image_paths_epoch = image_paths_epoch.tolist()
+                # sparse_depth_paths_epoch = sparse_depth_paths_epoch.tolist()
+                # intrinsics_paths_epoch = intrinsics_paths_epoch.tolist()
+                # ground_truth_paths_epoch = ground_truth_paths_epoch.tolist()
                 
                 # Append extended paths for each dataset
                 replay_image_paths_arr_epoch.append(image_paths_epoch)
@@ -977,7 +1042,7 @@ def train(train_image_paths,
                 replay_dataloader = torch.utils.data.DataLoader(
                     replay_dataset,
                     batch_size=batch_size,
-                    shuffle=True,
+                    shuffle=False,
                     num_workers=n_thread,
                     pin_memory=False,
                     drop_last=True)
@@ -986,12 +1051,103 @@ def train(train_image_paths,
 
         # Zip all dataloaders together to get batches from each
         train_dataloaders_epoch = tqdm.tqdm(
-            zip(*train_dataloaders),
+            train_dataloaders[0],
             desc='Epoch: {}/{}  Batch'.format(epoch, learning_schedule[-1]),
             total=n_step_per_epoch)
 
+        # Compute embedding for replay buffer
+        resnet = models.resnet50(pretrained=True)
+        resnet = torch.nn.Sequential(*(list(resnet.children())[:-1]))
+        resnet.eval()
+        resnet.to(device)
+
+        center_crop_transform = transforms.Compose([
+            transforms.CenterCrop(224)
+        ])
+
+        n_replay_datasets = len(replay_image_paths_arr)
+        buffer_embeddings = []
+
+        exit_flag = False
+
+        embedding_iterators = [iter(dataloader) for dataloader in train_dataloaders]
+        with torch.no_grad():
+            for idx in range(len(train_dataloaders_epoch)):
+                if exit_flag:
+                    break
+                for dataset_id in range(len(embedding_iterators)):
+                    train_batch = next(embedding_iterators[dataset_id])
+                    print(f"Step: {idx}/{replay_dataset_size // batch_size}")
+                    if idx < (replay_dataset_size // batch_size):
+                    
+                        if dataset_id > 0:
+                    
+                            # Fetch data
+                            train_batch = [
+                                in_.to(device) for in_ in train_batch
+                            ]
+
+                            if supervision_type == 'supervised':
+                                image0, \
+                                    sparse_depth0, \
+                                    intrinsics, \
+                                    ground_truth0 = train_batch
+
+                                image1 = image0.detach().clone()
+                                image2 = image0.detach().clone()
+                            elif supervision_type == 'unsupervised':
+                                image0, \
+                                    image1, \
+                                    image2, \
+                                    sparse_depth0, \
+                                    intrinsics = train_batch
+
+                                ground_truth0 = None
+                            else:
+                                raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
+
+                            # print(f"image shape: {image0.shape}")
+                            
+                            cropped_images = torch.stack([center_crop_transform(img) for img in image0])
+                            
+                            outputs = resnet(cropped_images)
+                            buffer_embeddings.append(outputs.view(outputs.size(0), -1))
+
+                            # print(f"Embedding shape: {buffer_embeddings[0].shape}")
+                    else:
+                        exit_flag = True
+                        break
+
+
+        # print(f"Number of embedding batches: {len(buffer_embeddings)}")
+        buffer_embeddings = torch.cat(buffer_embeddings, dim=0)
+        print(f"Buffer Embeddings shape: {buffer_embeddings.shape}")
+        buffer_embedding = buffer_embeddings.mean(dim=0)
+        
+        # print(saved_image_paths[0][0])
+
+        # for batch_id, train_batches in enumerate(train_dataloaders_epoch):
+        #     for dataset_id, train_batch in enumerate(train_batches):
+        #         # Fetch data
+        #         train_batch = [
+        #             in_.to(device) for in_ in train_batch
+        #         ]
+        #         image0, \
+        #             image1, \
+        #             image2, \
+        #             sparse_depth0, \
+        #             intrinsics = train_batch
+
+        #         ground_truth0 = None
+        #         first_image = image0
+        #         first_image = (first_image - first_image.min()) / (first_image.max() - first_image.min())
+        #         vutils.save_image(first_image, image_path, nrow=2)
+        #         raise ValueError('Done')
+
+
         # Each train_batches is a n_dataset-length tuple with one batch from each dataset
-        for train_batches in train_dataloaders_epoch:
+        train_iterators = [iter(dataloader) for dataloader in train_dataloaders]
+        for batch_id, train_batches in enumerate(train_dataloaders_epoch):
             train_step = train_step + 1
             loss = 0.0
             loss_info = {}
@@ -999,7 +1155,8 @@ def train(train_image_paths,
             '''
             Iterate over batches from different datasets
             '''
-            for dataset_id, train_batch in enumerate(train_batches):
+            for dataset_id in range(len(train_iterators)): 
+                train_batch = next(train_iterators[dataset_id])
 
                 # Fetch data
                 train_batch = [
@@ -1024,6 +1181,38 @@ def train(train_image_paths,
                     ground_truth0 = None
                 else:
                     raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
+
+                
+                # print(saved_image_paths[0][0])
+                # print(saved_image_paths[0][1])
+                # print(saved_image_paths[0][2])
+                # print(saved_image_paths[0][3])
+                # first_image = image0
+                # first_image = (first_image - first_image.min()) / (first_image.max() - first_image.min())
+                # vutils.save_image(first_image, image_path, nrow=2)
+                # raise ValueError('Done')
+                
+                if dataset_id == 0:
+                
+                    # Compute representation for batch and similarity with the buffer
+                    cropped_images = torch.stack([center_crop_transform(img) for img in image0])      
+                    outputs = resnet(cropped_images)
+                    train_embedding = outputs.view(outputs.size(0), -1).mean(dim=0)
+
+                    replay_similarity = torch.nn.functional.cosine_similarity(train_embedding, buffer_embedding, dim=0)
+                    # print(f"Similarity: {replay_similarity}")
+
+                    if replay_similarity.item() < 0.9935:
+                        for image_path1 in saved_image_paths[batch_id]:
+                            log(image_path1, new_replay_buffer_images_path, to_console=False)
+                        for sparse_depth_path1 in saved_sparse_depth_paths[batch_id]:
+                            log(sparse_depth_path1, new_replay_buffer_sparse_depth_path, to_console=False)
+                        for intrinsics_path1 in saved_intrinsics_paths[batch_id]:
+                            log(intrinsics_path1, new_replay_buffer_intrinsics_path, to_console=False)
+
+                        first_image = image0
+                        first_image = (first_image - first_image.min()) / (first_image.max() - first_image.min())
+                        vutils.save_image(first_image, image_path, nrow=2)                
 
                 # Validity map is where sparse depth is available
                 validity_map0 = torch.where(
