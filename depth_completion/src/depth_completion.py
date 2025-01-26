@@ -1084,6 +1084,10 @@ def validate(depth_model,
                     in_.to(device) for in_ in val_batch
                 ]
                 image, sparse_depth, intrinsics, ground_truth = val_batch
+                
+                if intrinsics.shape[-1] == 4 and intrinsics.shape[1] == 4:
+                    # Convert from 4x4 to 3x3
+                    intrinsics = intrinsics[:, :3, :3]
 
                 with torch.no_grad():
                     # Validity map is where sparse depth is available
