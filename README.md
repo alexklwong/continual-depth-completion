@@ -30,7 +30,7 @@ Each file corresponds to a specific experiment with a given method (e.g., under 
 - `ancl`: Auxiliary Network CL 
 - `lwf`: Learning without Forgetting
 - `replay`: Experience Replay
-- `cmp`: Optimized Buffer Replay
+- `Optimized buffer replay`: Optimized Buffer Replay from CMP
 
 ## Running a Script
 
@@ -62,7 +62,7 @@ Required for all methods to load pretrained models. Order:
     path/to/posenet.pth \
 ```
 ### Replay Paths 
-Use the *_replay_dataset_*.txt files stored in the folder of the pretrained checkpoint you are continually training from:
+For Optimized Buffer Replay, use the *_replay_dataset_*.txt files stored in the folder of the pretrained checkpoint you are continually training from:
 ```bash
 # example
 --replay_image_paths \
@@ -72,7 +72,7 @@ Use the *_replay_dataset_*.txt files stored in the folder of the pretrained chec
 --replay_intrinsics_paths \
     trained_completion/cmp/fusionnet_nyu_void/checkpoints.../next_replay_dataset_intrinsics_paths.txt
 ```
-
+For Replay, use the replay split or train split of the pretrained model's training datasets. 
 ### Evaluation
 Validation is automatically run during training using the dataset sequences defined in the bash script. 
 
