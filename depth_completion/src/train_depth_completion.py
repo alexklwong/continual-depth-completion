@@ -53,6 +53,10 @@ parser.add_argument('--replay_batch_size',
     type=int, default=8, help='Number of samples per batch (divisible by number of datasets)')
 parser.add_argument('--replay_crop_shapes',
     nargs='+', type=int, default=[480, 640], help='List of (height, width) crop shapes for training data')
+parser.add_argument('--replay_dataset_size',
+    type=int, default=64, help='Number of samples to use per dataset')
+parser.add_argument('--replay_seed',
+    type=int, default=8667, help='Seed for randomly choosing the samples in the replay buffer')
 
 # Depth network settings
 parser.add_argument('--model_name',
@@ -143,8 +147,8 @@ parser.add_argument('--min_evaluate_depths',
     nargs='+', type=float, default=[0.20], help='Minimum value of depth to evaluate')
 parser.add_argument('--max_evaluate_depths',
     nargs='+', type=float, default=[5.00], help='Maximum value of depth to evaluate')
-parser.add_argument('--evaluation_protocol',
-    type=str, default='default', help='Protocol for evaluation i.e. vkitti, nuscenes, default')
+parser.add_argument('--evaluation_protocols',
+    nargs='+', type=str, default=['default'], help='Protocol for evaluation i.e. vkitti, nuscenes, default')
 
 # Checkpoint settings
 parser.add_argument('--checkpoint_path',
@@ -214,6 +218,8 @@ if __name__ == '__main__':
         # Replay settings
         replay_batch_size=args.replay_batch_size,
         replay_crop_shapes=args.replay_crop_shapes,
+        replay_dataset_size=args.replay_dataset_size,
+        replay_seed=args.replay_seed,
         # Depth network settings
         model_name=args.model_name,
         network_modules=args.network_modules,
@@ -258,7 +264,7 @@ if __name__ == '__main__':
         # Evaluation settings
         min_evaluate_depths=args.min_evaluate_depths,
         max_evaluate_depths=args.max_evaluate_depths,
-        evaluation_protocol=args.evaluation_protocol,
+        evaluation_protocols=args.evaluation_protocols,
         # Checkpoint settings
         checkpoint_path=args.checkpoint_path,
         n_step_per_checkpoint=args.n_step_per_checkpoint,
