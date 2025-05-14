@@ -1,6 +1,7 @@
 import argparse
 import torch
 from depth_completion import train
+from depth_completion_optimized_buffer import create_optimized_buffer
 
 
 class ParseStrFloatKeyValueAction(argparse.Action):
@@ -37,6 +38,10 @@ parser.add_argument('--replay_intrinsics_paths',
     nargs='+', type=str, default=None, help='Paths to list of replay camera intrinsics paths')
 parser.add_argument('--replay_ground_truth_paths',
     nargs='+', type=str, default=None, help='Paths to list of replay ground_truth paths')
+
+parser.add_argument('--create_optimized_replay_buffer',
+    action='store_true',
+    help='If set, creates an optimized replay buffer instead of training')
 
 # Validation filepaths
 parser.add_argument('--val_image_paths',
@@ -199,79 +204,157 @@ if __name__ == '__main__':
 
     args.device = 'cuda' if args.device == 'gpu' else args.device
 
-    train(
-        # Training filepaths
-        train_image_paths=args.train_image_paths,
-        train_sparse_depth_paths=args.train_sparse_depth_paths,
-        train_intrinsics_paths=args.train_intrinsics_paths,
-        train_ground_truth_paths=args.train_ground_truth_paths,
-        # Replay filepaths
-        replay_image_paths=args.replay_image_paths,
-        replay_sparse_depth_paths=args.replay_sparse_depth_paths,
-        replay_intrinsics_paths=args.replay_intrinsics_paths,
-        replay_ground_truth_paths=args.replay_ground_truth_paths,
-        # Validation filepaths
-        val_image_paths=args.val_image_paths,
-        val_sparse_depth_paths=args.val_sparse_depth_paths,
-        val_intrinsics_paths=args.val_intrinsics_paths,
-        val_ground_truth_paths=args.val_ground_truth_paths,
-        # Replay settings
-        replay_batch_size=args.replay_batch_size,
-        replay_crop_shapes=args.replay_crop_shapes,
-        replay_dataset_size=args.replay_dataset_size,
-        replay_seed=args.replay_seed,
-        # Depth network settings
-        model_name=args.model_name,
-        network_modules=args.network_modules,
-        min_predict_depth=args.min_predict_depth,
-        max_predict_depth=args.max_predict_depth,
-        # Training settings
-        train_batch_size=args.train_batch_size,
-        train_crop_shapes=args.train_crop_shapes,
-        learning_rates=args.learning_rates,
-        learning_schedule=args.learning_schedule,
-        augmentation_probabilities=args.augmentation_probabilities,
-        augmentation_schedule=args.augmentation_schedule,
-        # Photometric data augmentations
-        augmentation_random_brightness=args.augmentation_random_brightness,
-        augmentation_random_contrast=args.augmentation_random_contrast,
-        augmentation_random_gamma=args.augmentation_random_gamma,
-        augmentation_random_hue=args.augmentation_random_hue,
-        augmentation_random_saturation=args.augmentation_random_saturation,
-        augmentation_random_gaussian_blur_kernel_size=args.augmentation_random_gaussian_blur_kernel_size,
-        augmentation_random_gaussian_blur_sigma_range=args.augmentation_random_gaussian_blur_sigma_range,
-        augmentation_random_noise_type=args.augmentation_random_noise_type,
-        augmentation_random_noise_spread=args.augmentation_random_noise_spread,
-        # Geometric data augmentations
-        augmentation_padding_mode=args.augmentation_padding_mode,
-        augmentation_random_crop_type=args.augmentation_random_crop_type,
-        augmentation_random_flip_type=args.augmentation_random_flip_type,
-        augmentation_random_rotate_max=args.augmentation_random_rotate_max,
-        augmentation_random_crop_and_pad=args.augmentation_random_crop_and_pad,
-        augmentation_random_resize_to_shape=args.augmentation_random_resize_to_shape,
-        augmentation_random_resize_and_pad=args.augmentation_random_resize_and_pad,
-        augmentation_random_resize_and_crop=args.augmentation_random_resize_and_crop,
-        # Occlusion data augmentations
-        augmentation_random_remove_patch_percent_range_image=args.augmentation_random_remove_patch_percent_range_image,
-        augmentation_random_remove_patch_size_image=args.augmentation_random_remove_patch_size_image,
-        augmentation_random_remove_patch_percent_range_depth=args.augmentation_random_remove_patch_percent_range_depth,
-        augmentation_random_remove_patch_size_depth=args.augmentation_random_remove_patch_size_depth,
-        # Loss function settings
-        supervision_type=args.supervision_type,
-        w_losses=args.w_losses,
-        # Frozen model paths
-        frozen_model_paths=args.frozen_model_paths,
-        # Evaluation settings
-        min_evaluate_depths=args.min_evaluate_depths,
-        max_evaluate_depths=args.max_evaluate_depths,
-        evaluation_protocols=args.evaluation_protocols,
-        # Checkpoint settings
-        checkpoint_path=args.checkpoint_path,
-        n_step_per_checkpoint=args.n_step_per_checkpoint,
-        n_step_per_summary=args.n_step_per_summary,
-        n_image_per_summary=args.n_image_per_summary,
-        start_step_validation=args.start_step_validation,
-        restore_paths=args.restore_paths,
-        # Hardware settings
-        device=args.device,
-        n_thread=args.n_thread)
+    if not args.create_optimized_replay_buffer:
+        train(
+            # Training filepaths
+            train_image_paths=args.train_image_paths,
+            train_sparse_depth_paths=args.train_sparse_depth_paths,
+            train_intrinsics_paths=args.train_intrinsics_paths,
+            train_ground_truth_paths=args.train_ground_truth_paths,
+            # Replay filepaths
+            replay_image_paths=args.replay_image_paths,
+            replay_sparse_depth_paths=args.replay_sparse_depth_paths,
+            replay_intrinsics_paths=args.replay_intrinsics_paths,
+            replay_ground_truth_paths=args.replay_ground_truth_paths,
+            # Validation filepaths
+            val_image_paths=args.val_image_paths,
+            val_sparse_depth_paths=args.val_sparse_depth_paths,
+            val_intrinsics_paths=args.val_intrinsics_paths,
+            val_ground_truth_paths=args.val_ground_truth_paths,
+            # Replay settings
+            replay_batch_size=args.replay_batch_size,
+            replay_crop_shapes=args.replay_crop_shapes,
+            replay_dataset_size=args.replay_dataset_size,
+            replay_seed=args.replay_seed,
+            # Depth network settings
+            model_name=args.model_name,
+            network_modules=args.network_modules,
+            min_predict_depth=args.min_predict_depth,
+            max_predict_depth=args.max_predict_depth,
+            # Training settings
+            train_batch_size=args.train_batch_size,
+            train_crop_shapes=args.train_crop_shapes,
+            learning_rates=args.learning_rates,
+            learning_schedule=args.learning_schedule,
+            augmentation_probabilities=args.augmentation_probabilities,
+            augmentation_schedule=args.augmentation_schedule,
+            # Photometric data augmentations
+            augmentation_random_brightness=args.augmentation_random_brightness,
+            augmentation_random_contrast=args.augmentation_random_contrast,
+            augmentation_random_gamma=args.augmentation_random_gamma,
+            augmentation_random_hue=args.augmentation_random_hue,
+            augmentation_random_saturation=args.augmentation_random_saturation,
+            augmentation_random_gaussian_blur_kernel_size=args.augmentation_random_gaussian_blur_kernel_size,
+            augmentation_random_gaussian_blur_sigma_range=args.augmentation_random_gaussian_blur_sigma_range,
+            augmentation_random_noise_type=args.augmentation_random_noise_type,
+            augmentation_random_noise_spread=args.augmentation_random_noise_spread,
+            # Geometric data augmentations
+            augmentation_padding_mode=args.augmentation_padding_mode,
+            augmentation_random_crop_type=args.augmentation_random_crop_type,
+            augmentation_random_flip_type=args.augmentation_random_flip_type,
+            augmentation_random_rotate_max=args.augmentation_random_rotate_max,
+            augmentation_random_crop_and_pad=args.augmentation_random_crop_and_pad,
+            augmentation_random_resize_to_shape=args.augmentation_random_resize_to_shape,
+            augmentation_random_resize_and_pad=args.augmentation_random_resize_and_pad,
+            augmentation_random_resize_and_crop=args.augmentation_random_resize_and_crop,
+            # Occlusion data augmentations
+            augmentation_random_remove_patch_percent_range_image=args.augmentation_random_remove_patch_percent_range_image,
+            augmentation_random_remove_patch_size_image=args.augmentation_random_remove_patch_size_image,
+            augmentation_random_remove_patch_percent_range_depth=args.augmentation_random_remove_patch_percent_range_depth,
+            augmentation_random_remove_patch_size_depth=args.augmentation_random_remove_patch_size_depth,
+            # Loss function settings
+            supervision_type=args.supervision_type,
+            w_losses=args.w_losses,
+            # Frozen model paths
+            frozen_model_paths=args.frozen_model_paths,
+            # Evaluation settings
+            min_evaluate_depths=args.min_evaluate_depths,
+            max_evaluate_depths=args.max_evaluate_depths,
+            evaluation_protocols=args.evaluation_protocols,
+            # Checkpoint settings
+            checkpoint_path=args.checkpoint_path,
+            n_step_per_checkpoint=args.n_step_per_checkpoint,
+            n_step_per_summary=args.n_step_per_summary,
+            n_image_per_summary=args.n_image_per_summary,
+            start_step_validation=args.start_step_validation,
+            restore_paths=args.restore_paths,
+            # Hardware settings
+            device=args.device,
+            n_thread=args.n_thread)
+    else:
+        create_optimized_buffer(
+            # Training filepaths
+            train_image_paths=args.train_image_paths,
+            train_sparse_depth_paths=args.train_sparse_depth_paths,
+            train_intrinsics_paths=args.train_intrinsics_paths,
+            train_ground_truth_paths=args.train_ground_truth_paths,
+            # Replay filepaths
+            replay_image_paths=args.replay_image_paths,
+            replay_sparse_depth_paths=args.replay_sparse_depth_paths,
+            replay_intrinsics_paths=args.replay_intrinsics_paths,
+            replay_ground_truth_paths=args.replay_ground_truth_paths,
+            # Validation filepaths
+            val_image_paths=args.val_image_paths,
+            val_sparse_depth_paths=args.val_sparse_depth_paths,
+            val_intrinsics_paths=args.val_intrinsics_paths,
+            val_ground_truth_paths=args.val_ground_truth_paths,
+            # Replay settings
+            replay_batch_size=args.replay_batch_size,
+            replay_crop_shapes=args.replay_crop_shapes,
+            replay_dataset_size=args.replay_dataset_size,
+            replay_seed=args.replay_seed,
+            # Depth network settings
+            model_name=args.model_name,
+            network_modules=args.network_modules,
+            min_predict_depth=args.min_predict_depth,
+            max_predict_depth=args.max_predict_depth,
+            # Training settings
+            train_batch_size=args.train_batch_size,
+            train_crop_shapes=args.train_crop_shapes,
+            learning_rates=args.learning_rates,
+            learning_schedule=args.learning_schedule,
+            augmentation_probabilities=args.augmentation_probabilities,
+            augmentation_schedule=args.augmentation_schedule,
+            # Photometric data augmentations
+            augmentation_random_brightness=args.augmentation_random_brightness,
+            augmentation_random_contrast=args.augmentation_random_contrast,
+            augmentation_random_gamma=args.augmentation_random_gamma,
+            augmentation_random_hue=args.augmentation_random_hue,
+            augmentation_random_saturation=args.augmentation_random_saturation,
+            augmentation_random_gaussian_blur_kernel_size=args.augmentation_random_gaussian_blur_kernel_size,
+            augmentation_random_gaussian_blur_sigma_range=args.augmentation_random_gaussian_blur_sigma_range,
+            augmentation_random_noise_type=args.augmentation_random_noise_type,
+            augmentation_random_noise_spread=args.augmentation_random_noise_spread,
+            # Geometric data augmentations
+            augmentation_padding_mode=args.augmentation_padding_mode,
+            augmentation_random_crop_type=args.augmentation_random_crop_type,
+            augmentation_random_flip_type=args.augmentation_random_flip_type,
+            augmentation_random_rotate_max=args.augmentation_random_rotate_max,
+            augmentation_random_crop_and_pad=args.augmentation_random_crop_and_pad,
+            augmentation_random_resize_to_shape=args.augmentation_random_resize_to_shape,
+            augmentation_random_resize_and_pad=args.augmentation_random_resize_and_pad,
+            augmentation_random_resize_and_crop=args.augmentation_random_resize_and_crop,
+            # Occlusion data augmentations
+            augmentation_random_remove_patch_percent_range_image=args.augmentation_random_remove_patch_percent_range_image,
+            augmentation_random_remove_patch_size_image=args.augmentation_random_remove_patch_size_image,
+            augmentation_random_remove_patch_percent_range_depth=args.augmentation_random_remove_patch_percent_range_depth,
+            augmentation_random_remove_patch_size_depth=args.augmentation_random_remove_patch_size_depth,
+            # Loss function settings
+            supervision_type=args.supervision_type,
+            w_losses=args.w_losses,
+            # Frozen model paths
+            frozen_model_paths=args.frozen_model_paths,
+            # Evaluation settings
+            min_evaluate_depths=args.min_evaluate_depths,
+            max_evaluate_depths=args.max_evaluate_depths,
+            evaluation_protocols=args.evaluation_protocols,
+            # Checkpoint settings
+            checkpoint_path=args.checkpoint_path,
+            n_step_per_checkpoint=args.n_step_per_checkpoint,
+            n_step_per_summary=args.n_step_per_summary,
+            n_image_per_summary=args.n_image_per_summary,
+            start_step_validation=args.start_step_validation,
+            restore_paths=args.restore_paths,
+            # Hardware settings
+            device=args.device,
+            n_thread=args.n_thread)
