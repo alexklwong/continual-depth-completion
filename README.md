@@ -1,6 +1,6 @@
 # Continual Depth Completion
 
-This repository provides standardized training scripts and evaluation pipelines for continual depth completion using a variety of methods (EWC, ANCL, LwF, Replay, CMP). It supports six major RGB-D datasets across indoor and outdoor environments.
+This repository provides training and evaluation pipelines for depth completion using a variety of continual learning methods (EWC, ANCL, LwF, Replay, CMP) on both indoor and outdoor datasets. 
 
 ## Dataset Setup
 
@@ -73,10 +73,10 @@ Use the *_replay_dataset_*.txt files stored in the folder of the pretrained chec
     trained_completion/cmp/fusionnet_nyu_void/checkpoints.../next_replay_dataset_intrinsics_paths.txt
 ```
 
-### evaluation
+### Evaluation
 Validation is automatically run during training using the dataset sequences defined in the bash script. 
 
-### output
+### Output
 
 Trained checkpoints and logs are saved to the folder specified via:
 ```bash
