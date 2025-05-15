@@ -62,6 +62,7 @@ python depth_completion/src/train_depth_completion.py \
     w_smoothness=2.0 \
     w_weight_decay_depth=0.0 \
     w_weight_decay_pose=0.0 \
+--create_optimized_replay_buffer true \
 --min_evaluate_depth 0.2 0.2 \
 --max_evaluate_depth 5.0 5.0 \
 --evaluation_protocols nyu_v2 void \
