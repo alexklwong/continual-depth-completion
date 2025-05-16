@@ -83,3 +83,9 @@ Trained checkpoints and logs are saved to the folder specified via:
 --checkpoint_path trained_completion/{method}/{model_name}_{dataset_sequence}
 # example: --checkpoint_path trained_completion/ancl/kbnet_nyu_v2_void
 ```
+### Environment
+```bash
+pip install -r requirements.txt
+```
+
+
