@@ -21,7 +21,7 @@ python depth_completion/src/train_depth_completion.py \
 --val_ground_truth_paths \
     validation/kitti/kitti_val_ground_truth.txt \
     tesing_v2/validation/waymo/waymo_val_day_ground_truth.txt \
---model_name msg_chn_kitti \
+--model_name msg_chn \
 --network_modules depth pose \
 --min_predict_depth 1.5 \
 --max_predict_depth 100.0 \
@@ -50,7 +50,7 @@ python depth_completion/src/train_depth_completion.py \
 --augmentation_random_remove_patch_size_image -1 -1 \
 --augmentation_random_remove_patch_percent_range_depth -1 -1 \
 --augmentation_random_remove_patch_size_depth -1 -1 \
---supervision_type unsupervised \
+--supervision_type supervised \
 --w_losses \
     w_color=0.15 \
     w_structure=0.95 \
