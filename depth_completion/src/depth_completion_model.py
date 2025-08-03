@@ -82,6 +82,38 @@ class DepthCompletionModel(object):
                 min_predict_depth=min_predict_depth,
                 max_predict_depth=max_predict_depth,
                 device=device)
+
+        elif 'nlspn' in model_name:
+            from nlspn_model import NLSPNModel
+
+            self.model = NLSPNModel(
+                max_predict_depth=max_predict_depth,
+                use_pretrained='pretrained' in model_name,
+                device=device)
+        elif 'enet' in model_name:
+            from enet_model import ENetModel
+
+            self.model = ENetModel(
+                max_predict_depth=max_predict_depth,
+                device=device)
+        elif 'penet' in model_name:
+            from penet_model import PENetModel
+
+            self.model = PENetModel(
+                max_predict_depth=max_predict_depth,
+                device=device)
+        elif 'msg_chn' in model_name:
+            from msg_chn_model import MsgChnModel
+
+            self.model = MsgChnModel(
+                max_predict_depth=max_predict_depth,
+                device=device)
+        elif 'rgb_guidance_uncertainty' in model_name:
+            from rgb_guidance_uncertainty_model import RGBGuidanceUncertaintyModel
+
+            self.model = RGBGuidanceUncertaintyModel(
+                use_pretrained='pretrained' in model_name,
+                device=device)
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(model_name))
 
@@ -196,7 +228,7 @@ class DepthCompletionModel(object):
 
         if supervision_type == 'supervised':
             loss, loss_info = self.model.compute_loss(
-                target_depth=ground_truth0,
+                ground_truth=ground_truth0,
                 output_depth=output_depth0)
         elif supervision_type == 'unsupervised':
             loss, loss_info = self.model.compute_loss(
@@ -223,7 +255,7 @@ class DepthCompletionModel(object):
 
             loss += loss_ewc
             loss_info['loss_ewc'] = loss_ewc
-            
+
         if aux_model is not None and 'w_ancl' in w_losses:
             loss_ancl = ancl_loss(
                 current_parameters=self.model.parameters_depth(),
@@ -232,12 +264,12 @@ class DepthCompletionModel(object):
                 lambda_ewc=w_losses['w_ewc'],
                 lambda_ancl=w_losses['w_ancl'],
                 fisher_info=self.prev_fisher)
-            
+
             loss += loss_ancl
             loss_info['loss_ancl'] = loss_ancl
 
         if 'w_lwf' in w_losses:
-            #to debug this, I modified a few lines in random crop, need to fix back later
+            # to debug this, I modified a few lines in random crop, need to fix back later
             frozen_model_output_depth0 = frozen_model.forward_depth(image0, sparse_depth0, validity_map_depth0, intrinsics, return_all_outputs=True)
 
             loss_lwf = lwf_loss(output_depth0, frozen_model_output_depth0, w_losses['w_lwf'])
@@ -444,10 +476,11 @@ class DepthCompletionModel(object):
             normalization : int
                 length of dataset
         '''
+
         self.epoch_fisher = net_utils.compute_fisher(
-                    fisher_info=self.epoch_fisher,
-                    parameters=self.model.parameters_depth(),
-                    normalization=normalization)
+            fisher_info=self.epoch_fisher,
+            parameters=self.model.parameters_depth(),
+            normalization=normalization)
 
     # TODO add fisher matrix to model save
     # def save_fisher(self,

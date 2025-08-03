@@ -147,14 +147,14 @@ class ScaffNetModel(object):
         return image, sparse_depth
 
     def compute_loss(self,
-                     target_depth,
+                     ground_truth,
                      output_depth,
                      w_supervised=1.00):
         '''
         Computes loss function
 
         Arg(s):
-            target_depth : torch.Tensor[float32]
+            ground_truth : torch.Tensor[float32]
                 N x 1 x H x W groundtruth target depth
             output_depth : torch.Tensor[float32]
                 N x 1 x H x W output depth
@@ -174,7 +174,7 @@ class ScaffNetModel(object):
         # Compute loss function
         loss, loss_info = self.model.compute_loss(
             loss_func='supervised_l1_normalized',
-            target_depth=target_depth,
+            target_depth=ground_truth,
             output_depths=output_depth,
             output_uncertainties=output_uncertainty,
             w_supervised=w_supervised)
