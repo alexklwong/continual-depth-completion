@@ -421,7 +421,7 @@ class DepthCompletionModel(object):
                 optimizer=optimizer_depth)
         elif 'msg_chn' in self.model_name:
             return self.model.restore_model(
-                restore_path=restore_paths[0],
+                restore_paths=restore_paths[0],
                 optimizer=optimizer_depth)
         elif 'rgb_guidance_uncertainty' in self.model_name:
             return self.model.restore_model(
