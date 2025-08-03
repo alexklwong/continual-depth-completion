@@ -301,6 +301,15 @@ class MsgChnModel(object):
 
         checkpoint = torch.load(restore_paths, map_location=self.device)
 
+        for key, value in checkpoint['net'].items():
+
+            key_parts = key = key.split('.')
+
+            if key_parts[0] == 'module':
+                new_key = key_parts[1:].join('.')
+                checkpoint['net'][new_key] = value
+                checkpoint['net'].pop(key)
+
         if isinstance(self.model, torch.nn.DataParallel):
             self.model.module.load_state_dict(checkpoint['net'])
         else:
