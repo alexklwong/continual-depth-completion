@@ -1,7 +1,7 @@
 import torch
 import os, sys
 import utils.src.loss_utils as loss_utils
-sys.path.insert(0, os.path.join('external_src', 'MSG_CHN', 'workspace', 'exp_msg_chn'))
+sys.path.insert(0, os.path.join('external_src', 'depth_completion', 'MSG_CHN', 'workspace', 'exp_msg_chn'))
 from network_exp_msg_chn import network
 
 
@@ -333,3 +333,11 @@ class MsgChnModel(object):
             }
 
         torch.save(checkpoint, checkpoint_path)
+
+    def parameters_depth(self):
+        '''
+        Fetches model parameters for depth network modules
+        Returns:
+            list[torch.Tensor[float32]] : list of model parameters for depth network modules
+        '''
+        return self.model.parameters()
