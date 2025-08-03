@@ -422,11 +422,11 @@ def train(train_image_paths,
         ]
 
         # Make sure each set of paths have same number of samples
-        # for n_val_sample, sparse_depth_paths in zip(n_val_samples, val_sparse_depth_paths_arr):
-        #     assert n_val_sample == len(sparse_depth_paths)
+        for n_val_sample, sparse_depth_paths in zip(n_val_samples, val_sparse_depth_paths_arr):
+            assert n_val_sample == len(sparse_depth_paths)
 
-        # # Images <=> Ground truths
-        # assert len(val_image_paths) == len(val_ground_truth_paths)
+        # Images <=> Ground truths
+        assert len(val_image_paths) == len(val_ground_truth_paths)
 
         val_ground_truth_paths_arr = [
             data_utils.read_paths(val_ground_truth_path)
@@ -434,12 +434,12 @@ def train(train_image_paths,
         ]
 
         # Make sure each set of paths have same number of samples
-        # for n_val_sample, ground_truth_paths in zip(n_val_samples, val_ground_truth_paths_arr):
-        #     assert n_val_sample == len(ground_truth_paths)
+        for n_val_sample, ground_truth_paths in zip(n_val_samples, val_ground_truth_paths_arr):
+            assert n_val_sample == len(ground_truth_paths)
 
         # Images <=>? Intrinsics
         if val_intrinsics_paths is not None and len(val_intrinsics_paths) > 0:
-            # assert len(val_image_paths) == len(val_intrinsics_paths)
+            assert len(val_image_paths) == len(val_intrinsics_paths)
 
             val_intrinsics_paths_arr = [
                 data_utils.read_paths(val_intrinsics_path)
@@ -447,8 +447,8 @@ def train(train_image_paths,
             ]
 
             # Make sure each set of paths have same number of samples
-            # for n_val_sample, intrinsics_paths in zip(n_val_samples, val_intrinsics_paths_arr):
-            #     assert n_val_sample == len(intrinsics_paths)
+            for n_val_sample, intrinsics_paths in zip(n_val_samples, val_intrinsics_paths_arr):
+                assert n_val_sample == len(intrinsics_paths)
         else:
             val_intrinsics_paths_arr = [
                 [None] * n_val_sample
@@ -1407,18 +1407,16 @@ def validate(depth_model,
     validity_map_summary = [[] for _ in range(n_dataloaders)]
     ground_truth_summary = [[] for _ in range(n_dataloaders)]
 
-    # val_dataloaders_epoch = tqdm.tqdm(
-    #     zip_longest(*dataloaders, fillvalue=None),
-    #     desc='Batch',
-    #     total=n_val_steps)
-    for dataset_id, dataloader in enumerate(dataloaders):
-        val_dataloader_epoch = tqdm.tqdm(dataloader, desc=f'Val [{dataset_id}]', ncols=100)
+    val_dataloaders_epoch = tqdm.tqdm(
+        zip_longest(*dataloaders, fillvalue=None),
+        desc='Batch',
+        total=n_val_steps)
 
-        for idx, val_batch in enumerate(val_dataloader_epoch):
-            '''
-            Iterate over batches from different datasets
-            '''
-            # for dataset_id, val_batch in enumerate(val_batches):
+    for idx, val_batches in enumerate(val_dataloaders_epoch):
+        '''
+        Iterate over batches from different datasets
+        '''
+        for dataset_id, val_batch in enumerate(val_batches):
 
             # Handles val dataloaders of different lengths 
             if val_batch is not None:
@@ -1441,7 +1439,6 @@ def validate(depth_model,
                         sparse_depth)
 
                     # Forward through network
-                    
                     output_depth = depth_model.forward_depth(
                         image=image,
                         sparse_depth=sparse_depth,
@@ -1449,89 +1446,14 @@ def validate(depth_model,
                         intrinsics=intrinsics,
                         return_all_outputs=False)
 
-                # if summary_writer is not None:
+                if summary_writer is not None:
+
+                    image_summary[dataset_id].append(image)
+                    output_depth_summary[dataset_id].append(output_depth)
+                    sparse_depth_summary[dataset_id].append(sparse_depth)
+                    validity_map_summary[dataset_id].append(validity_map)
+                    ground_truth_summary[dataset_id].append(ground_truth)
                     
-
-                    # if len(image_summary[dataset_id]) < n_image_per_summary:
-
-                    #     image_summary[dataset_id].append(image)
-                    #     output_depth_summary[dataset_id].append(output_depth)
-                    #     sparse_depth_summary[dataset_id].append(sparse_depth)
-                    #     validity_map_summary[dataset_id].append(validity_map)
-                    #     ground_truth_summary[dataset_id].append(ground_truth)
-                    # save_dir = '/media/home/xechen/continual-depth-completion/visual/alexewc_kittiwaymovkitti'
-
-                    # # --- Save first 10 samples to disk ---
-                    # import matplotlib.pyplot as plt
-                    # import torchvision.transforms as T
-
-                    # os.makedirs(save_dir, exist_ok=True)
-
-                    # # if dataset_id == 0 and idx < 50:  # save only first 10 images of first val set
-                    # if dataset_id == 0 and idx <= 999:  # save only last 50
-
-                    #     # Normalize depth for visualization
-                    #     # def normalize_depth(depth):
-                    #     #     if depth.ndim == 3:
-                    #     #         depth = np.squeeze(depth)
-                    #     #     if depth.ndim != 2:
-                    #     #         raise ValueError(f"Expected 2D array after squeeze, got shape: {depth.shape}")
-                    #     #     return (depth - np.nanmin(depth)) / (np.nanmax(depth) - np.nanmin(depth) + 1e-8)
-                    #     def normalize_depth(depth):
-                    #         d = np.copy(depth)           
-                    #         if np.isnan(d).all():
-                    #             return np.zeros_like(d)
-                    #         min_val = np.nanmin(d)
-                    #         max_val = np.nanmax(d)
-                    #         return (d - min_val) / (max_val - min_val + 1e-8)
-                    #     # RGB
-                    #     rgb = image[0].cpu().numpy().transpose(1, 2, 0)  # C,H,W -> H,W,C
-                    #     rgb = np.clip((rgb - rgb.min()) / (rgb.max() - rgb.min() + 1e-8), 0, 1)
-                    #     rgb = (rgb * 255).astype(np.uint8)
-
-                    #     # Depths
-                    #     sparse = sparse_depth[0, 0].cpu().numpy()
-                    #     pred = output_depth[0].cpu().numpy()
-                    #     gt = ground_truth[0].cpu().numpy()
-
-                    #     # Normalize
-                    #     pred_norm = normalize_depth(pred)
-                    #     gt_norm = normalize_depth(gt)
-                    #     # pred: H x W predicted depth
-                    #     # gt: H x W ground truth depth
-
-                    #     valid_mask = (gt > 0)
-                    #     error = np.abs(pred - gt)
-
-                    #     # Mask out invalid regions in error map
-                    #     error[~valid_mask] = 0  # Or use 0, or any neutral color for display
-
-                    #     # Then normalize for visualization
- 
-                    #     error = np.clip(error, 0, np.percentile(error, 98))
-
-                    #     err_norm = normalize_depth(error)
-
-                    #     # err = np.abs(pred - gt)
-                    #     # err = np.clip(err, 0, np.percentile(err, 98))
-                    #     # err_norm = normalize_depth(err)
-                    #     # err = np.clip(err, 0, np.percentile(err, 85))
-                    #     # err_norm = normalize_depth(err)
-                    #     print('GT min/max:', np.nanmin(gt), np.nanmax(gt))
-                    #     print('Pred min/max:', np.nanmin(pred), np.nanmax(pred))
-                    #     print('GT shape:', gt.shape)
-                    #     print('Pred shape:', pred.shape)
-                    #     print('Valid mask sum:', np.sum(valid_mask))
-
-
-                    #     # Save
-                    #     plt.imsave(os.path.join(save_dir, f'{idx}_rgb.png'), rgb)
-                    #     plt.imsave(os.path.join(save_dir, f'{idx}_sparse.png'), sparse, cmap='jet')
-                    #     # plt.imsave(os.path.join(save_dir, f'{idx}_gt.png'), gt_norm, cmap='jet')
-                    #     plt.imsave(os.path.join(save_dir, f'{idx}_gt.png'), np.squeeze(gt_norm), cmap='jet')
-                    #     plt.imsave(os.path.join(save_dir, f'{idx}_pred.png'), np.squeeze(pred_norm), cmap='jet')
-                    #     plt.imsave(os.path.join(save_dir, f'{idx}_err.png'), np.squeeze(err_norm), cmap='inferno')
-
                 # Convert to numpy to validate
                 output_depth = np.squeeze(output_depth.cpu().numpy())
                 ground_truth = np.squeeze(ground_truth.cpu().numpy())
@@ -1593,30 +1515,26 @@ def validate(depth_model,
     rmse  = np.nanmean(rmse, axis=1)
     imae  = np.nanmean(imae, axis=1)
     irmse = np.nanmean(irmse, axis=1)
-    import gc
 
     # Log for each dataset:
     for dataset_id in range(n_dataloaders):
 
-        gc.collect()
-        torch.cuda.empty_cache()
-
-        # Now safe to concat without OOM
-        depth_model.log_summary(
-            summary_writer=summary_writer,
-            tag='eval' + '-{}'.format(dataset_id),
-            step=step,
-            image0=torch.cat(image_summary[dataset_id], dim=0),
-            output_depth0=torch.cat(output_depth_summary[dataset_id], dim=0),
-            sparse_depth0=torch.cat(sparse_depth_summary[dataset_id], dim=0),
-            validity_map0=torch.cat(validity_map_summary[dataset_id], dim=0),
-            ground_truth0=torch.cat(ground_truth_summary[dataset_id], dim=0),
-            scalars={'mae' : mae[dataset_id],
-                    'rmse' : rmse[dataset_id],
-                    'imae' : imae[dataset_id],
-                    'irmse': irmse[dataset_id]},
-            n_image_per_summary=n_image_per_summary)
-
+        # Log to tensorboard
+        if summary_writer is not None:
+            depth_model.log_summary(
+                summary_writer=summary_writer,
+                tag='eval' + '-{}'.format(dataset_id),
+                step=step,
+                image0=torch.cat(image_summary[dataset_id], dim=0),
+                output_depth0=torch.cat(output_depth_summary[dataset_id], dim=0),
+                sparse_depth0=torch.cat(sparse_depth_summary[dataset_id], dim=0),
+                validity_map0=torch.cat(validity_map_summary[dataset_id], dim=0),
+                ground_truth0=torch.cat(ground_truth_summary[dataset_id], dim=0),
+                scalars={'mae' : mae[dataset_id],
+                         'rmse' : rmse[dataset_id],
+                         'imae' : imae[dataset_id],
+                         'irmse': irmse[dataset_id]},
+                n_image_per_summary=n_image_per_summary)
 
         # Print validation results to console
         log('Validation results for dataset {}:'.format(dataset_id), log_path)
@@ -1654,44 +1572,6 @@ def validate(depth_model,
             best_results['rmse'][dataset_id],
             best_results['imae'][dataset_id],
             best_results['irmse'][dataset_id]), log_path)
-
-        # Save top 4 performing samples (lowest MAE)
-        # Save top 10 performing samples (lowest MAE) for each dataset
-        # for dataset_id in range(n_dataloaders):
-        #     n_samples = len(image_summary[dataset_id])
-
-        #     mae_per_sample = np.array([
-        #         eval_utils.mean_abs_err(
-        #             1000.0 * output_depth_summary[dataset_id][i][0].cpu().numpy(),
-        #             1000.0 * ground_truth_summary[dataset_id][i][0].cpu().numpy())
-        #         for i in range(n_samples)
-        #     ])
-
-        #     topk = np.argsort(mae_per_sample)[:10]
-
-        #     save_txt_dir = os.path.join(log_path.rsplit('/', 1)[0], f'best_samples_dataset{dataset_id}')
-        #     os.makedirs(save_txt_dir, exist_ok=True)
-
-        #     image_paths = dataloaders[dataset_id].dataset.image_paths
-        #     sparse_paths = dataloaders[dataset_id].dataset.sparse_depth_paths
-        #     gt_paths = dataloaders[dataset_id].dataset.ground_truth_paths
-        #     intrinsics_paths = dataloaders[dataset_id].dataset.intrinsics_paths
-        #     pred_paths = [os.path.join(save_dir, f'{i}_pred.png') for i in topk]
-
-        #     with open(os.path.join(save_txt_dir, 'best_image_0.txt'), 'w') as f_img, \
-        #         open(os.path.join(save_txt_dir, 'best_sparse_0.txt'), 'w') as f_sparse, \
-        #         open(os.path.join(save_txt_dir, 'best_gt_0.txt'), 'w') as f_gt, \
-        #         open(os.path.join(save_txt_dir, 'best_pred.txt'), 'w') as f_pred, \
-        #         open(os.path.join(save_txt_dir, 'best_intrinsics.txt'), 'w') as f_int:
-
-        #         for i, pred_path in zip(topk, pred_paths):
-        #             f_img.write(image_paths[i] + '\n')
-        #             f_sparse.write(sparse_paths[i] + '\n')
-        #             f_gt.write(gt_paths[i] + '\n')
-        #             f_pred.write(pred_path + '\n')
-        #             f_int.write(intrinsics_paths[i] + '\n')
-
-
 
     return best_results
 
