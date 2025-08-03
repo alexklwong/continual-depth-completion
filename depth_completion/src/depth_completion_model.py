@@ -407,6 +407,26 @@ class DepthCompletionModel(object):
                 model_pose_restore_path=restore_paths[1] if len(restore_paths) > 1 else None,
                 optimizer_depth=optimizer_depth,
                 optimizer_pose=optimizer_pose)
+        elif 'nlspn' in self.model_name:
+            return self.model.restore_model(
+                restore_path=restore_paths[0],
+                optimizer=optimizer_depth)
+        elif 'enet' in self.model_name:
+            return self.model.restore_model(
+                restore_path=restore_paths[0],
+                optimizer=optimizer_depth)
+        elif 'penet' in self.model_name:
+            return self.model.restore_model(
+                restore_path=restore_paths[0],
+                optimizer=optimizer_depth)
+        elif 'msg_chn' in self.model_name:
+            return self.model.restore_model(
+                restore_path=restore_paths[0],
+                optimizer=optimizer_depth)
+        elif 'rgb_guidance_uncertainty' in self.model_name:
+            return self.model.restore_model(
+                restore_path=restore_paths[0],
+                optimizer=optimizer_depth)
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
 
@@ -455,6 +475,31 @@ class DepthCompletionModel(object):
                 optimizer_depth,
                 model_pose_checkpoint_path=os.path.join(checkpoint_dirpath, 'posenet-{}.pth'.format(step)),
                 optimizer_pose=optimizer_pose)
+        elif 'nlspn' in self.model_name:
+            self.model.save_model(
+                os.path.join(checkpoint_dirpath, 'nlspn-{}.pth'.format(step)),
+                step=step,
+                optimizer=optimizer_depth)
+        elif 'enet' in self.model_name:
+            self.model.save_model(
+                os.path.join(checkpoint_dirpath, 'enet-{}.pth'.format(step)),
+                step=step,
+                optimizer=optimizer_depth)
+        elif 'penet' in self.model_name:
+            self.model.save_model(
+                os.path.join(checkpoint_dirpath, 'penet-{}.pth'.format(step)),
+                step=step,
+                optimizer=optimizer_depth)
+        elif 'msg_chn' in self.model_name:
+            self.model.save_model(
+                os.path.join(checkpoint_dirpath, 'msg_chn-{}.pth'.format(step)),
+                step=step,
+                optimizer=optimizer_depth)
+        elif 'rgb_guidance_uncertainty' in self.model_name:
+            self.model.save_model(
+                os.path.join(checkpoint_dirpath, 'rgb_guidance_uncertainty-{}.pth'.format(step)),
+                step=step,
+                optimizer=optimizer_depth)
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
 

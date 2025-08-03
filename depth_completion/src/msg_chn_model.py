@@ -239,6 +239,16 @@ class MsgChnModel(object):
         parameters = list(self.model.parameters())
         return parameters
 
+    def parameters_depth(self):
+        '''
+        Fetches model parameters for depth network modules
+
+        Returns:
+            list[torch.Tensor[float32]] : list of model parameters for depth network modules
+        '''
+
+        return self.parameters()
+
     def train(self):
         '''
         Sets model to training mode
@@ -333,11 +343,3 @@ class MsgChnModel(object):
             }
 
         torch.save(checkpoint, checkpoint_path)
-
-    def parameters_depth(self):
-        '''
-        Fetches model parameters for depth network modules
-        Returns:
-            list[torch.Tensor[float32]] : list of model parameters for depth network modules
-        '''
-        return self.model.parameters()
