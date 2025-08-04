@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=1
 
 python depth_completion/src/train_depth_completion.py \
 --train_image_paths \
@@ -9,6 +9,8 @@ python depth_completion/src/train_depth_completion.py \
     training_v2/training/waymo/waymo_train_day_lidar.txt \
 --train_intrinsics_path \
     training_v2/training/waymo/waymo_train_day_intrinsics.txt \
+--train_ground_truth_path \
+    training_v2/training/waymo/waymo_train_day_ground_truth.txt \
 --val_image_paths \
     validation/kitti/kitti_val_image.txt \
     tesing_v2/validation/waymo/waymo_val_day_image.txt \
@@ -61,14 +63,14 @@ python depth_completion/src/train_depth_completion.py \
 --min_evaluate_depth 1e-3 1e-3 1e-3 \
 --max_evaluate_depth 100.0 80.0 100.0 \
 --evaluation_protocols kitti waymo \
---n_step_per_summary 100 \
---n_step_per_checkpoint 100 \
---start_step_validation 100 \
+--n_step_per_summary 2000 \
+--n_step_per_checkpoint 2000 \
+--start_step_validation 2000 \
 --restore_paths \
     /media/home/xechen/continual-depth-completion/trained_completion/final.pth.tar \
 --frozen_model_paths \
     /media/home/xechen/continual-depth-completion/trained_completion/final.pth.tar \
 --checkpoint_path \
-    trained_completion/rebutal/mg \
+    trained_completion/rebutal/finetune \
 --device gpu \
 --n_thread 8

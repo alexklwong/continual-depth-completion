@@ -29,7 +29,7 @@ class MsgChnModel(object):
         self.device = device
         self.to(self.device)
 
-    def forward(self, image, sparse_depth, intrinsics, return_all_outputs=False):
+    def forward_depth(self, image, sparse_depth, validity_map, intrinsics, return_all_outputs=False):
         '''
         Forwards inputs through the network
 
@@ -239,16 +239,6 @@ class MsgChnModel(object):
         parameters = list(self.model.parameters())
         return parameters
 
-    def parameters_depth(self):
-        '''
-        Fetches model parameters for depth network modules
-
-        Returns:
-            list[torch.Tensor[float32]] : list of model parameters for depth network modules
-        '''
-
-        return self.parameters()
-
     def train(self):
         '''
         Sets model to training mode
@@ -301,14 +291,16 @@ class MsgChnModel(object):
 
         checkpoint = torch.load(restore_paths, map_location=self.device)
 
+        new_state_dict = {}
         for key, value in checkpoint['net'].items():
-
-            key_parts = key = key.split('.')
-
+            key_parts = key.split('.')
             if key_parts[0] == 'module':
-                new_key = key_parts[1:].join('.')
-                checkpoint['net'][new_key] = value
-                checkpoint['net'].pop(key)
+                new_key = '.'.join(key_parts[1:])
+            else:
+                new_key = key
+            new_state_dict[new_key] = value
+
+        checkpoint['net'] = new_state_dict
 
         if isinstance(self.model, torch.nn.DataParallel):
             self.model.module.load_state_dict(checkpoint['net'])
@@ -320,6 +312,8 @@ class MsgChnModel(object):
 
         try:
             train_step = checkpoint['train_step']
+            if train_step is None:
+                train_step = 0
         except Exception:
             train_step = 0
 
@@ -352,3 +346,11 @@ class MsgChnModel(object):
             }
 
         torch.save(checkpoint, checkpoint_path)
+
+    def parameters_depth(self):
+        '''
+        Fetches model parameters for depth network modules
+        Returns:
+            list[torch.Tensor[float32]] : list of model parameters for depth network modules
+        '''
+        return self.model.parameters()

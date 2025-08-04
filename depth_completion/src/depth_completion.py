@@ -766,20 +766,26 @@ def train(train_image_paths,
 
     if len(restore_paths) > 0:
         try:
-            train_step, optimizer_depth, optimizer_pose = depth_completion_model.restore_model(
-                restore_paths,
-                optimizer_depth=optimizer_depth,
-                optimizer_pose=optimizer_pose)
+            if supervision_type == 'unsupervised':
+                train_step, optimizer_depth, optimizer_pose = depth_completion_model.restore_model(
+                    restore_paths,
+                    optimizer_depth=optimizer_depth,
+                    optimizer_pose=optimizer_pose)
+            else:
+                train_step, optimizer_depth = depth_completion_model.restore_model(
+                    restore_paths,
+                    optimizer_depth=optimizer_depth)
         except Exception:
             print('Failed to restore optimizer for depth network: Ignoring...')
-            train_step = depth_completion_model.restore_model(
+            train_step, _ = depth_completion_model.restore_model(
                 restore_paths)
 
         for g in optimizer_depth.param_groups:
             g['lr'] = learning_rate
 
-        for g in optimizer_pose.param_groups:
-            g['lr'] = learning_rate
+        if supervision_type == 'unsupervised':
+            for g in optimizer_pose.param_groups:
+                g['lr'] = learning_rate
 
         n_train_step = n_train_step + train_step
 
