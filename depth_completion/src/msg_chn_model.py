@@ -350,7 +350,9 @@ class MsgChnModel(object):
     def parameters_depth(self):
         '''
         Fetches model parameters for depth network modules
+
         Returns:
             list[torch.Tensor[float32]] : list of model parameters for depth network modules
         '''
-        return self.model.parameters()
+
+        return self.parameters()
