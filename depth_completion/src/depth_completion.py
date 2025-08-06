@@ -1360,6 +1360,12 @@ def train(train_image_paths,
             depth_completion_model.update_fisher()
             aux_model.update_fisher()
 
+            depth_completion_model.save_model_fisher(
+                checkpoint_dirpath.format(train_step),
+                train_step,
+                optimizer_depth,
+                optimizer_pose)
+
 
     '''
     Perform validation for final step and save checkpoint
@@ -1452,13 +1458,13 @@ def validate(depth_model,
                         intrinsics=intrinsics,
                         return_all_outputs=False)
 
-                if summary_writer is not None:
+                # if summary_writer is not None:
 
-                    image_summary[dataset_id].append(image)
-                    output_depth_summary[dataset_id].append(output_depth)
-                    sparse_depth_summary[dataset_id].append(sparse_depth)
-                    validity_map_summary[dataset_id].append(validity_map)
-                    ground_truth_summary[dataset_id].append(ground_truth)
+                #     image_summary[dataset_id].append(image)
+                #     output_depth_summary[dataset_id].append(output_depth)
+                #     sparse_depth_summary[dataset_id].append(sparse_depth)
+                #     validity_map_summary[dataset_id].append(validity_map)
+                #     ground_truth_summary[dataset_id].append(ground_truth)
                     
                 # Convert to numpy to validate
                 output_depth = np.squeeze(output_depth.cpu().numpy())
@@ -1531,11 +1537,11 @@ def validate(depth_model,
                 summary_writer=summary_writer,
                 tag='eval' + '-{}'.format(dataset_id),
                 step=step,
-                image0=torch.cat(image_summary[dataset_id], dim=0),
-                output_depth0=torch.cat(output_depth_summary[dataset_id], dim=0),
-                sparse_depth0=torch.cat(sparse_depth_summary[dataset_id], dim=0),
-                validity_map0=torch.cat(validity_map_summary[dataset_id], dim=0),
-                ground_truth0=torch.cat(ground_truth_summary[dataset_id], dim=0),
+                # image0=torch.cat(image_summary[dataset_id], dim=0),
+                # output_depth0=torch.cat(output_depth_summary[dataset_id], dim=0),
+                # sparse_depth0=torch.cat(sparse_depth_summary[dataset_id], dim=0),
+                # validity_map0=torch.cat(validity_map_summary[dataset_id], dim=0),
+                # ground_truth0=torch.cat(ground_truth_summary[dataset_id], dim=0),
                 scalars={'mae' : mae[dataset_id],
                          'rmse' : rmse[dataset_id],
                          'imae' : imae[dataset_id],

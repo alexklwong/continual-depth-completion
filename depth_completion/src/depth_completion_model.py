@@ -430,6 +430,31 @@ class DepthCompletionModel(object):
         else:
             raise ValueError('Unsupported depth completion model: {}'.format(self.model_name))
 
+    def save_model_fisher(self,
+                   checkpoint_dirpath,
+                   step,
+                   optimizer_depth=None,
+                   optimizer_pose=None):
+        '''
+        Save weights of the model to checkpoint path
+
+        Arg(s):
+            checkpoint_dirpath : str
+                path to save directory to save checkpoints
+            step : int
+                current training step
+            optimizer : torch.optim
+                optimizer
+        '''
+
+        os.makedirs(checkpoint_dirpath, exist_ok=True)
+
+        print(f"cfe: {self.calculate_fisher_enabled}, fisher: {self.fisher is not None}")
+        if self.calculate_fisher_enabled and self.fisher is not None:
+            torch.save(self.fisher, os.path.join(checkpoint_dirpath, 'fisher-info_{}.pth'.format(step)))
+            raise ValueError("Done")
+        # torch.save(self.fisher, os.path.join(checkpoint_dirpath, 'fisher-info_{}.pth'.format(step)))
+
     def save_model(self,
                    checkpoint_dirpath,
                    step,
