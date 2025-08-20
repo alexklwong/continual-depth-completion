@@ -10,7 +10,7 @@ sys.path.insert(0, './')
 import utils.src.data_utils as data_utils
 
 
-N_CLUSTER = 7500
+N_CLUSTER = 1500
 O_HEIGHT = 968
 O_WIDTH = 1296
 R_HEIGHT = 480
@@ -18,9 +18,10 @@ R_WIDTH = 640
 N_HEIGHT = 448
 N_WIDTH = 608
 MIN_POINTS = 1100
-TEMPORAL_WINDOW = 3
 RANDOM_SEED = 1
+TEMPORAL_WINDOW = 3
 TEST_SET_SUBSAMPLE_FACTOR = 10
+
 
 random.seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
@@ -30,7 +31,7 @@ SCANNET_ROOT_DIRPATH = os.path.join('data', 'scannet')
 SCANNET_TRAIN_DIRPATH = os.path.join(SCANNET_ROOT_DIRPATH, 'scans')
 SCANNET_TEST_DIRPATH = os.path.join(SCANNET_ROOT_DIRPATH, 'scans_test')
 
-SCANNET_DERIVED_DIRPATH = os.path.join('data', 'scannet_derived')
+SCANNET_DERIVED_DIRPATH = os.path.join('data', 'scannet_derived-{}')
 
 TRAIN_REF_DIRPATH = os.path.join('training', 'scannet')
 VAL_REF_DIRPATH = os.path.join('validation', 'scannet')
@@ -49,7 +50,7 @@ TRAIN_SUPERVISED_GROUND_TRUTH_OUTPUT_FILEPATH = \
 TRAIN_SUPERVISED_INTRINSICS_OUTPUT_FILEPATH = \
     os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'scannet_train_intrinsics_{}.txt')
 
-# Define output paths for for unsupervised training
+# Define output paths for unsupervised training
 TRAIN_UNSUPERVISED_IMAGES_OUTPUT_FILEPATH = \
     os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'scannet_train_images_{}.txt')
 TRAIN_UNSUPERVISED_SPARSE_DEPTH_OUTPUT_FILEPATH = \
@@ -69,37 +70,6 @@ TEST_GROUND_TRUTH_OUTPUT_FILEPATH = \
 TEST_INTRINSICS_OUTPUT_FILEPATH = \
     os.path.join(TEST_REF_DIRPATH, 'scannet_test_intrinsics_{}.txt')
 
-def create_fast_feature_validity_map(fast_feature_detector, image, n_points):
-    '''
-    Creates validity map using a FAST feature detector
-
-    Arg(s):
-        fast_feature_detector : cv2.FastFeatureDetector
-            FAST feature detector instance
-        image : numpy[uint8]
-            H x W x 3 RGB image in range [0, 255]
-        n_points : int
-            number of points to sample
-    '''
-
-    n_height, n_width = image.shape[0:2]
-
-    # Run fast feature detector
-    key_points = fast_feature_detector.detect(image, None)
-    key_points = np.array([p.pt for p in key_points]).astype(int)
-
-    # Sample up to the number of points
-    selected = np.random.permutation(np.arange(key_points.shape[0]))[:n_points]
-
-    try:
-        points = key_points[selected, :]
-        validity_map = np.zeros((n_height, n_width))
-        validity_map[points[:, 1], points[:, 0]] = 1
-
-    except Exception:
-        validity_map = np.zeros((n_height, n_width))
-
-    return validity_map
 
 def process_frame(inputs):
     '''
@@ -107,7 +77,7 @@ def process_frame(inputs):
 
     Arg(s):
         inputs : tuple
-            image path at time t=0,
+            image path at time t=0
             image path at time t=1,
             image path at time t=-1,
             ground truth path at time t=0
@@ -135,15 +105,17 @@ def process_frame(inputs):
         n_width, \
         save_image_triplet = inputs
 
-    # Load image (for corner detection) to generate valid map
+    # Load image
     image0 = cv2.imread(image0_path)
-    image0 = np.float32(cv2.cvtColor(image0, cv2.COLOR_BGR2GRAY))
 
     # Load dense depth
     ground_truth = data_utils.load_depth(ground_truth_path, multiplier=1000.0)
     assert ground_truth.shape == (R_HEIGHT, R_WIDTH)
 
     image0 = cv2.resize(image0, (R_WIDTH, R_HEIGHT), interpolation=cv2.INTER_AREA)
+
+    # Convert to gray (for corner detection) to generate valid map
+    image0_gray = np.float32(cv2.cvtColor(image0, cv2.COLOR_BGR2GRAY))
 
     # Crop away black borders
     d_height = R_HEIGHT - n_height
@@ -155,6 +127,7 @@ def process_frame(inputs):
     x_end = x_start + n_width
 
     image0 = image0[y_start:y_end, x_start:x_end]
+    image0_gray = image0_gray[y_start:y_end, x_start:x_end]
     ground_truth = ground_truth[y_start:y_end, x_start:x_end]
 
     if sparse_depth_distro_type == 'corner':
@@ -191,6 +164,7 @@ def process_frame(inputs):
 
         # Use k-Means means as corners
         selected_indices = kmeans.cluster_centers_.astype(np.uint16)
+
         # Convert the indices into validity map
         validity_map = np.zeros_like(image0).astype(np.int16)
         validity_map[selected_indices[:, 0], selected_indices[:, 1]] = 1.0
@@ -210,11 +184,8 @@ def process_frame(inputs):
 
     elif sparse_depth_distro_type == 'fast':
 
-        image0_raw = cv2.imread(image0_path)
-
         fast_feature_detector = cv2.FastFeatureDetector_create(threshold=1, nonmaxSuppression=False)
-        validity_map = create_fast_feature_validity_map(fast_feature_detector, image0_raw, n_points)
-        validity_map = cv2.resize(validity_map, (n_width, n_height), interpolation=cv2.INTER_NEAREST)
+        validity_map = data_utils.create_fast_feature_validity_map(fast_feature_detector, image0, n_points)
 
     else:
         raise ValueError('Unsupported sparse depth distribution type: {}'.format(
@@ -222,6 +193,7 @@ def process_frame(inputs):
 
     # Build validity map from selected points, keep only ones greater than 0
     validity_map = np.where(validity_map * ground_truth > 0.0, 1.0, 0.0)
+
     # Get sparse depth based on validity map
     sparse_depth = validity_map * ground_truth
 
@@ -240,7 +212,7 @@ def process_frame(inputs):
     if np.sum(np.where(validity_map > 0.0, 1.0, 0.0)) < min_points:
         error_flag = True
         print('FAILED: np.sum(np.where(validity_map > 0.0, 1.0, 0.0)) < MIN_POINTS', np.sum(np.where(validity_map > 0.0, 1.0, 0.0)))
-  
+
     if np.sum(np.where(ground_truth > 0.0, 1.0, 0.0)) < min_points:
         error_flag = True
         print('FAILED: np.sum(np.where(ground_truth > 0.0, 1.0, 0.0)) < MIN_POINTS')
@@ -251,11 +223,6 @@ def process_frame(inputs):
         print('FAILED: np.any(np.isnan(sparse_depth))')
 
     if not error_flag:
-
-        image0 = cv2.imread(image0_path)
-
-        image0 = cv2.resize(image0, (R_WIDTH, R_HEIGHT), interpolation=cv2.INTER_AREA)
-        image0 = image0[y_start:y_end, x_start:x_end, :]
 
         if save_image_triplet:
             # Read images and concatenate together
@@ -274,21 +241,22 @@ def process_frame(inputs):
 
         # Example: data/scannet/scans_test/scene0799_00/export/color/1.jpg
         image_output_path = image0_path \
-            .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH) \
+            .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH.format(sparse_depth_distro_type)) \
             .replace(os.path.join('export', 'color'), 'image')
 
         if imagec is None:
             images_output_path = None
         else:
             images_output_path = image0_path \
-                .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH) \
+                .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH.format(sparse_depth_distro_type)) \
                 .replace(os.path.join('export', 'color'), 'images')
 
         sparse_depth_output_path = ground_truth_path \
-            .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH) \
+            .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH.format(sparse_depth_distro_type)) \
             .replace(os.path.join('export', 'depth'), 'sparse_depth')
+
         ground_truth_output_path = ground_truth_path \
-            .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH) \
+            .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH.format(sparse_depth_distro_type)) \
             .replace(os.path.join('export', 'depth'), 'ground_truth')
 
         image_output_dirpath = os.path.dirname(image_output_path)
@@ -333,13 +301,14 @@ def process_frame(inputs):
             sparse_depth_output_path,
             ground_truth_output_path)
 
+
 def setup_dataset_scannet_training(sparse_depth_distro_type,
                                    n_points,
                                    min_points,
                                    n_height,
                                    n_width,
                                    temporal_window,
-                                   fast_forward):
+                                   n_thread):
     '''
     Fetch image and ground truth paths for training
 
@@ -356,8 +325,8 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
             width of image and ground truth after cropping away black edges
         temporal_window : int
             window to sample image triplet on left middle and right of window
-        fast_forward : bool
-            if set, then fast forward through sequences that have already been processed
+        n_thread: int
+            number of thread for parallel processing
     '''
 
     # Define output paths for supervised training
@@ -375,7 +344,7 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
     w = int(temporal_window // 2)
 
     train_sequence_dirpaths = natsorted(glob.glob(os.path.join(SCANNET_TRAIN_DIRPATH, '*/')))
-    
+
     for train_sequence_dirpath in train_sequence_dirpaths:
 
         image_paths = natsorted(glob.glob(
@@ -406,146 +375,83 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
         intrinsics[0, 0] = intrinsics[0, 0] * scale_factor_x
         intrinsics[1, 1] = intrinsics[1, 1] * scale_factor_y
         intrinsics[0, 2] = intrinsics[0, 2] * scale_factor_x - offset_x
-        intrinsics[1, 2] = intrinsics[1, 2] * scale_factor_x - offset_y
+        intrinsics[1, 2] = intrinsics[1, 2] * scale_factor_y - offset_y
 
+        # Save intrinsics
         intrinsics_output_path = intrinsics_path \
-            .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH) \
+            .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH.format(sparse_depth_distro_type)) \
             .replace(os.path.join('intrinsic', 'intrinsic_color.txt'), 'intrinsics.npy') \
             .replace('export', 'intrinsic')
-            
-        intrinsics_dir_path, extension = os.path.splitext(intrinsics_output_path)
 
-        if intrinsics_dir_path is not None and not os.path.exists(intrinsics_dir_path):
-            os.makedirs(intrinsics_dir_path, exist_ok=True)
+        intrinsics_dirpath = os.path.dirname(intrinsics_output_path)
+        os.makedirs(intrinsics_dirpath, exist_ok=True)
 
         np.save(intrinsics_output_path, intrinsics)
 
-        # Get all existing paths
-        image_output_dirpath = os.path.dirname(
-            image_paths[0]
-                .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH)
-                .replace(os.path.join('export', 'color'), 'image'))
-        images_output_dirpath = os.path.dirname(
-            image_paths[0]
-                .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH)
-                .replace(os.path.join('export', 'color'), 'images'))
-        sparse_depth_output_dirpath = os.path.dirname(
-            ground_truth_paths[0]
-                .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH)
-                .replace(os.path.join('export', 'depth'), 'sparse_depth'))
-        ground_truth_output_dirpath = os.path.dirname(
-            ground_truth_paths[0]
-                .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH)
-                .replace(os.path.join('export', 'depth'), 'ground_truth'))
+        print('Processing training {} samples in: {}'.format(n_sample, train_sequence_dirpath))
 
-        image_output_paths = natsorted(glob.glob(os.path.join(image_output_dirpath, '*.jpg')))
-        images_output_paths = natsorted(glob.glob(os.path.join(images_output_dirpath, '*.jpg')))
-        sparse_depth_output_paths = natsorted(glob.glob(os.path.join(sparse_depth_output_dirpath, '*.png')))
-        ground_truth_output_paths = natsorted(glob.glob(os.path.join(ground_truth_output_dirpath, '*.png')))
+        pool_inputs = []
 
-        is_exists_output_dirpaths = \
-            os.path.exists(image_output_dirpath) and \
-            os.path.exists(images_output_dirpath) and \
-            os.path.exists(sparse_depth_output_dirpath) and \
-            os.path.exists(ground_truth_output_dirpath) and \
-            len(image_output_paths) == len(sparse_depth_output_paths) and \
-            len(image_output_paths) == len(ground_truth_output_paths)
+        for idx in range(n_sample):
 
-        if fast_forward and is_exists_output_dirpaths:
+            image_filename = os.path.splitext(os.path.basename(image_paths[idx]))[0]
+            ground_truth_filename = os.path.splitext(os.path.basename(ground_truth_paths[idx]))[0]
+            assert image_filename == ground_truth_filename
 
-            print('Found {} samples for supervised and {} samples for unsupervised training in: {}'.format(
-                len(image_output_paths), len(images_output_paths), train_sequence_dirpath))
+            if idx in range(w, n_sample - w):
+                pool_inputs.append((
+                    image_paths[idx],
+                    image_paths[idx-w],
+                    image_paths[idx+w],
+                    ground_truth_paths[idx],
+                    sparse_depth_distro_type,
+                    n_points,
+                    min_points,
+                    n_height,
+                    n_width,
+                    True))
+            else:
+                pool_inputs.append((
+                    image_paths[idx],
+                    image_paths[idx],
+                    image_paths[idx],
+                    ground_truth_paths[idx],
+                    sparse_depth_distro_type,
+                    n_points,
+                    min_points,
+                    n_height,
+                    n_width,
+                    False))
 
-            # Append all training paths
-            train_supervised_image_output_paths.extend(image_output_paths)
-            train_supervised_sparse_depth_output_paths.extend(sparse_depth_output_paths)
-            train_supervised_ground_truth_output_paths.extend(ground_truth_output_paths)
-            train_supervised_intrinsics_output_paths.extend([intrinsics_output_path] * len(image_output_paths))
+        with mp.Pool(n_thread) as pool:
+            pool_results = pool.map(process_frame, pool_inputs)
 
-            images_output_filenames = [
-                os.path.splitext(os.path.basename(path))[0]
-                for path in images_output_paths
-            ]
+            for result in pool_results:
+                image_output_path, \
+                    images_output_path, \
+                    sparse_depth_output_path, \
+                    ground_truth_output_path = result
 
-            for depth_idx, sparse_depth_output_path in enumerate(sparse_depth_output_paths):
-                sparse_depth_output_filename = os.path.splitext(os.path.basename(sparse_depth_output_path))[0]
+                error_encountered = \
+                    image_output_path == 'error' or \
+                    images_output_path == 'error' or \
+                    sparse_depth_output_path == 'error' or \
+                    ground_truth_output_path == 'error'
 
-                try:
-                    images_idx = images_output_filenames.index(sparse_depth_output_filename)
-                except ValueError:
+                if error_encountered:
                     continue
 
-                ground_truth_output_path = ground_truth_output_paths[depth_idx]
-                images_output_path = images_output_paths[images_idx]
+                # Collect train filepaths
+                if images_output_path is not None:
+                    train_unsupervised_images_output_paths.append(images_output_path)
+                    train_unsupervised_sparse_depth_output_paths.append(sparse_depth_output_path)
+                    train_unsupervised_ground_truth_output_paths.append(ground_truth_output_path)
+                    train_unsupervised_intrinsics_output_paths.append(intrinsics_output_path)
 
-                train_unsupervised_images_output_paths.append(images_output_path)
-                train_unsupervised_sparse_depth_output_paths.append(sparse_depth_output_path)
-                train_unsupervised_ground_truth_output_paths.append(ground_truth_output_path)
-                train_unsupervised_intrinsics_output_paths.extend([intrinsics_output_path] * len(images_output_paths))
-        else:
-            print('Processing training {} samples in: {}'.format(n_sample, train_sequence_dirpath))
-
-            pool_inputs = []
-
-            for idx in range(n_sample):
-
-                image_filename = os.path.splitext(os.path.basename(image_paths[idx]))[0]
-                ground_truth_filename = os.path.splitext(os.path.basename(ground_truth_paths[idx]))[0]
-                assert image_filename == ground_truth_filename
-
-                if idx in range(w, n_sample - w):
-                    pool_inputs.append((
-                        image_paths[idx],
-                        image_paths[idx-w],
-                        image_paths[idx+w],
-                        ground_truth_paths[idx],
-                        sparse_depth_distro_type,
-                        n_points,
-                        min_points,
-                        n_height,
-                        n_width,
-                        True))
-                else:
-                    pool_inputs.append((
-                        image_paths[idx],
-                        image_paths[idx],
-                        image_paths[idx],
-                        ground_truth_paths[idx],
-                        sparse_depth_distro_type,
-                        n_points,
-                        min_points,
-                        n_height,
-                        n_width,
-                        False))
-
-            with mp.Pool() as pool:
-                pool_results = pool.map(process_frame, pool_inputs)
-
-                for result in pool_results:
-                    image_output_path, \
-                        images_output_path, \
-                        sparse_depth_output_path, \
-                        ground_truth_output_path = result
-
-                    error_encountered = \
-                        image_output_path == 'error' or \
-                        images_output_path == 'error' or \
-                        sparse_depth_output_path == 'error' or \
-                        ground_truth_output_path == 'error'
-
-                    if error_encountered:
-                        continue
-
-                    # Collect train filepaths
-                    if images_output_path is not None:
-                        train_unsupervised_images_output_paths.append(images_output_path)
-                        train_unsupervised_sparse_depth_output_paths.append(sparse_depth_output_path)
-                        train_unsupervised_ground_truth_output_paths.append(ground_truth_output_path)
-                        train_unsupervised_intrinsics_output_paths.append(intrinsics_output_path)
-                    train_supervised_image_output_paths.append(image_output_path)
-                    train_supervised_sparse_depth_output_paths.append(sparse_depth_output_path)
-                    train_supervised_ground_truth_output_paths.append(ground_truth_output_path)
-                    train_supervised_intrinsics_output_paths.append(intrinsics_output_path)
+                train_supervised_image_output_paths.append(image_output_path)
+                train_supervised_sparse_depth_output_paths.append(sparse_depth_output_path)
+                train_supervised_ground_truth_output_paths.append(ground_truth_output_path)
+                train_supervised_intrinsics_output_paths.append(intrinsics_output_path)
 
     '''
     Write training output paths
@@ -602,12 +508,11 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
         len(train_unsupervised_intrinsics_output_paths), train_unsupervised_intrinsics_output_filepath))
     data_utils.write_paths(train_unsupervised_intrinsics_output_filepath, train_unsupervised_intrinsics_output_paths)
 
-
 def setup_dataset_scannet_testing(sparse_depth_distro_type,
                                   n_points,
                                   n_height,
                                   n_width,
-                                  fast_forward):
+                                  n_thread):
     '''
     Fetch image and ground truth paths for testing
 
@@ -620,8 +525,8 @@ def setup_dataset_scannet_testing(sparse_depth_distro_type,
             height of image and ground truth after cropping away black edges
         n_width : int
             width of image and ground truth after cropping away black edges
-        fast_forward : bool
-            if set, then fast forward through sequences that have already been processed
+        n_thread: int
+            number of thread for parallel processing
     '''
 
     # Define output paths
@@ -662,102 +567,65 @@ def setup_dataset_scannet_testing(sparse_depth_distro_type,
         intrinsics[0, 0] = intrinsics[0, 0] * scale_factor_x
         intrinsics[1, 1] = intrinsics[1, 1] * scale_factor_y
         intrinsics[0, 2] = intrinsics[0, 2] * scale_factor_x - offset_x
-        intrinsics[1, 2] = intrinsics[1, 2] * scale_factor_x - offset_y
+        intrinsics[1, 2] = intrinsics[1, 2] * scale_factor_y - offset_y
 
         test_intrinsics_output_path = test_intrinsics_path \
-            .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH) \
+            .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH.format(sparse_depth_distro_type)) \
             .replace(os.path.join('intrinsic', 'intrinsic_color.txt'), 'intrinsics.npy') \
             .replace('export', 'intrinsic')
-            
-        intrinsics_dir_path, extension = os.path.splitext(test_intrinsics_output_path)
 
-        if intrinsics_dir_path is not None and not os.path.exists(intrinsics_dir_path):
-            os.makedirs(intrinsics_dir_path, exist_ok=True)
+        test_intrinsics_dirpath = os.path.dirname(test_intrinsics_output_path)
+        os.makedirs(test_intrinsics_dirpath, exist_ok=True)
 
         np.save(test_intrinsics_output_path, intrinsics)
 
-        # Get all existing paths
-        image_output_dirpath = os.path.dirname(
-            test_image_paths[0]
-                .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH)
-                .replace(os.path.join('export', 'color'), 'image'))
-        sparse_depth_output_dirpath = os.path.dirname(
-            test_ground_truth_paths[0]
-                .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH)
-                .replace(os.path.join('export', 'depth'), 'sparse_depth'))
-        ground_truth_output_dirpath = os.path.dirname(
-            test_ground_truth_paths[0]
-                .replace(SCANNET_ROOT_DIRPATH, SCANNET_DERIVED_DIRPATH)
-                .replace(os.path.join('export', 'depth'), 'ground_truth'))
+        print('Processing testing {} samples in: {}'.format(n_sample, test_sequence_dirpath))
 
-        image_output_paths = natsorted(glob.glob(os.path.join(image_output_dirpath, '*.jpg')))
-        sparse_depth_output_paths = natsorted(glob.glob(os.path.join(sparse_depth_output_dirpath, '*.png')))
-        ground_truth_output_paths = natsorted(glob.glob(os.path.join(ground_truth_output_dirpath, '*.png')))
+        # Subsample test set by factor
+        test_image_paths = test_image_paths[::TEST_SET_SUBSAMPLE_FACTOR]
+        test_ground_truth_paths = test_ground_truth_paths[::TEST_SET_SUBSAMPLE_FACTOR]
 
-        is_exists_output_dirpaths = \
-            os.path.exists(image_output_dirpath) and \
-            os.path.exists(sparse_depth_output_dirpath) and \
-            os.path.exists(ground_truth_output_dirpath) and \
-            len(image_output_paths) == len(sparse_depth_output_paths) and \
-            len(image_output_paths) == len(ground_truth_output_paths)
+        pool_inputs = []
 
-        if fast_forward and is_exists_output_dirpaths:
+        for image_path, ground_truth_path in zip(test_image_paths, test_ground_truth_paths):
+            image_filename = os.path.splitext(os.path.basename(image_path))[0]
+            ground_truth_filename = os.path.splitext(os.path.basename(ground_truth_path))[0]
+            assert image_filename == ground_truth_filename
 
-            print('Found {} samples for testing in: {}'.format(len(image_output_paths), test_sequence_dirpath))
+            pool_inputs.append((
+                image_path,
+                image_path,
+                image_path,
+                ground_truth_path,
+                sparse_depth_distro_type,
+                n_points,
+                100,
+                n_height,
+                n_width,
+                False))
 
-            # Append all testing paths
-            test_image_output_paths.extend(image_output_paths)
-            test_sparse_depth_output_paths.extend(sparse_depth_output_paths)
-            test_ground_truth_output_paths.extend(ground_truth_output_paths)
-            test_intrinsics_output_paths.extend([test_intrinsics_output_path] * len(image_output_paths))
-        else:
-            print('Processing testing {} samples in: {}'.format(n_sample, test_sequence_dirpath))
+        with mp.Pool(n_thread) as pool:
+            pool_results = pool.map(process_frame, pool_inputs)
 
-            # Subsample test set by factor
-            test_image_paths = test_image_paths[::TEST_SET_SUBSAMPLE_FACTOR]
-            test_ground_truth_paths = test_ground_truth_paths[::TEST_SET_SUBSAMPLE_FACTOR]
+            for result in pool_results:
+                image_output_path, \
+                    _, \
+                    sparse_depth_output_path, \
+                    ground_truth_output_path = result
 
-            pool_inputs = []
+                error_encountered = \
+                    image_output_path == 'error' or \
+                    sparse_depth_output_path == 'error' or \
+                    ground_truth_output_path == 'error'
 
-            for image_path, ground_truth_path in zip(test_image_paths, test_ground_truth_paths):
-                image_filename = os.path.splitext(os.path.basename(image_path))[0]
-                ground_truth_filename = os.path.splitext(os.path.basename(ground_truth_path))[0]
-                assert image_filename == ground_truth_filename
+                if error_encountered:
+                    continue
 
-                pool_inputs.append((
-                    image_path,
-                    image_path,
-                    image_path,
-                    ground_truth_path,
-                    sparse_depth_distro_type,
-                    n_points,
-                    100,
-                    n_height,
-                    n_width,
-                    False))
-
-            with mp.Pool() as pool:
-                pool_results = pool.map(process_frame, pool_inputs)
-
-                for result in pool_results:
-                    image_output_path, \
-                        _, \
-                        sparse_depth_output_path, \
-                        ground_truth_output_path = result
-
-                    error_encountered = \
-                        image_output_path == 'error' or \
-                        sparse_depth_output_path == 'error' or \
-                        ground_truth_output_path == 'error'
-
-                    if error_encountered:
-                        continue
-
-                    # Collect test filepaths
-                    test_image_output_paths.append(image_output_path)
-                    test_sparse_depth_output_paths.append(sparse_depth_output_path)
-                    test_ground_truth_output_paths.append(ground_truth_output_path)
-                    test_intrinsics_output_paths.append(test_intrinsics_output_path)
+                # Collect test filepaths
+                test_image_output_paths.append(image_output_path)
+                test_sparse_depth_output_paths.append(sparse_depth_output_path)
+                test_ground_truth_output_paths.append(ground_truth_output_path)
+                test_intrinsics_output_paths.append(test_intrinsics_output_path)
 
     '''
     Write testing output paths
@@ -794,13 +662,14 @@ if __name__ == "__main__":
     parser.add_argument('--n_height',                 type=int, default=N_HEIGHT)
     parser.add_argument('--n_width',                  type=int, default=N_WIDTH)
     parser.add_argument('--temporal_window',          type=int, default=TEMPORAL_WINDOW)
-    parser.add_argument('--fast_forward',             action='store_true')
+    parser.add_argument('--dataset_split',            nargs='+', type=str, default=['training', 'testing'])
+    parser.add_argument('--n_thread',                 type=int, default=os.cpu_count())
 
     args = parser.parse_args()
 
     # Create output directories first
     dirpaths = [
-        SCANNET_DERIVED_DIRPATH,
+        SCANNET_DERIVED_DIRPATH.format(args.sparse_depth_distro_type),
         TRAIN_REF_DIRPATH,
         VAL_REF_DIRPATH,
         TEST_REF_DIRPATH,
@@ -813,19 +682,21 @@ if __name__ == "__main__":
             os.makedirs(dirpath, exist_ok=True)
 
     # Set up dataset for training
-    setup_dataset_scannet_training(
-        sparse_depth_distro_type=args.sparse_depth_distro_type,
-        n_points=args.n_points,
-        min_points=args.min_points,
-        n_height=args.n_height,
-        n_width=args.n_width,
-        temporal_window=args.temporal_window,
-        fast_forward=args.fast_forward)
+    if 'training' in args.dataset_split:
+        setup_dataset_scannet_training(
+            sparse_depth_distro_type=args.sparse_depth_distro_type,
+            n_points=args.n_points,
+            min_points=args.min_points,
+            n_height=args.n_height,
+            n_width=args.n_width,
+            temporal_window=args.temporal_window,
+            n_thread=args.n_thread)
 
     # Set up dataset for testing
-    setup_dataset_scannet_testing(
-        sparse_depth_distro_type=args.sparse_depth_distro_type,
-        n_points=args.n_points,
-        n_height=args.n_height,
-        n_width=args.n_width,
-        fast_forward=args.fast_forward)
+    if 'testing' in args.dataset_split:
+        setup_dataset_scannet_testing(
+            sparse_depth_distro_type=args.sparse_depth_distro_type,
+            n_points=args.n_points,
+            n_height=args.n_height,
+            n_width=args.n_width,
+            n_thread=args.n_thread)
