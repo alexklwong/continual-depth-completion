@@ -34,17 +34,12 @@ class DepthCompletionModel(object):
         self.device = device
 
         # Parse dataset name
-        if 'kitti' in model_name:
+        if 'outdoor' in model_name:
             dataset_name = 'kitti'
-        elif 'vkitti' in model_name:
-            dataset_name = 'vkitti'
-        elif 'void' in model_name:
+        elif 'indoor' in model_name:
             dataset_name = 'void'
-        elif 'scenenet' in model_name:
-            dataset_name = 'scenenet'
-        elif 'nyu_v2' in model_name:
-            dataset_name = 'nyu_v2'
         else:
+            # Default to outdoor
             dataset_name = 'kitti'
 
         if 'kbnet' in model_name:

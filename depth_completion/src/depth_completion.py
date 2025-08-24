@@ -4,16 +4,12 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 sys.path.insert(0, os.getcwd())
 import datasets
-from utils.src import data_utils, eval_utils, net_utils
-from utils.src import data_utils, eval_utils, net_utils
+from utils.src import data_utils, eval_utils
 from utils.src.log_utils import log
 from depth_completion_model import DepthCompletionModel
 from utils.src.transforms import Transforms
 from PIL import Image
 from itertools import zip_longest
-
-
-
 
 
 def train(train_image_paths,
@@ -174,7 +170,7 @@ def train(train_image_paths,
 
     '''
     Setup training dataloaders
-    '''    
+    '''
     # Get number of train samples and training step
     # Note: zipping up iterators will pad based on largest one
     max_train_sample = max(n_train_samples)
@@ -349,7 +345,7 @@ def train(train_image_paths,
                 intrinsics_paths, \
                 ground_truth_paths = inputs
 
-            # Compute indices to select 
+            # Compute indices to select
             np.random.seed(replay_seed)
             idx_replay_samples = np.random.permutation(range(len(image_paths)))[:replay_dataset_size]
             np.random.seed(None)
@@ -454,10 +450,10 @@ def train(train_image_paths,
                 [None] * n_val_sample
                 for n_val_sample in n_val_samples
             ]
-        
+
         # Make sure the number of evalution protocols matches the number of validation datasets
         assert len(val_image_paths) == len(evaluation_protocols)
-        
+
         '''
         Setup validation dataloaders
         '''
@@ -525,7 +521,7 @@ def train(train_image_paths,
     # Also will need to introduce an argument for restoring weights from previous dataset
 
     if len(frozen_model_paths) > 0:
-        frozen_model =  DepthCompletionModel(
+        frozen_model = DepthCompletionModel(
             model_name=model_name,
             network_modules=network_modules,
             min_predict_depth=min_predict_depth,
@@ -534,17 +530,17 @@ def train(train_image_paths,
 
         frozen_model.restore_model(frozen_model_paths, frozen_model=True)
         frozen_model.eval()
-        
+
         aux_model = DepthCompletionModel(
             model_name=model_name,
             network_modules=network_modules,
             min_predict_depth=min_predict_depth,
             max_predict_depth=max_predict_depth,
             device=device)
-        
+
         aux_model.restore_model(frozen_model_paths, frozen_model=True)
         aux_model.train()
-        
+
         parameters_aux_model = aux_model.parameters_depth()
         if supervision_type == 'unsupervised':
             parameters_aux_model = aux_model.parameters_pose()
@@ -602,7 +598,7 @@ def train(train_image_paths,
             for path in paths:
                 if path is not None:
                     log(path, log_path)
-        
+
         log('', log_path)
 
     # Added multiple dataset support
@@ -830,9 +826,9 @@ def train(train_image_paths,
                 sparse_depth_paths, \
                 intrinsics_paths, \
                 ground_truth_paths, \
-                multiplier_sample_padding,\
+                multiplier_sample_padding, \
                 remainder_sample_padding = inputs
-            
+
             # Compute indices to select remainder for this epoch
             idx_remainder = np.random.permutation(range(len(image_paths)))[:remainder_sample_padding]
 
@@ -850,12 +846,12 @@ def train(train_image_paths,
             intrinsics_paths_epoch = intrinsics_paths + \
                 intrinsics_paths * (multiplier_sample_padding - 1) + \
                 (np.array(intrinsics_paths)[idx_remainder]).tolist()
-            
+
             # Extend ground truth paths
             ground_truth_paths_epoch = ground_truth_paths + \
                 ground_truth_paths * (multiplier_sample_padding - 1) + \
                 (np.array(ground_truth_paths)[idx_remainder]).tolist()
-            
+
             # Append extended paths for each dataset
             train_image_paths_arr_epoch.append(image_paths_epoch)
             train_sparse_depth_paths_arr_epoch.append(sparse_depth_paths_epoch)
@@ -869,7 +865,7 @@ def train(train_image_paths,
             train_ground_truth_paths_arr_epoch,
             train_batch_sizes_arr_epoch,
             train_crop_shapes_arr_epoch)
-        
+
         train_dataloaders = []
         # For each dataset
         for inputs in train_input_paths_arr_epoch:
@@ -899,7 +895,6 @@ def train(train_image_paths,
                     random_crop_type=augmentation_random_crop_type)
             else:
                 raise ValueError('Unsupported supervision type: {}'.format(supervision_type))
-            
 
             train_dataloader = torch.utils.data.DataLoader(
                 train_dataset,
@@ -938,9 +933,9 @@ def train(train_image_paths,
                     sparse_depth_paths, \
                     intrinsics_paths, \
                     ground_truth_paths, \
-                    multiplier_sample_padding,\
+                    multiplier_sample_padding, \
                     remainder_sample_padding = inputs
-                
+
                 # Compute indices to select remainder for this epoch
                 idx_remainder = np.random.permutation(range(len(image_paths)))[:remainder_sample_padding]
 
@@ -958,12 +953,12 @@ def train(train_image_paths,
                 intrinsics_paths_epoch = intrinsics_paths + \
                     intrinsics_paths * (multiplier_sample_padding - 1) + \
                     (np.array(intrinsics_paths)[idx_remainder]).tolist()
-                
+
                 # Extend ground truth paths
                 ground_truth_paths_epoch = ground_truth_paths + \
                     ground_truth_paths * (multiplier_sample_padding - 1) + \
                     (np.array(ground_truth_paths)[idx_remainder]).tolist()
-                
+
                 # Append extended paths for each dataset
                 replay_image_paths_arr_epoch.append(image_paths_epoch)
                 replay_sparse_depth_paths_arr_epoch.append(sparse_depth_paths_epoch)
@@ -1165,7 +1160,7 @@ def train(train_image_paths,
 
                 # Compute loss function
                 validity_map_depth0 = validity_map0
-                
+
                 # Auxillary network for ANCL
                 if 'w_ancl' in w_losses:
                     loss_aux_batch, loss_info_aux_batch = aux_model.compute_loss(
@@ -1184,12 +1179,12 @@ def train(train_image_paths,
                         w_losses=w_losses)
 
                     optimizer_aux.zero_grad()
-                    
-                    if supervision_type == 'unsupervised':  
+
+                    if supervision_type == 'unsupervised':
                         optimizer_aux_pose.zero_grad()
 
                     loss_aux_batch.backward()
-                
+
                     optimizer_aux.step()
                     if supervision_type == 'unsupervised':
                         optimizer_aux_pose.step()
@@ -1214,22 +1209,21 @@ def train(train_image_paths,
                         aux_model=aux_model)
                 else:
                     loss_batch, loss_info_batch = depth_completion_model.compute_loss(
-                    image0=image0,
-                    image1=image1,
-                    image2=image2,
-                    output_depth0=output_depth0,
-                    sparse_depth0=sparse_depth0,
-                    validity_map_depth0=validity_map_depth0,
-                    validity_map_image0=validity_map_image0,
-                    ground_truth0=ground_truth0,
-                    intrinsics=intrinsics,
-                    pose0to1=pose0to1,
-                    pose0to2=pose0to2,
-                    supervision_type=supervision_type,
-                    w_losses=w_losses,
-                    frozen_model=frozen_model)
-                
-                    
+                        image0=image0,
+                        image1=image1,
+                        image2=image2,
+                        output_depth0=output_depth0,
+                        sparse_depth0=sparse_depth0,
+                        validity_map_depth0=validity_map_depth0,
+                        validity_map_image0=validity_map_image0,
+                        ground_truth0=ground_truth0,
+                        intrinsics=intrinsics,
+                        pose0to1=pose0to1,
+                        pose0to2=pose0to2,
+                        supervision_type=supervision_type,
+                        w_losses=w_losses,
+                        frozen_model=frozen_model)
+
                 # Accumulate loss over batches and update loss info
                 loss = loss + loss_batch
 
@@ -1354,7 +1348,6 @@ def train(train_image_paths,
             depth_completion_model.update_fisher()
             aux_model.update_fisher()
 
-
     '''
     Perform validation for final step and save checkpoint
     '''
@@ -1380,6 +1373,7 @@ def train(train_image_paths,
         train_step,
         optimizer_depth,
         optimizer_pose)
+
 
 def validate(depth_model,
              dataloaders,  # multiple dataloaders
@@ -1418,7 +1412,7 @@ def validate(depth_model,
         '''
         for dataset_id, val_batch in enumerate(val_batches):
 
-            # Handles val dataloaders of different lengths 
+            # Handles val dataloaders of different lengths
             if val_batch is not None:
 
                 # Fetch data
@@ -1426,7 +1420,7 @@ def validate(depth_model,
                     in_.to(device) for in_ in val_batch
                 ]
                 image, sparse_depth, intrinsics, ground_truth = val_batch
-                
+
                 if intrinsics.shape[-1] == 4 and intrinsics.shape[1] == 4:
                     # Convert from 4x4 to 3x3
                     intrinsics = intrinsics[:, :3, :3]
@@ -1453,7 +1447,7 @@ def validate(depth_model,
                     sparse_depth_summary[dataset_id].append(sparse_depth)
                     validity_map_summary[dataset_id].append(validity_map)
                     ground_truth_summary[dataset_id].append(ground_truth)
-                    
+
                 # Convert to numpy to validate
                 output_depth = np.squeeze(output_depth.cpu().numpy())
                 ground_truth = np.squeeze(ground_truth.cpu().numpy())
@@ -2085,8 +2079,8 @@ def log_evaluation_settings(log_path,
         log_path)
     for i in range(len(min_evaluate_depths)):
         log('Dataset {}: min_evaluate_depth={:.2f}  max_evaluate_depth={:.2f}'.format(
-        i, min_evaluate_depths[i], max_evaluate_depths[i]),
-        log_path)
+            i, min_evaluate_depths[i], max_evaluate_depths[i]),
+            log_path)
     log('', log_path)
 
 def log_system_settings(log_path,
