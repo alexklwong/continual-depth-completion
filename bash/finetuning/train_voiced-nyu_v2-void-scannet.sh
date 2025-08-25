@@ -96,7 +96,7 @@ python depth_completion/src/train_depth_completion.py \
     testing/nyu_v2/nyu_v2_test_ground_truth_corner.txt \
     testing/void/void_test_ground_truth_1500.txt \
     testing/scannet/scannet_test_ground_truth_fast.txt \
---model_name voiced-indoors \
+--model_name voiced-indoor \
 --network_modules depth pose \
 --min_predict_depth 0.1 \
 --max_predict_depth 8.0 \
