@@ -1570,17 +1570,12 @@ def validate(depth_model,
     return best_results
 
 
-# NOT set up for multiple val dataloaders
 def run(image_path,
         sparse_depth_path,
         intrinsics_path,
         ground_truth_path,
         # Restore path settings
         restore_paths,
-        # Input settings
-        input_channels_image,
-        input_channels_depth,
-        normalized_image_range,
         # Depth network settings
         model_name,
         network_modules,
@@ -1811,10 +1806,49 @@ def run(image_path,
                 ground_truth_path = os.path.join(ground_truth_dirpath, filename)
                 data_utils.save_depth(ground_truth, ground_truth_path)
 
-            validity_mask = np.where(validity_map > 0, 1, 0)
+            if evaluation_protocols in ['kitti', 'vkitti']:
+                # Crop output_depth and ground_truth
+                crop_height = 240
+                crop_width = 1216
+                crop_mask = [crop_height, crop_width]
+            elif evaluation_protocols == 'nuscenes':
+                # Crop output_depth and ground_truth
+                crop_height = 540
+                crop_width = 1600
+                crop_mask = [crop_height, crop_width]
+            elif evaluation_protocols == 'synthia':
+                # Crop output_depth and ground_truth
+                crop_height = 320
+                crop_width = 640
+                crop_mask = [crop_height, crop_width]
+            elif evaluation_protocols == 'waymo':
+                # Crop output_depth and ground_truth
+                crop_height = 768
+                crop_width = 1920
+                crop_mask = [crop_height, crop_width]
+            else:
+                crop_mask = None
+
+            if crop_mask is not None:
+                height, width = ground_truth.shape[-2], ground_truth.shape[-1]
+
+                # Bottom crop
+                center = width // 2
+                start_x = center - crop_width // 2
+                end_x = center + crop_width // 2
+                end_y = height
+                start_y = end_y - crop_height
+
+                output_depth = output_depth[start_y:end_y, start_x:end_x]
+                ground_truth = ground_truth[start_y:end_y, start_x:end_x]
+
+            # Select valid regions to evaluate
+            validity_mask = np.where(ground_truth > 0, 1, 0)
+
             min_max_mask = np.logical_and(
                 ground_truth > min_evaluate_depth,
                 ground_truth < max_evaluate_depth)
+
             mask = np.where(np.logical_and(validity_mask, min_max_mask) > 0)
 
             output_depth = output_depth[mask]

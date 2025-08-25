@@ -19,14 +19,6 @@ parser.add_argument('--ground_truth_path',
 parser.add_argument('--restore_paths',
     nargs='+', type=str, default=[], help='Path to restore depth or pose model from checkpoint')
 
-# Input settings
-parser.add_argument('--input_channels_image',
-    type=int, default=3, help='Number of input image channels')
-parser.add_argument('--input_channels_depth',
-    type=int, default=2, help='Number of input depth channels')
-parser.add_argument('--normalized_image_range',
-    nargs='+', type=float, default=[0, 1], help='Range of image intensities after normalization')
-
 # Depth network settings
 parser.add_argument('--model_name',
     type=str, default='kbnet_void', help='Depth completion model name')
