@@ -1440,7 +1440,7 @@ def validate(depth_model,
                         intrinsics=intrinsics,
                         return_all_outputs=False)
 
-                if summary_writer is not None:
+                if summary_writer is not None and idx % n_interval_per_summary == 0:
 
                     image_summary[dataset_id].append(image)
                     output_depth_summary[dataset_id].append(output_depth)
