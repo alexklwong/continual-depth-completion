@@ -15,7 +15,7 @@ extract_last_best_step() {
 
     # Use awk to find the last "Best results:" section and extract the Step value
     local best_step=$(awk '
-        /Best results:/ {
+        /Best results/ {
             in_best = 1
             next
         }
