@@ -20,6 +20,7 @@ N_WIDTH = 608
 MIN_POINTS = 800
 RANDOM_SEED = 1
 TEMPORAL_WINDOW = 3
+TRAIN_SET_SUBSAMPLE_FACTOR = 10
 TEST_SET_SUBSAMPLE_FACTOR = 10
 
 
@@ -50,6 +51,15 @@ TRAIN_SUPERVISED_GROUND_TRUTH_OUTPUT_FILEPATH = \
 TRAIN_SUPERVISED_INTRINSICS_OUTPUT_FILEPATH = \
     os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'scannet_train_intrinsics_{}.txt')
 
+TRAIN_SUPERVISED_SUBSET_IMAGE_OUTPUT_FILEPATH = \
+    os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'scannet_train_image_{}-subset.txt')
+TRAIN_SUPERVISED_SUBSET_SPARSE_DEPTH_OUTPUT_FILEPATH = \
+    os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'scannet_train_sparse_depth_{}-subset.txt')
+TRAIN_SUPERVISED_SUBSET_GROUND_TRUTH_OUTPUT_FILEPATH = \
+    os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'scannet_train_ground_truth_{}-subset.txt')
+TRAIN_SUPERVISED_SUBSET_INTRINSICS_OUTPUT_FILEPATH = \
+    os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'scannet_train_intrinsics_{}-subset.txt')
+
 # Define output paths for unsupervised training
 TRAIN_UNSUPERVISED_IMAGES_OUTPUT_FILEPATH = \
     os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'scannet_train_images_{}.txt')
@@ -59,6 +69,15 @@ TRAIN_UNSUPERVISED_GROUND_TRUTH_OUTPUT_FILEPATH = \
     os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'scannet_train_ground_truth_{}.txt')
 TRAIN_UNSUPERVISED_INTRINSICS_OUTPUT_FILEPATH = \
     os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'scannet_train_intrinsics_{}.txt')
+
+TRAIN_UNSUPERVISED_SUBSET_IMAGES_OUTPUT_FILEPATH = \
+    os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'scannet_train_images_{}-subset.txt')
+TRAIN_UNSUPERVISED_SUBSET_SPARSE_DEPTH_OUTPUT_FILEPATH = \
+    os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'scannet_train_sparse_depth_{}-subset.txt')
+TRAIN_UNSUPERVISED_SUBSET_GROUND_TRUTH_OUTPUT_FILEPATH = \
+    os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'scannet_train_ground_truth_{}-subset.txt')
+TRAIN_UNSUPERVISED_SUBSET_INTRINSICS_OUTPUT_FILEPATH = \
+    os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'scannet_train_intrinsics_{}-subset.txt')
 
 # Test file paths
 TEST_IMAGE_OUTPUT_FILEPATH = \
@@ -454,6 +473,27 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
                 train_supervised_intrinsics_output_paths.append(intrinsics_output_path)
 
     '''
+    Subsample training set based on subsample factor
+    '''
+    train_supervised_subset_image_output_paths = \
+        train_supervised_image_output_paths[::TRAIN_SET_SUBSAMPLE_FACTOR]
+    train_supervised_subset_sparse_depth_output_paths = \
+        train_supervised_sparse_depth_output_paths[::TRAIN_SET_SUBSAMPLE_FACTOR]
+    train_supervised_subset_ground_truth_output_paths = \
+        train_supervised_ground_truth_output_paths[::TRAIN_SET_SUBSAMPLE_FACTOR]
+    train_supervised_subset_intrinsics_output_paths = \
+        train_supervised_intrinsics_output_paths[::TRAIN_SET_SUBSAMPLE_FACTOR]
+
+    train_unsupervised_subset_images_output_paths = \
+        train_unsupervised_images_output_paths[::TRAIN_SET_SUBSAMPLE_FACTOR]
+    train_unsupervised_subset_sparse_depth_output_paths = \
+        train_unsupervised_sparse_depth_output_paths[::TRAIN_SET_SUBSAMPLE_FACTOR]
+    train_unsupervised_subset_ground_truth_output_paths = \
+        train_unsupervised_ground_truth_output_paths[::TRAIN_SET_SUBSAMPLE_FACTOR]
+    train_unsupervised_subset_intrinsics_output_paths = \
+        train_unsupervised_intrinsics_output_paths[::TRAIN_SET_SUBSAMPLE_FACTOR]
+
+    '''
     Write training output paths
     '''
     train_supervised_image_output_filepath = \
@@ -465,6 +505,15 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
     train_supervised_intrinsics_output_filepath = \
         TRAIN_SUPERVISED_INTRINSICS_OUTPUT_FILEPATH.format(sparse_depth_distro_type)
 
+    train_supervised_subset_image_output_filepath = \
+        TRAIN_SUPERVISED_SUBSET_IMAGE_OUTPUT_FILEPATH.format(sparse_depth_distro_type)
+    train_supervised_subset_sparse_depth_output_filepath = \
+        TRAIN_SUPERVISED_SUBSET_SPARSE_DEPTH_OUTPUT_FILEPATH.format(sparse_depth_distro_type)
+    train_supervised_subset_ground_truth_output_filepath = \
+        TRAIN_SUPERVISED_SUBSET_GROUND_TRUTH_OUTPUT_FILEPATH.format(sparse_depth_distro_type)
+    train_supervised_subset_intrinsics_output_filepath = \
+        TRAIN_SUPERVISED_SUBSET_INTRINSICS_OUTPUT_FILEPATH.format(sparse_depth_distro_type)
+
     train_unsupervised_images_output_filepath = \
         TRAIN_UNSUPERVISED_IMAGES_OUTPUT_FILEPATH.format(sparse_depth_distro_type)
     train_unsupervised_sparse_depth_output_filepath = \
@@ -474,39 +523,83 @@ def setup_dataset_scannet_training(sparse_depth_distro_type,
     train_unsupervised_intrinsics_output_filepath = \
         TRAIN_UNSUPERVISED_INTRINSICS_OUTPUT_FILEPATH.format(sparse_depth_distro_type)
 
+    train_unsupervised_subset_images_output_filepath = \
+        TRAIN_UNSUPERVISED_SUBSET_IMAGES_OUTPUT_FILEPATH.format(sparse_depth_distro_type)
+    train_unsupervised_subset_sparse_depth_output_filepath = \
+        TRAIN_UNSUPERVISED_SUBSET_SPARSE_DEPTH_OUTPUT_FILEPATH.format(sparse_depth_distro_type)
+    train_unsupervised_subset_ground_truth_output_filepath = \
+        TRAIN_UNSUPERVISED_SUBSET_GROUND_TRUTH_OUTPUT_FILEPATH.format(sparse_depth_distro_type)
+    train_unsupervised_subset_intrinsics_output_filepath = \
+        TRAIN_UNSUPERVISED_SUBSET_INTRINSICS_OUTPUT_FILEPATH.format(sparse_depth_distro_type)
+
     # Storing paths for supervised training
-    print('Storing {} training supervised image file paths into: {}'.format(
+    print('Storing {} supervised training image file paths into: {}'.format(
         len(train_supervised_image_output_paths), train_supervised_image_output_filepath))
     data_utils.write_paths(train_supervised_image_output_filepath, train_supervised_image_output_paths)
 
-    print('Storing {} training supervised sparse depth file paths into: {}'.format(
+    print('Storing {} supervised training sparse depth file paths into: {}'.format(
         len(train_supervised_sparse_depth_output_paths), train_supervised_sparse_depth_output_filepath))
     data_utils.write_paths(train_supervised_sparse_depth_output_filepath, train_supervised_sparse_depth_output_paths)
 
-    print('Storing {} training supervised ground truth file paths into: {}'.format(
+    print('Storing {} supervised training ground truth file paths into: {}'.format(
         len(train_supervised_ground_truth_output_paths), train_supervised_ground_truth_output_filepath))
     data_utils.write_paths(train_supervised_ground_truth_output_filepath, train_supervised_ground_truth_output_paths)
 
-    print('Storing {} training supervised intrinsics file paths into: {}'.format(
+    print('Storing {} supervised training intrinsics file paths into: {}'.format(
         len(train_supervised_intrinsics_output_paths), train_supervised_intrinsics_output_filepath))
     data_utils.write_paths(train_supervised_intrinsics_output_filepath, train_supervised_intrinsics_output_paths)
 
+    # Storing paths for supervised training subset
+    print('Storing {} supervised training subset image file paths into: {}'.format(
+        len(train_supervised_subset_image_output_paths), train_supervised_subset_image_output_filepath))
+    data_utils.write_paths(train_supervised_subset_image_output_filepath, train_supervised_subset_image_output_paths)
+
+    print('Storing {} supervised training subset sparse depth file paths into: {}'.format(
+        len(train_supervised_subset_sparse_depth_output_paths), train_supervised_subset_sparse_depth_output_filepath))
+    data_utils.write_paths(train_supervised_subset_sparse_depth_output_filepath, train_supervised_subset_sparse_depth_output_paths)
+
+    print('Storing {} supervised training subset ground truth file paths into: {}'.format(
+        len(train_supervised_subset_ground_truth_output_paths), train_supervised_subset_ground_truth_output_filepath))
+    data_utils.write_paths(train_supervised_subset_ground_truth_output_filepath, train_supervised_subset_ground_truth_output_paths)
+
+    print('Storing {} supervised trainingsubset intrinsics file paths into: {}'.format(
+        len(train_supervised_subset_intrinsics_output_paths), train_supervised_subset_intrinsics_output_filepath))
+    data_utils.write_paths(train_supervised_subset_intrinsics_output_filepath, train_supervised_subset_intrinsics_output_paths)
+
     # Storing paths for unsupervised training
-    print('Storing {} training image file paths into: {}'.format(
+    print('Storing {} unsupervised training image file paths into: {}'.format(
         len(train_unsupervised_images_output_paths), train_unsupervised_images_output_filepath))
     data_utils.write_paths(train_unsupervised_images_output_filepath, train_unsupervised_images_output_paths)
 
-    print('Storing {} training sparse depth file paths into: {}'.format(
+    print('Storing {} unsupervised training sparse depth file paths into: {}'.format(
         len(train_unsupervised_sparse_depth_output_paths), train_unsupervised_sparse_depth_output_filepath))
     data_utils.write_paths(train_unsupervised_sparse_depth_output_filepath, train_unsupervised_sparse_depth_output_paths)
 
-    print('Storing {} training ground truth file paths into: {}'.format(
+    print('Storing {} unsupervised training ground truth file paths into: {}'.format(
         len(train_unsupervised_ground_truth_output_paths), train_unsupervised_ground_truth_output_filepath))
     data_utils.write_paths(train_unsupervised_ground_truth_output_filepath, train_unsupervised_ground_truth_output_paths)
 
-    print('Storing {} training intrinsics file paths into: {}'.format(
+    print('Storing {} unsupervised training intrinsics file paths into: {}'.format(
         len(train_unsupervised_intrinsics_output_paths), train_unsupervised_intrinsics_output_filepath))
     data_utils.write_paths(train_unsupervised_intrinsics_output_filepath, train_unsupervised_intrinsics_output_paths)
+
+    # Storing paths for unsupervised training subset
+    print('Storing {} unsupervised training subset image file paths into: {}'.format(
+        len(train_unsupervised_subset_images_output_paths), train_unsupervised_subset_images_output_filepath))
+    data_utils.write_paths(train_unsupervised_subset_images_output_filepath, train_unsupervised_subset_images_output_paths)
+
+    print('Storing {} unsupervised training subset sparse depth file paths into: {}'.format(
+        len(train_unsupervised_subset_sparse_depth_output_paths), train_unsupervised_subset_sparse_depth_output_filepath))
+    data_utils.write_paths(train_unsupervised_subset_sparse_depth_output_filepath, train_unsupervised_subset_sparse_depth_output_paths)
+
+    print('Storing {} unsupervised training subset ground truth file paths into: {}'.format(
+        len(train_unsupervised_subset_ground_truth_output_paths), train_unsupervised_subset_ground_truth_output_filepath))
+    data_utils.write_paths(train_unsupervised_subset_ground_truth_output_filepath, train_unsupervised_subset_ground_truth_output_paths)
+
+    print('Storing {} unsupervised training subset intrinsics file paths into: {}'.format(
+        len(train_unsupervised_subset_intrinsics_output_paths), train_unsupervised_subset_intrinsics_output_filepath))
+    data_utils.write_paths(train_unsupervised_subset_intrinsics_output_filepath, train_unsupervised_subset_intrinsics_output_paths)
+
 
 def setup_dataset_scannet_testing(sparse_depth_distro_type,
                                   n_points,
