@@ -759,6 +759,7 @@ def train(train_image_paths,
         aux_model.train()
 
     train_step = 0
+    train_step_elapsed = 0
 
     if len(restore_paths) > 0:
         try:
@@ -1020,6 +1021,7 @@ def train(train_image_paths,
         # Each train_batches is a n_dataset-length tuple with one batch from each dataset
         for train_batches in train_dataloaders_epoch:
             train_step = train_step + 1
+            train_step_elapsed = train_step_elapsed + 1
             loss = 0.0
             loss_info = {}
 
@@ -1312,7 +1314,7 @@ def train(train_image_paths,
                     train_step, n_train_step, loss.item(), time_elapse, time_remain),
                     log_path)
 
-                if train_step >= start_step_validation and is_available_validation:
+                if train_step_elapsed >= start_step_validation and is_available_validation:
                     # Switch to validation mode
                     depth_completion_model.eval()
 
