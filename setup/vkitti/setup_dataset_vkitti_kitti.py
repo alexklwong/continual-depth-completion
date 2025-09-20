@@ -2,7 +2,8 @@ import sys, os, glob, shutil, argparse, random, cv2
 import multiprocessing as mp
 import numpy as np
 import pandas as pd
-sys.path.insert(0, './')
+
+sys.path.insert(0, "./")
 import utils.src.data_utils as data_utils
 
 
@@ -15,165 +16,208 @@ MAX_DEPTH_VALUE = 65504
 
 N_VAL_SAMPLE = 5
 CONDITIONS = [
-    '15-deg-left',
-    '15-deg-right',
-    '30-deg-left',
-    '30-deg-right',
-    'clone',
-    'fog',
-    'morning',
-    'overcast',
-    'rain',
-    'sunset'
+    "15-deg-left",
+    "15-deg-right",
+    "30-deg-left",
+    "30-deg-right",
+    "clone",
+    "fog",
+    "morning",
+    "overcast",
+    "rain",
+    "sunset",
 ]
 
 
-'''
+"""
 Paths for KITTI dataset
-'''
-KITTI_ROOT_DIRPATH = os.path.join('data', 'kitti_depth_completion')
+"""
+KITTI_ROOT_DIRPATH = os.path.join("data", "kitti_depth_completion")
 KITTI_TRAIN_SPARSE_DEPTH_DIRPATH = os.path.join(
-    KITTI_ROOT_DIRPATH, 'train_val_split', 'sparse_depth', 'train')
+    KITTI_ROOT_DIRPATH, "train_val_split", "sparse_depth", "train"
+)
 # To be concatenated to sequence path
-KITTI_SPARSE_DEPTH_REFPATH = os.path.join('proj_depth', 'velodyne_raw')
+KITTI_SPARSE_DEPTH_REFPATH = os.path.join("proj_depth", "velodyne_raw")
 
 KITTI_PEDESTRIAN_SEQUENCES = [
-    '2011_09_28_drive_0053_sync',
-    '2011_09_28_drive_0054_sync',
-    '2011_09_28_drive_0057_sync',
-    '2011_09_28_drive_0065_sync',
-    '2011_09_28_drive_0066_sync',
-    '2011_09_28_drive_0068_sync',
-    '2011_09_28_drive_0070_sync',
-    '2011_09_28_drive_0071_sync',
-    '2011_09_28_drive_0075_sync',
-    '2011_09_28_drive_0077_sync',
-    '2011_09_28_drive_0078_sync',
-    '2011_09_28_drive_0080_sync',
-    '2011_09_28_drive_0082_sync',
-    '2011_09_28_drive_0086_sync',
-    '2011_09_28_drive_0087_sync',
-    '2011_09_28_drive_0089_sync',
-    '2011_09_28_drive_0090_sync',
-    '2011_09_28_drive_0094_sync',
-    '2011_09_28_drive_0095_sync',
-    '2011_09_28_drive_0096_sync',
-    '2011_09_28_drive_0098_sync',
-    '2011_09_28_drive_0100_sync',
-    '2011_09_28_drive_0102_sync',
-    '2011_09_28_drive_0103_sync',
-    '2011_09_28_drive_0104_sync',
-    '2011_09_28_drive_0106_sync',
-    '2011_09_28_drive_0108_sync',
-    '2011_09_28_drive_0110_sync',
-    '2011_09_28_drive_0113_sync',
-    '2011_09_28_drive_0117_sync',
-    '2011_09_28_drive_0119_sync',
-    '2011_09_28_drive_0121_sync',
-    '2011_09_28_drive_0122_sync',
-    '2011_09_28_drive_0125_sync',
-    '2011_09_28_drive_0126_sync',
-    '2011_09_28_drive_0128_sync',
-    '2011_09_28_drive_0132_sync',
-    '2011_09_28_drive_0134_sync',
-    '2011_09_28_drive_0135_sync',
-    '2011_09_28_drive_0136_sync',
-    '2011_09_28_drive_0141_sync',
-    '2011_09_28_drive_0143_sync',
-    '2011_09_28_drive_0145_sync',
-    '2011_09_28_drive_0146_sync',
-    '2011_09_28_drive_0149_sync',
-    '2011_09_28_drive_0153_sync',
-    '2011_09_28_drive_0154_sync',
-    '2011_09_28_drive_0155_sync',
-    '2011_09_28_drive_0156_sync',
-    '2011_09_28_drive_0153_sync',
-    '2011_09_28_drive_0160_sync',
-    '2011_09_28_drive_0161_sync',
-    '2011_09_28_drive_0162_sync',
-    '2011_09_28_drive_0165_sync',
-    '2011_09_28_drive_0166_sync',
-    '2011_09_28_drive_0167_sync',
-    '2011_09_28_drive_0168_sync',
-    '2011_09_28_drive_0171_sync',
-    '2011_09_28_drive_0174_sync',
-    '2011_09_28_drive_0177_sync',
-    '2011_09_28_drive_0179_sync',
-    '2011_09_28_drive_0183_sync',
-    '2011_09_28_drive_0184_sync',
-    '2011_09_28_drive_0185_sync',
-    '2011_09_28_drive_0186_sync',
-    '2011_09_28_drive_0187_sync',
-    '2011_09_28_drive_0191_sync',
-    '2011_09_28_drive_0192_sync',
-    '2011_09_28_drive_0195_sync',
-    '2011_09_28_drive_0198_sync',
-    '2011_09_28_drive_0199_sync',
-    '2011_09_28_drive_0201_sync',
-    '2011_09_28_drive_0204_sync',
-    '2011_09_28_drive_0205_sync',
-    '2011_09_28_drive_0208_sync',
-    '2011_09_28_drive_0209_sync',
-    '2011_09_28_drive_0214_sync',
-    '2011_09_28_drive_0216_sync',
-    '2011_09_28_drive_0220_sync',
-    '2011_09_28_drive_0222_sync'
+    "2011_09_28_drive_0053_sync",
+    "2011_09_28_drive_0054_sync",
+    "2011_09_28_drive_0057_sync",
+    "2011_09_28_drive_0065_sync",
+    "2011_09_28_drive_0066_sync",
+    "2011_09_28_drive_0068_sync",
+    "2011_09_28_drive_0070_sync",
+    "2011_09_28_drive_0071_sync",
+    "2011_09_28_drive_0075_sync",
+    "2011_09_28_drive_0077_sync",
+    "2011_09_28_drive_0078_sync",
+    "2011_09_28_drive_0080_sync",
+    "2011_09_28_drive_0082_sync",
+    "2011_09_28_drive_0086_sync",
+    "2011_09_28_drive_0087_sync",
+    "2011_09_28_drive_0089_sync",
+    "2011_09_28_drive_0090_sync",
+    "2011_09_28_drive_0094_sync",
+    "2011_09_28_drive_0095_sync",
+    "2011_09_28_drive_0096_sync",
+    "2011_09_28_drive_0098_sync",
+    "2011_09_28_drive_0100_sync",
+    "2011_09_28_drive_0102_sync",
+    "2011_09_28_drive_0103_sync",
+    "2011_09_28_drive_0104_sync",
+    "2011_09_28_drive_0106_sync",
+    "2011_09_28_drive_0108_sync",
+    "2011_09_28_drive_0110_sync",
+    "2011_09_28_drive_0113_sync",
+    "2011_09_28_drive_0117_sync",
+    "2011_09_28_drive_0119_sync",
+    "2011_09_28_drive_0121_sync",
+    "2011_09_28_drive_0122_sync",
+    "2011_09_28_drive_0125_sync",
+    "2011_09_28_drive_0126_sync",
+    "2011_09_28_drive_0128_sync",
+    "2011_09_28_drive_0132_sync",
+    "2011_09_28_drive_0134_sync",
+    "2011_09_28_drive_0135_sync",
+    "2011_09_28_drive_0136_sync",
+    "2011_09_28_drive_0141_sync",
+    "2011_09_28_drive_0143_sync",
+    "2011_09_28_drive_0145_sync",
+    "2011_09_28_drive_0146_sync",
+    "2011_09_28_drive_0149_sync",
+    "2011_09_28_drive_0153_sync",
+    "2011_09_28_drive_0154_sync",
+    "2011_09_28_drive_0155_sync",
+    "2011_09_28_drive_0156_sync",
+    "2011_09_28_drive_0153_sync",
+    "2011_09_28_drive_0160_sync",
+    "2011_09_28_drive_0161_sync",
+    "2011_09_28_drive_0162_sync",
+    "2011_09_28_drive_0165_sync",
+    "2011_09_28_drive_0166_sync",
+    "2011_09_28_drive_0167_sync",
+    "2011_09_28_drive_0168_sync",
+    "2011_09_28_drive_0171_sync",
+    "2011_09_28_drive_0174_sync",
+    "2011_09_28_drive_0177_sync",
+    "2011_09_28_drive_0179_sync",
+    "2011_09_28_drive_0183_sync",
+    "2011_09_28_drive_0184_sync",
+    "2011_09_28_drive_0185_sync",
+    "2011_09_28_drive_0186_sync",
+    "2011_09_28_drive_0187_sync",
+    "2011_09_28_drive_0191_sync",
+    "2011_09_28_drive_0192_sync",
+    "2011_09_28_drive_0195_sync",
+    "2011_09_28_drive_0198_sync",
+    "2011_09_28_drive_0199_sync",
+    "2011_09_28_drive_0201_sync",
+    "2011_09_28_drive_0204_sync",
+    "2011_09_28_drive_0205_sync",
+    "2011_09_28_drive_0208_sync",
+    "2011_09_28_drive_0209_sync",
+    "2011_09_28_drive_0214_sync",
+    "2011_09_28_drive_0216_sync",
+    "2011_09_28_drive_0220_sync",
+    "2011_09_28_drive_0222_sync",
 ]
 
-'''
+"""
 Paths for Virtual KITTI dataset
-'''
-VKITTI_ROOT_DIRPATH = os.path.join('data', 'virtual_kitti')
-VKITTI_TRAIN_DEPTH_REFPATH = 'vkitti_2.0.3'
-VKITTI_TRAIN_DEPTH_DIRPATH = os.path.join(VKITTI_ROOT_DIRPATH, VKITTI_TRAIN_DEPTH_REFPATH)
+"""
+VKITTI_ROOT_DIRPATH = os.path.join("data", "virtual_kitti")
+VKITTI_TRAIN_DEPTH_REFPATH = "vkitti_2.0.3"
+VKITTI_TRAIN_DEPTH_DIRPATH = os.path.join(
+    VKITTI_ROOT_DIRPATH, VKITTI_TRAIN_DEPTH_REFPATH
+)
 
 
-'''
+"""
 Output directory
-'''
-OUTPUT_ROOT_DIRPATH = os.path.join('data', 'virtual_kitti_derived-kitti')
-TRAIN_SUPERVISED_REF_DIRPATH = os.path.join('training', 'virtual_kitti-kitti', 'supervised')
-TRAIN_UNSUPERVISED_REF_DIRPATH = os.path.join('training', 'virtual_kitti-kitti', 'unsupervised')
-TEST_REF_DIRPATH = os.path.join('testing', 'virtual_kitti-kitti')
+"""
+OUTPUT_ROOT_DIRPATH = os.path.join("data", "virtual_kitti_derived-kitti")
+TRAIN_SUPERVISED_REF_DIRPATH = os.path.join(
+    "training", "virtual_kitti-kitti", "supervised"
+)
+TRAIN_UNSUPERVISED_REF_DIRPATH = os.path.join(
+    "training", "virtual_kitti-kitti", "unsupervised"
+)
+TEST_REF_DIRPATH = os.path.join("testing", "virtual_kitti-kitti")
 
 # All paths for supervised training
-ALL_SUPERVISED_IMAGE_FILEPATH = os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'vkitti_all_image-{}.txt')
-ALL_SUPERVISED_SPARSE_DEPTH_FILEPATH = os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'vkitti_all_sparse_depth-{}.txt')
-ALL_SUPERVISED_GROUND_TRUTH_FILEPATH = os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'vkitti_all_ground_truth-{}.txt')
-ALL_SUPERVISED_INTRINSICS_FILEPATH = os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'vkitti_all_intrinsics-{}.txt')
+ALL_SUPERVISED_IMAGE_FILEPATH = os.path.join(
+    TRAIN_SUPERVISED_REF_DIRPATH, "vkitti_all_image-{}.txt"
+)
+ALL_SUPERVISED_SPARSE_DEPTH_FILEPATH = os.path.join(
+    TRAIN_SUPERVISED_REF_DIRPATH, "vkitti_all_sparse_depth-{}.txt"
+)
+ALL_SUPERVISED_GROUND_TRUTH_FILEPATH = os.path.join(
+    TRAIN_SUPERVISED_REF_DIRPATH, "vkitti_all_ground_truth-{}.txt"
+)
+ALL_SUPERVISED_INTRINSICS_FILEPATH = os.path.join(
+    TRAIN_SUPERVISED_REF_DIRPATH, "vkitti_all_intrinsics-{}.txt"
+)
 
 # Paths for supervised training
-TRAIN_SUPERVISED_IMAGE_FILEPATH = os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'vkitti_train_image-{}.txt')
-TRAIN_SUPERVISED_SPARSE_DEPTH_FILEPATH = os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'vkitti_train_sparse_depth-{}.txt')
-TRAIN_SUPERVISED_GROUND_TRUTH_FILEPATH = os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'vkitti_train_ground_truth-{}.txt')
-TRAIN_SUPERVISED_INTRINSICS_FILEPATH = os.path.join(TRAIN_SUPERVISED_REF_DIRPATH, 'vkitti_train_intrinsics-{}.txt')
+TRAIN_SUPERVISED_IMAGE_FILEPATH = os.path.join(
+    TRAIN_SUPERVISED_REF_DIRPATH, "vkitti_train_image-{}.txt"
+)
+TRAIN_SUPERVISED_SPARSE_DEPTH_FILEPATH = os.path.join(
+    TRAIN_SUPERVISED_REF_DIRPATH, "vkitti_train_sparse_depth-{}.txt"
+)
+TRAIN_SUPERVISED_GROUND_TRUTH_FILEPATH = os.path.join(
+    TRAIN_SUPERVISED_REF_DIRPATH, "vkitti_train_ground_truth-{}.txt"
+)
+TRAIN_SUPERVISED_INTRINSICS_FILEPATH = os.path.join(
+    TRAIN_SUPERVISED_REF_DIRPATH, "vkitti_train_intrinsics-{}.txt"
+)
 
 # All paths for unsupervised training
-ALL_UNSUPERVISED_IMAGES_FILEPATH = os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'vkitti_all_image-{}.txt')
-ALL_UNSUPERVISED_SPARSE_DEPTH_FILEPATH = os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'vkitti_all_sparse_depth-{}.txt')
-ALL_UNSUPERVISED_GROUND_TRUTH_FILEPATH = os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'vkitti_all_ground_truth-{}.txt')
-ALL_UNSUPERVISED_INTRINSICS_FILEPATH = os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'vkitti_all_intrinsics-{}.txt')
+ALL_UNSUPERVISED_IMAGES_FILEPATH = os.path.join(
+    TRAIN_UNSUPERVISED_REF_DIRPATH, "vkitti_all_image-{}.txt"
+)
+ALL_UNSUPERVISED_SPARSE_DEPTH_FILEPATH = os.path.join(
+    TRAIN_UNSUPERVISED_REF_DIRPATH, "vkitti_all_sparse_depth-{}.txt"
+)
+ALL_UNSUPERVISED_GROUND_TRUTH_FILEPATH = os.path.join(
+    TRAIN_UNSUPERVISED_REF_DIRPATH, "vkitti_all_ground_truth-{}.txt"
+)
+ALL_UNSUPERVISED_INTRINSICS_FILEPATH = os.path.join(
+    TRAIN_UNSUPERVISED_REF_DIRPATH, "vkitti_all_intrinsics-{}.txt"
+)
 
 # Paths for unsupervised training
-TRAIN_UNSUPERVISED_IMAGES_FILEPATH = os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'vkitti_train_image-{}.txt')
-TRAIN_UNSUPERVISED_SPARSE_DEPTH_FILEPATH = os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'vkitti_train_sparse_depth-{}.txt')
-TRAIN_UNSUPERVISED_GROUND_TRUTH_FILEPATH = os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'vkitti_train_ground_truth-{}.txt')
-TRAIN_UNSUPERVISED_INTRINSICS_FILEPATH = os.path.join(TRAIN_UNSUPERVISED_REF_DIRPATH, 'vkitti_train_intrinsics-{}.txt')
+TRAIN_UNSUPERVISED_IMAGES_FILEPATH = os.path.join(
+    TRAIN_UNSUPERVISED_REF_DIRPATH, "vkitti_train_image-{}.txt"
+)
+TRAIN_UNSUPERVISED_SPARSE_DEPTH_FILEPATH = os.path.join(
+    TRAIN_UNSUPERVISED_REF_DIRPATH, "vkitti_train_sparse_depth-{}.txt"
+)
+TRAIN_UNSUPERVISED_GROUND_TRUTH_FILEPATH = os.path.join(
+    TRAIN_UNSUPERVISED_REF_DIRPATH, "vkitti_train_ground_truth-{}.txt"
+)
+TRAIN_UNSUPERVISED_INTRINSICS_FILEPATH = os.path.join(
+    TRAIN_UNSUPERVISED_REF_DIRPATH, "vkitti_train_intrinsics-{}.txt"
+)
 
 # Paths for testing
-TEST_IMAGE_FILEPATH = os.path.join(TEST_REF_DIRPATH, 'vkitti_test_image-{}.txt')
-TEST_SPARSE_DEPTH_FILEPATH = os.path.join(TEST_REF_DIRPATH, 'vkitti_test_sparse_depth-{}.txt')
-TEST_GROUND_TRUTH_FILEPATH = os.path.join(TEST_REF_DIRPATH, 'vkitti_test_ground_truth-{}.txt')
-TEST_INTRINSICS_FILEPATH = os.path.join(TEST_REF_DIRPATH, 'vkitti_test_intrinsics-{}.txt')
+TEST_IMAGE_FILEPATH = os.path.join(TEST_REF_DIRPATH, "vkitti_test_image-{}.txt")
+TEST_SPARSE_DEPTH_FILEPATH = os.path.join(
+    TEST_REF_DIRPATH, "vkitti_test_sparse_depth-{}.txt"
+)
+TEST_GROUND_TRUTH_FILEPATH = os.path.join(
+    TEST_REF_DIRPATH, "vkitti_test_ground_truth-{}.txt"
+)
+TEST_INTRINSICS_FILEPATH = os.path.join(
+    TEST_REF_DIRPATH, "vkitti_test_intrinsics-{}.txt"
+)
 
 # Data split
-TEST_SPLIT_SEQUENCES = [
-    'Scene02'
-]
+TEST_SPLIT_SEQUENCES = ["Scene02"]
 
 
 def process_frame(args):
-    '''
+    """
     Processes one frame
 
     Arg(s):
@@ -193,20 +237,27 @@ def process_frame(args):
         list[str]: paths to vkitti sparse depth
         list[str]: paths to vkitti intrinsics matrix
         list[str]: paths to vkitti ground truth
-    '''
+    """
 
-    vkitti_image0_path, \
-        vkitti_image1_path, \
-        vkitti_image2_path, \
-        vkitti_intrinsics, \
-        vkitti_ground_truth_path, \
-        kitti_sparse_depth_paths, \
-        output_dirpaths, \
-        save_image_triplet, \
-        paths_only = args
+    (
+        vkitti_image0_path,
+        vkitti_image1_path,
+        vkitti_image2_path,
+        pose_prev_path,
+        pose_curr_path,
+        pose_next_path,
+        vkitti_intrinsics,
+        vkitti_ground_truth_path,
+        kitti_sparse_depth_paths,
+        output_dirpaths,
+        save_image_triplet,
+        paths_only,
+    ) = args
 
     # Load virtual KITTI groundtruth depth
-    vkitti_ground_truth = data_utils.load_depth(vkitti_ground_truth_path, multiplier=100.0)
+    vkitti_ground_truth = data_utils.load_depth(
+        vkitti_ground_truth_path, multiplier=100.0
+    )
     vkitti_ground_truth = np.nan_to_num(vkitti_ground_truth, nan=0.0)
     vkitti_ground_truth = np.where(vkitti_ground_truth < 0, 0, vkitti_ground_truth)
 
@@ -216,21 +267,71 @@ def process_frame(args):
 
     n_sample = len(kitti_sparse_depth_paths)
 
-    vkitti_image_dirpath, \
-        vkitti_images_dirpath, \
-        vkitti_sparse_depth_dirpath, \
-        vkitti_intrinsics_dirpath, \
-        vkitti_ground_truth_dirpath = output_dirpaths
+    (
+        vkitti_image_dirpath,
+        vkitti_images_dirpath,
+        vkitti_sparse_depth_dirpath,
+        vkitti_intrinsics_dirpath,
+        vkitti_ground_truth_dirpath,
+    ) = output_dirpaths
 
     # Output filepaths
-    vkitti_image_paths = \
-        [os.path.join(vkitti_image_dirpath, os.path.basename(vkitti_image0_path))] * n_sample
+    vkitti_image_paths = [
+        os.path.join(vkitti_image_dirpath, os.path.basename(vkitti_image0_path))
+    ] * n_sample
 
     imagec = None
 
+    # Check if we violate parallax constraints
+    parallax_flag = False
+    t_prev_to_curr = None
+    t_next_to_curr = None
+
+    try:
+        if (
+            pose_prev_path
+            and os.path.exists(pose_prev_path)
+            and pose_curr_path
+            and os.path.exists(pose_curr_path)
+            and pose_next_path
+            and os.path.exists(pose_next_path)
+        ):
+
+            world_to_camera_prev = np.load(pose_prev_path)
+            world_to_camera_curr = np.load(pose_curr_path)
+            world_to_camera_next = np.load(pose_next_path)
+
+            # Get parallax for prev to curr
+            camera_to_world_prev = np.linalg.inv(world_to_camera_prev)
+            prev_to_curr = np.matmul(camera_to_world_prev, world_to_camera_curr)
+            t_prev_to_curr = np.linalg.norm(prev_to_curr[:3, 3])
+
+            # Get parallax for next to curr
+            camera_to_world_next = np.linalg.inv(world_to_camera_next)
+            next_to_curr = np.matmul(camera_to_world_next, world_to_camera_curr)
+            t_next_to_curr = np.linalg.norm(next_to_curr[:3, 3])
+
+            # Check if we violate parallax
+            parallax_flag = (
+                parallax_flag
+                or t_prev_to_curr > args.max_parallax_between_frames
+                or t_prev_to_curr < args.min_parallax_between_frames
+            )
+            parallax_flag = (
+                parallax_flag
+                or t_next_to_curr > args.max_parallax_between_frames
+                or t_next_to_curr < args.min_parallax_between_frames
+            )
+    except Exception:
+        parallax_flag = False
+
+    if parallax_flag and save_image_triplet:
+        save_image_triplet = False
+
     if save_image_triplet:
-        vkitti_images_paths = \
-            [os.path.join(vkitti_images_dirpath, os.path.basename(vkitti_image0_path))] * n_sample
+        vkitti_images_paths = [
+            os.path.join(vkitti_images_dirpath, os.path.basename(vkitti_image0_path))
+        ] * n_sample
 
         # Read images and concatenate together
         image0 = cv2.imread(vkitti_image0_path)
@@ -245,15 +346,17 @@ def process_frame(args):
     # Save intrinsics and duplicate paths
     vkitti_intrinsics_path = os.path.join(
         vkitti_intrinsics_dirpath,
-        os.path.splitext(os.path.basename(vkitti_image0_path))[0] + '.npy')
+        os.path.splitext(os.path.basename(vkitti_image0_path))[0] + ".npy",
+    )
     np.save(vkitti_intrinsics_path, vkitti_intrinsics)
 
     vkitti_intrinsics_paths = [vkitti_intrinsics_path] * n_sample
 
     # Set up sparse depth and ground truth paths
     vkitti_sparse_depth_paths = []
-    vkitti_ground_truth_paths = \
-        [os.path.join(vkitti_ground_truth_dirpath, filename + ext)] * n_sample
+    vkitti_ground_truth_paths = [
+        os.path.join(vkitti_ground_truth_dirpath, filename + ext)
+    ] * n_sample
 
     # Get height and width of VKITTI image for rescaling
     n_height_vkitti, n_width_vkitti = vkitti_ground_truth.shape
@@ -268,10 +371,7 @@ def process_frame(args):
 
             # Load KITTI validity map
             kitti_sparse_depth = data_utils.load_depth(kitti_sparse_depth_path)
-            kitti_validity_map = np.where(
-                kitti_sparse_depth > 0.0,
-                1.0,
-                0.0)
+            kitti_validity_map = np.where(kitti_sparse_depth > 0.0, 1.0, 0.0)
 
             n_height_kitti, n_width_kitti = kitti_validity_map.shape
 
@@ -279,7 +379,9 @@ def process_frame(args):
             y_nonzero, x_nonzero = np.nonzero(kitti_validity_map)
 
             x_nonzero_indices = int_vector((x_nonzero / n_width_kitti) * n_width_vkitti)
-            y_nonzero_indices = int_vector((y_nonzero / n_height_kitti) * n_height_vkitti)
+            y_nonzero_indices = int_vector(
+                (y_nonzero / n_height_kitti) * n_height_vkitti
+            )
 
             vkitti_validity_map[y_nonzero_indices, x_nonzero_indices] = 1.0
 
@@ -287,15 +389,21 @@ def process_frame(args):
 
             # Remove any sparse depth points in sky regions
             vkitti_sparse_depth[vkitti_sparse_depth >= SKY_DEPTH_VALUE] = 0
-            vkitti_ground_truth[vkitti_ground_truth >= SKY_DEPTH_VALUE] = MAX_DEPTH_VALUE
+            vkitti_ground_truth[vkitti_ground_truth >= SKY_DEPTH_VALUE] = (
+                MAX_DEPTH_VALUE
+            )
             vkitti_validity_map = np.where(vkitti_validity_map > 0, 1.0, 0.0)
 
         # Append KITTI sequence and filename to VKIITTI filename
         kitti_path_parts = kitti_sparse_depth_path.split(os.sep)
-        output_filename = filename + '-{}'.format(kitti_path_parts[-5] + '_' + kitti_path_parts[-1])
+        output_filename = filename + "-{}".format(
+            kitti_path_parts[-5] + "_" + kitti_path_parts[-1]
+        )
 
         # Store output paths
-        vkitti_sparse_depth_paths.append(os.path.join(vkitti_sparse_depth_dirpath, output_filename))
+        vkitti_sparse_depth_paths.append(
+            os.path.join(vkitti_sparse_depth_dirpath, output_filename)
+        )
 
         # Save to as PNG to disk
         if not paths_only:
@@ -309,39 +417,75 @@ def process_frame(args):
             if imagec is not None:
                 cv2.imwrite(vkitti_images_paths[-1], imagec)
 
-    return (vkitti_image_paths,
-            vkitti_images_paths,
-            vkitti_sparse_depth_paths,
-            vkitti_intrinsics_paths,
-            vkitti_ground_truth_paths)
+    return (
+        vkitti_image_paths,
+        vkitti_images_paths,
+        vkitti_sparse_depth_paths,
+        vkitti_intrinsics_paths,
+        vkitti_ground_truth_paths,
+    )
 
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--n_sample_per_image',
-    type=int, default=50, help='Number of nuscenes sample to use for each Virtual KITTI image')
-parser.add_argument('--paths_only',
-    action='store_true', help='If set, then only produce paths')
-parser.add_argument('--n_thread',
-    type=int, default=10, help='Number of threads to use in parallel pool')
-parser.add_argument('--conditions',
-    nargs='+', type=str, default=CONDITIONS, help='Different conditions in Virtual KITTI dataset')
-parser.add_argument('--temporal_window',
-    type=int, default=3, help='Temporal window to use for image triplet')
+parser.add_argument(
+    "--n_sample_per_image",
+    type=int,
+    default=50,
+    help="Number of nuscenes sample to use for each Virtual KITTI image",
+)
+parser.add_argument(
+    "--paths_only", action="store_true", help="If set, then only produce paths"
+)
+parser.add_argument(
+    "--n_thread", type=int, default=10, help="Number of threads to use in parallel pool"
+)
+parser.add_argument(
+    "--conditions",
+    nargs="+",
+    type=str,
+    default=CONDITIONS,
+    help="Different conditions in Virtual KITTI dataset",
+)
+parser.add_argument(
+    "--temporal_window",
+    type=int,
+    default=3,
+    help="Temporal window to use for image triplet",
+)
+
+# Parallax filtering (translation magnitude between frames, in same units as poses)
+parser.add_argument(
+    "--min_parallax_between_frames",
+    type=float,
+    default=0.01,
+    help="Minimum allowed translation between frames (meters)",
+)
+parser.add_argument(
+    "--max_parallax_between_frames",
+    type=float,
+    default=5.0,
+    help="Maximum allowed translation between frames (meters)",
+)
 
 args = parser.parse_args()
 
 
-'''
+"""
 Generate sparse, semi-dense, dense depth with validity map
-'''
-for dirpath in [TRAIN_SUPERVISED_REF_DIRPATH, TRAIN_UNSUPERVISED_REF_DIRPATH, TEST_REF_DIRPATH]:
+"""
+for dirpath in [
+    TRAIN_SUPERVISED_REF_DIRPATH,
+    TRAIN_UNSUPERVISED_REF_DIRPATH,
+    TEST_REF_DIRPATH,
+]:
     if not os.path.exists(dirpath):
         os.makedirs(dirpath)
 
 # Obtain all KITTI paths
-kitti_sparse_depth_sequences = \
-    sorted(glob.glob(os.path.join(KITTI_TRAIN_SPARSE_DEPTH_DIRPATH, '*')))
+kitti_sparse_depth_sequences = sorted(
+    glob.glob(os.path.join(KITTI_TRAIN_SPARSE_DEPTH_DIRPATH, "*"))
+)
 
 # Select pedestrian KITTI paths
 kitti_sparse_depth_paths = []
@@ -349,13 +493,17 @@ kitti_sparse_depth_paths = []
 for dirpath in kitti_sparse_depth_sequences:
     # If sequence is one of pedestrians
     if os.path.basename(dirpath) in KITTI_PEDESTRIAN_SEQUENCES:
-        sparse_depth_paths = glob.glob(os.path.join(dirpath, KITTI_SPARSE_DEPTH_REFPATH, '*', '*.png'))
+        sparse_depth_paths = glob.glob(
+            os.path.join(dirpath, KITTI_SPARSE_DEPTH_REFPATH, "*", "*.png")
+        )
         kitti_sparse_depth_paths.extend(sorted(sparse_depth_paths))
 
 kitti_sparse_depth_paths = sorted(kitti_sparse_depth_paths)
 
 # Obtain Virtual KITTI sequence directory paths
-vkitti_sequence_dirpaths = sorted(glob.glob(os.path.join(VKITTI_TRAIN_DEPTH_DIRPATH, '*/')))
+vkitti_sequence_dirpaths = sorted(
+    glob.glob(os.path.join(VKITTI_TRAIN_DEPTH_DIRPATH, "*/"))
+)
 
 # Allocate lists to hold all paths
 all_supervised_image_paths = []
@@ -414,74 +562,101 @@ for vkitti_condition in args.conditions:
     test_ground_truth_condition_paths = []
 
     for vkitti_sequence_dirpath in vkitti_sequence_dirpaths:
-        print('Processing Virtual KITTI sequence: {}'.format(vkitti_sequence_dirpath))
+        print("Processing Virtual KITTI sequence: {}".format(vkitti_sequence_dirpath))
 
         # Select Virtual KITTI image for sequence: data/virtual_kitti/vkitti_2.0.3_depth/Scene01/clone/frames/rgb/
-        vkitti_sequence_image_dirpath = os.path.join(vkitti_sequence_dirpath, vkitti_condition, 'frames', 'rgb')
+        vkitti_sequence_image_dirpath = os.path.join(
+            vkitti_sequence_dirpath, vkitti_condition, "frames", "rgb"
+        )
 
         # Select Virtual KITTI depth for sequence: data/virtual_kitti/vkitti_2.0.3_depth/Scene01/clone/frames/depth/
-        vkitti_sequence_depth_dirpath = os.path.join(vkitti_sequence_dirpath, vkitti_condition, 'frames', 'depth')
+        vkitti_sequence_depth_dirpath = os.path.join(
+            vkitti_sequence_dirpath, vkitti_condition, "frames", "depth"
+        )
 
         # Select Virtual KITTI intrinsics for sequence: data/virtual_kitti/vkitti_2.0.3_depth/Scene01/clone/intrinsic.txt
-        vkitti_sequence_intrinsics_path = os.path.join(vkitti_sequence_dirpath, vkitti_condition, 'intrinsic.txt')
+        vkitti_sequence_intrinsics_path = os.path.join(
+            vkitti_sequence_dirpath, vkitti_condition, "intrinsic.txt"
+        )
 
         # Read intrinsics file: frame cameraID K[0,0] K[1,1] K[0,2] K[1,2]
         intrinsics = pd.read_csv(vkitti_sequence_intrinsics_path, delim_whitespace=True)
 
         # Construct output directory for rgb: data/virtual_kitti_derived/vkitti_2.0.3_depth/Scene01/clone/frames/rgb/
-        output_sequence_image_dirpath = \
-            vkitti_sequence_image_dirpath.replace(VKITTI_ROOT_DIRPATH, OUTPUT_ROOT_DIRPATH)
+        output_sequence_image_dirpath = vkitti_sequence_image_dirpath.replace(
+            VKITTI_ROOT_DIRPATH, OUTPUT_ROOT_DIRPATH
+        )
 
         # Construct output directory for depth: data/virtual_kitti_derived/vkitti_2.0.3_depth/Scene01/clone/frames/depth/
-        output_sequence_depth_dirpath = \
-            vkitti_sequence_depth_dirpath.replace(VKITTI_ROOT_DIRPATH, OUTPUT_ROOT_DIRPATH)
+        output_sequence_depth_dirpath = vkitti_sequence_depth_dirpath.replace(
+            VKITTI_ROOT_DIRPATH, OUTPUT_ROOT_DIRPATH
+        )
 
         # Construct output directory for intrinsics: data/virtual_kitti_derived/vkitti_2.0.3_depth/Scene01/clone/intrinsic
-        output_sequence_intrinsics_dirpath = \
-            vkitti_sequence_intrinsics_path.replace(VKITTI_ROOT_DIRPATH, OUTPUT_ROOT_DIRPATH)[:-4]
+        output_sequence_intrinsics_dirpath = vkitti_sequence_intrinsics_path.replace(
+            VKITTI_ROOT_DIRPATH, OUTPUT_ROOT_DIRPATH
+        )[:-4]
 
         n_output = 0
 
-        camera_dirpaths = ['Camera_0', 'Camera_1']
+        camera_dirpaths = ["Camera_0", "Camera_1"]
 
         w = int(args.temporal_window // 2)
 
         for vkitti_camera_dirpath in camera_dirpaths:
 
-            vkitti_sequence_image_filepaths = sorted(glob.glob(
-                os.path.join(vkitti_sequence_image_dirpath, vkitti_camera_dirpath, '*.jpg')))
+            vkitti_sequence_image_filepaths = sorted(
+                glob.glob(
+                    os.path.join(
+                        vkitti_sequence_image_dirpath, vkitti_camera_dirpath, "*.jpg"
+                    )
+                )
+            )
 
-            vkitti_sequence_depth_filepaths = sorted(glob.glob(
-                os.path.join(vkitti_sequence_depth_dirpath, vkitti_camera_dirpath, '*.png')))
+            vkitti_sequence_depth_filepaths = sorted(
+                glob.glob(
+                    os.path.join(
+                        vkitti_sequence_depth_dirpath, vkitti_camera_dirpath, "*.png"
+                    )
+                )
+            )
 
             n_filepath_image = len(vkitti_sequence_image_filepaths)
             n_filepath_depth = len(vkitti_sequence_depth_filepaths)
 
-            assert n_filepath_image == n_filepath_depth, \
-                'Number of filepaths: image={} depth={}'.format(n_filepath_image, n_filepath_depth)
+            assert (
+                n_filepath_image == n_filepath_depth
+            ), "Number of filepaths: image={} depth={}".format(
+                n_filepath_image, n_filepath_depth
+            )
 
             # Construct output paths
             output_image_dirpath = os.path.join(
-                output_sequence_image_dirpath, vkitti_camera_dirpath, 'image')
+                output_sequence_image_dirpath, vkitti_camera_dirpath, "image"
+            )
             output_images_dirpath = os.path.join(
-                output_sequence_image_dirpath, vkitti_camera_dirpath, 'images')
+                output_sequence_image_dirpath, vkitti_camera_dirpath, "images"
+            )
             output_sparse_depth_dirpath = os.path.join(
-                output_sequence_depth_dirpath, vkitti_camera_dirpath, 'sparse_depth')
+                output_sequence_depth_dirpath, vkitti_camera_dirpath, "sparse_depth"
+            )
             output_intrinsics_dirpath = os.path.join(
-                output_sequence_intrinsics_dirpath, vkitti_camera_dirpath)
+                output_sequence_intrinsics_dirpath, vkitti_camera_dirpath
+            )
             output_ground_truth_dirpath = os.path.join(
-                output_sequence_depth_dirpath, vkitti_camera_dirpath, 'ground_truth')
+                output_sequence_depth_dirpath, vkitti_camera_dirpath, "ground_truth"
+            )
 
             # Get camera id
             camera_id = int(vkitti_camera_dirpath[-1])
-            intrinsics_camera = intrinsics.loc[intrinsics['cameraID'] == camera_id]
+            intrinsics_camera = intrinsics.loc[intrinsics["cameraID"] == camera_id]
 
             output_dirpaths = [
                 output_image_dirpath,
                 output_images_dirpath,
                 output_sparse_depth_dirpath,
                 output_intrinsics_dirpath,
-                output_ground_truth_dirpath
+                output_ground_truth_dirpath,
             ]
 
             for output_dirpath in output_dirpaths:
@@ -495,8 +670,12 @@ for vkitti_condition in args.conditions:
                 vkitti_image0_path = vkitti_sequence_image_filepaths[idx]
 
                 # Create intrinsics matrix using K[0,0] K[1,1] K[0,2] K[1,2]
-                vkitti_intrinsics_params = intrinsics_camera.loc[intrinsics_camera['frame'] == idx]
-                vkitti_intrinsics_params = np.reshape(vkitti_intrinsics_params.to_numpy(), -1)[2:]
+                vkitti_intrinsics_params = intrinsics_camera.loc[
+                    intrinsics_camera["frame"] == idx
+                ]
+                vkitti_intrinsics_params = np.reshape(
+                    vkitti_intrinsics_params.to_numpy(), -1
+                )[2:]
                 vkitti_intrinsics = np.eye(3)
                 vkitti_intrinsics[0, 0] = vkitti_intrinsics_params[0]
                 vkitti_intrinsics[1, 1] = vkitti_intrinsics_params[1]
@@ -504,8 +683,8 @@ for vkitti_condition in args.conditions:
                 vkitti_intrinsics[1, 2] = vkitti_intrinsics_params[3]
 
                 if idx in range(w, n_sample - w):
-                    vkitti_image1_path = vkitti_sequence_image_filepaths[idx-1]
-                    vkitti_image2_path = vkitti_sequence_image_filepaths[idx+1]
+                    vkitti_image1_path = vkitti_sequence_image_filepaths[idx - 1]
+                    vkitti_image2_path = vkitti_sequence_image_filepaths[idx + 1]
                     save_image_triplet = True
                 else:
                     vkitti_image1_path = None
@@ -515,39 +694,49 @@ for vkitti_condition in args.conditions:
                 vkitti_ground_truth_path = vkitti_sequence_depth_filepaths[idx]
 
                 # Shuffle the KITTI samples and choose N of them
-                kitti_subset_sparse_depth_paths = \
-                    np.random.permutation(kitti_sparse_depth_paths)[0:args.n_sample_per_image]
+                kitti_subset_sparse_depth_paths = np.random.permutation(
+                    kitti_sparse_depth_paths
+                )[0 : args.n_sample_per_image]
 
-                pool_inputs.append((
-                    vkitti_image0_path,
-                    vkitti_image1_path,
-                    vkitti_image2_path,
-                    vkitti_intrinsics,
-                    vkitti_ground_truth_path,
-                    kitti_subset_sparse_depth_paths,
-                    output_dirpaths,
-                    save_image_triplet,
-                    args.paths_only))
+                pool_inputs.append(
+                    (
+                        vkitti_image0_path,
+                        vkitti_image1_path,
+                        vkitti_image2_path,
+                        vkitti_intrinsics,
+                        vkitti_ground_truth_path,
+                        kitti_subset_sparse_depth_paths,
+                        output_dirpaths,
+                        save_image_triplet,
+                        args.paths_only,
+                    )
+                )
 
             with mp.Pool(args.n_thread) as pool:
                 pool_results = pool.map(process_frame, pool_inputs)
 
             for result in pool_results:
 
-                image_paths, \
-                    images_paths, \
-                    sparse_depth_paths, \
-                    intrinsics_paths, \
-                    ground_truth_paths = result
+                (
+                    image_paths,
+                    images_paths,
+                    sparse_depth_paths,
+                    intrinsics_paths,
+                    ground_truth_paths,
+                ) = result
 
                 n_output = n_output + len(sparse_depth_paths)
 
                 # If we have image triplet
                 if images_paths is not None:
                     all_unsupervised_images_condition_paths.extend(images_paths)
-                    all_unsupervised_sparse_depth_condition_paths.extend(sparse_depth_paths)
+                    all_unsupervised_sparse_depth_condition_paths.extend(
+                        sparse_depth_paths
+                    )
                     all_unsupervised_intrinsics_condition_paths.extend(intrinsics_paths)
-                    all_unsupervised_ground_truth_condition_paths.extend(ground_truth_paths)
+                    all_unsupervised_ground_truth_condition_paths.extend(
+                        ground_truth_paths
+                    )
 
                 # Append all images for supervised training
                 all_supervised_image_condition_paths.extend(image_paths)
@@ -564,357 +753,545 @@ for vkitti_condition in args.conditions:
                         break
 
                 if is_test:
-                    test_image_condition_paths.extend(image_paths[0:min(N_VAL_SAMPLE, args.n_sample_per_image)])
-                    test_sparse_depth_condition_paths.extend(sparse_depth_paths[0:min(N_VAL_SAMPLE, args.n_sample_per_image)])
-                    test_intrinsics_condition_paths.extend(intrinsics_paths[0:min(N_VAL_SAMPLE, args.n_sample_per_image)])
-                    test_ground_truth_condition_paths.extend(ground_truth_paths[0:min(N_VAL_SAMPLE, args.n_sample_per_image)])
+                    test_image_condition_paths.extend(
+                        image_paths[0 : min(N_VAL_SAMPLE, args.n_sample_per_image)]
+                    )
+                    test_sparse_depth_condition_paths.extend(
+                        sparse_depth_paths[
+                            0 : min(N_VAL_SAMPLE, args.n_sample_per_image)
+                        ]
+                    )
+                    test_intrinsics_condition_paths.extend(
+                        intrinsics_paths[0 : min(N_VAL_SAMPLE, args.n_sample_per_image)]
+                    )
+                    test_ground_truth_condition_paths.extend(
+                        ground_truth_paths[
+                            0 : min(N_VAL_SAMPLE, args.n_sample_per_image)
+                        ]
+                    )
                 else:
                     if images_paths is not None:
                         train_unsupervised_images_condition_paths.extend(images_paths)
-                        train_unsupervised_sparse_depth_condition_paths.extend(sparse_depth_paths)
-                        train_unsupervised_intrinsics_condition_paths.extend(intrinsics_paths)
-                        train_unsupervised_ground_truth_condition_paths.extend(ground_truth_paths)
+                        train_unsupervised_sparse_depth_condition_paths.extend(
+                            sparse_depth_paths
+                        )
+                        train_unsupervised_intrinsics_condition_paths.extend(
+                            intrinsics_paths
+                        )
+                        train_unsupervised_ground_truth_condition_paths.extend(
+                            ground_truth_paths
+                        )
 
                     train_supervised_image_condition_paths.extend(image_paths)
-                    train_supervised_sparse_depth_condition_paths.extend(sparse_depth_paths)
+                    train_supervised_sparse_depth_condition_paths.extend(
+                        sparse_depth_paths
+                    )
                     train_supervised_intrinsics_condition_paths.extend(intrinsics_paths)
-                    train_supervised_ground_truth_condition_paths.extend(ground_truth_paths)
+                    train_supervised_ground_truth_condition_paths.extend(
+                        ground_truth_paths
+                    )
 
-        print('Generated {} total samples for {}'.format(n_output, vkitti_sequence_dirpath))
+        print(
+            "Generated {} total samples for {}".format(
+                n_output, vkitti_sequence_dirpath
+            )
+        )
 
     # Keep track of all condition paths for sequences
     all_supervised_image_paths.extend(all_supervised_image_condition_paths)
-    all_supervised_sparse_depth_paths.extend(all_supervised_sparse_depth_condition_paths)
+    all_supervised_sparse_depth_paths.extend(
+        all_supervised_sparse_depth_condition_paths
+    )
     all_supervised_intrinsics_paths.extend(all_supervised_intrinsics_condition_paths)
-    all_supervised_ground_truth_paths.extend(all_supervised_ground_truth_condition_paths)
+    all_supervised_ground_truth_paths.extend(
+        all_supervised_ground_truth_condition_paths
+    )
 
     train_supervised_image_paths.extend(train_supervised_image_condition_paths)
-    train_supervised_sparse_depth_paths.extend(train_supervised_sparse_depth_condition_paths)
-    train_supervised_intrinsics_paths.extend(train_supervised_intrinsics_condition_paths)
-    train_supervised_ground_truth_paths.extend(train_supervised_ground_truth_condition_paths)
+    train_supervised_sparse_depth_paths.extend(
+        train_supervised_sparse_depth_condition_paths
+    )
+    train_supervised_intrinsics_paths.extend(
+        train_supervised_intrinsics_condition_paths
+    )
+    train_supervised_ground_truth_paths.extend(
+        train_supervised_ground_truth_condition_paths
+    )
 
     all_unsupervised_images_paths.extend(all_unsupervised_images_condition_paths)
-    all_unsupervised_sparse_depth_paths.extend(all_unsupervised_sparse_depth_condition_paths)
-    all_unsupervised_intrinsics_paths.extend(all_unsupervised_intrinsics_condition_paths)
-    all_unsupervised_ground_truth_paths.extend(all_unsupervised_ground_truth_condition_paths)
+    all_unsupervised_sparse_depth_paths.extend(
+        all_unsupervised_sparse_depth_condition_paths
+    )
+    all_unsupervised_intrinsics_paths.extend(
+        all_unsupervised_intrinsics_condition_paths
+    )
+    all_unsupervised_ground_truth_paths.extend(
+        all_unsupervised_ground_truth_condition_paths
+    )
 
     train_unsupervised_images_paths.extend(train_unsupervised_images_condition_paths)
-    train_unsupervised_sparse_depth_paths.extend(train_unsupervised_sparse_depth_condition_paths)
-    train_unsupervised_intrinsics_paths.extend(train_unsupervised_intrinsics_condition_paths)
-    train_unsupervised_ground_truth_paths.extend(train_unsupervised_ground_truth_condition_paths)
+    train_unsupervised_sparse_depth_paths.extend(
+        train_unsupervised_sparse_depth_condition_paths
+    )
+    train_unsupervised_intrinsics_paths.extend(
+        train_unsupervised_intrinsics_condition_paths
+    )
+    train_unsupervised_ground_truth_paths.extend(
+        train_unsupervised_ground_truth_condition_paths
+    )
 
     test_image_paths.extend(test_image_condition_paths)
     test_sparse_depth_paths.extend(test_sparse_depth_condition_paths)
     test_intrinsics_paths.extend(test_intrinsics_condition_paths)
     test_ground_truth_paths.extend(test_ground_truth_condition_paths)
 
-    '''
+    """
     Write all supervised training paths for a condition to disk
-    '''
-    print('Writing all {} supervised training image paths to {}'.format(
-        len(all_supervised_image_condition_paths),
-        ALL_SUPERVISED_IMAGE_FILEPATH.format(vkitti_condition)))
+    """
+    print(
+        "Writing all {} supervised training image paths to {}".format(
+            len(all_supervised_image_condition_paths),
+            ALL_SUPERVISED_IMAGE_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         ALL_SUPERVISED_IMAGE_FILEPATH.format(vkitti_condition),
-        all_supervised_image_condition_paths)
+        all_supervised_image_condition_paths,
+    )
 
-    print('Writing all {} supervised training sparse depth paths to {}'.format(
-        len(all_supervised_sparse_depth_condition_paths),
-        ALL_SUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing all {} supervised training sparse depth paths to {}".format(
+            len(all_supervised_sparse_depth_condition_paths),
+            ALL_SUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         ALL_SUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition),
-        all_supervised_sparse_depth_condition_paths)
+        all_supervised_sparse_depth_condition_paths,
+    )
 
-    print('Writing all {} supervised training intrinsics paths to {}'.format(
-        len(all_supervised_intrinsics_condition_paths),
-        ALL_SUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing all {} supervised training intrinsics paths to {}".format(
+            len(all_supervised_intrinsics_condition_paths),
+            ALL_SUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         ALL_SUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition),
-        all_supervised_intrinsics_condition_paths)
+        all_supervised_intrinsics_condition_paths,
+    )
 
-    print('Writing all {} supervised training groundtruth depth paths to {}'.format(
-        len(all_supervised_ground_truth_condition_paths),
-        ALL_SUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing all {} supervised training groundtruth depth paths to {}".format(
+            len(all_supervised_ground_truth_condition_paths),
+            ALL_SUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         ALL_SUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition),
-        all_supervised_ground_truth_condition_paths)
+        all_supervised_ground_truth_condition_paths,
+    )
 
-    '''
+    """
     Write supervised training paths for a condition to disk
-    '''
-    print('Writing {} supervised training image paths to {}'.format(
-        len(train_supervised_image_condition_paths),
-        TRAIN_SUPERVISED_IMAGE_FILEPATH.format(vkitti_condition)))
+    """
+    print(
+        "Writing {} supervised training image paths to {}".format(
+            len(train_supervised_image_condition_paths),
+            TRAIN_SUPERVISED_IMAGE_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         TRAIN_SUPERVISED_IMAGE_FILEPATH.format(vkitti_condition),
-        train_supervised_image_condition_paths)
+        train_supervised_image_condition_paths,
+    )
 
-    print('Writing {} supervised training sparse depth paths to {}'.format(
-        len(train_supervised_sparse_depth_condition_paths),
-        TRAIN_SUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing {} supervised training sparse depth paths to {}".format(
+            len(train_supervised_sparse_depth_condition_paths),
+            TRAIN_SUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         TRAIN_SUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition),
-        train_supervised_sparse_depth_condition_paths)
+        train_supervised_sparse_depth_condition_paths,
+    )
 
-    print('Writing {} supervised training intrinsics paths to {}'.format(
-        len(train_supervised_intrinsics_condition_paths),
-        TRAIN_SUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing {} supervised training intrinsics paths to {}".format(
+            len(train_supervised_intrinsics_condition_paths),
+            TRAIN_SUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         TRAIN_SUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition),
-        train_supervised_intrinsics_condition_paths)
+        train_supervised_intrinsics_condition_paths,
+    )
 
-    print('Writing {} supervised training groundtruth depth paths to {}'.format(
-        len(train_supervised_ground_truth_condition_paths),
-        TRAIN_SUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing {} supervised training groundtruth depth paths to {}".format(
+            len(train_supervised_ground_truth_condition_paths),
+            TRAIN_SUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         TRAIN_SUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition),
-        train_supervised_ground_truth_condition_paths)
+        train_supervised_ground_truth_condition_paths,
+    )
 
-    '''
+    """
     Write all unsupervised training paths for a condition to disk
-    '''
-    print('Writing all unsupervised {} training image paths to {}'.format(
-        len(all_unsupervised_images_condition_paths),
-        ALL_UNSUPERVISED_IMAGES_FILEPATH.format(vkitti_condition)))
+    """
+    print(
+        "Writing all unsupervised {} training image paths to {}".format(
+            len(all_unsupervised_images_condition_paths),
+            ALL_UNSUPERVISED_IMAGES_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         ALL_UNSUPERVISED_IMAGES_FILEPATH.format(vkitti_condition),
-        all_unsupervised_images_condition_paths)
+        all_unsupervised_images_condition_paths,
+    )
 
-    print('Writing all {} unsupervised training sparse depth paths to {}'.format(
-        len(all_unsupervised_sparse_depth_condition_paths),
-        ALL_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing all {} unsupervised training sparse depth paths to {}".format(
+            len(all_unsupervised_sparse_depth_condition_paths),
+            ALL_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         ALL_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition),
-        all_unsupervised_sparse_depth_condition_paths)
+        all_unsupervised_sparse_depth_condition_paths,
+    )
 
-    print('Writing all {} unsupervised training intrinsics paths to {}'.format(
-        len(all_unsupervised_intrinsics_condition_paths),
-        ALL_UNSUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing all {} unsupervised training intrinsics paths to {}".format(
+            len(all_unsupervised_intrinsics_condition_paths),
+            ALL_UNSUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         ALL_UNSUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition),
-        all_unsupervised_intrinsics_condition_paths)
+        all_unsupervised_intrinsics_condition_paths,
+    )
 
-    print('Writing all {} unsupervised training groundtruth depth paths to {}'.format(
-        len(all_unsupervised_ground_truth_condition_paths),
-        ALL_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing all {} unsupervised training groundtruth depth paths to {}".format(
+            len(all_unsupervised_ground_truth_condition_paths),
+            ALL_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         ALL_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition),
-        all_unsupervised_ground_truth_condition_paths)
+        all_unsupervised_ground_truth_condition_paths,
+    )
 
-    '''
+    """
     Write unsupervised training paths for a condition to disk
-    '''
-    print('Writing {} unsupervised training image paths to {}'.format(
-        len(train_unsupervised_images_condition_paths),
-        TRAIN_UNSUPERVISED_IMAGES_FILEPATH.format(vkitti_condition)))
+    """
+    print(
+        "Writing {} unsupervised training image paths to {}".format(
+            len(train_unsupervised_images_condition_paths),
+            TRAIN_UNSUPERVISED_IMAGES_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         TRAIN_UNSUPERVISED_IMAGES_FILEPATH.format(vkitti_condition),
-        train_unsupervised_images_condition_paths)
+        train_unsupervised_images_condition_paths,
+    )
 
-    print('Writing {} unsupervised training sparse depth paths to {}'.format(
-        len(train_unsupervised_sparse_depth_condition_paths),
-        TRAIN_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing {} unsupervised training sparse depth paths to {}".format(
+            len(train_unsupervised_sparse_depth_condition_paths),
+            TRAIN_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         TRAIN_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format(vkitti_condition),
-        train_unsupervised_sparse_depth_condition_paths)
+        train_unsupervised_sparse_depth_condition_paths,
+    )
 
-    print('Writing {} unsupervised training intrinsics paths to {}'.format(
-        len(train_unsupervised_intrinsics_condition_paths),
-        TRAIN_UNSUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing {} unsupervised training intrinsics paths to {}".format(
+            len(train_unsupervised_intrinsics_condition_paths),
+            TRAIN_UNSUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         TRAIN_UNSUPERVISED_INTRINSICS_FILEPATH.format(vkitti_condition),
-        train_unsupervised_intrinsics_condition_paths)
+        train_unsupervised_intrinsics_condition_paths,
+    )
 
-    print('Writing {} unsupervised training groundtruth depth paths to {}'.format(
-        len(train_unsupervised_ground_truth_condition_paths),
-        TRAIN_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing {} unsupervised training groundtruth depth paths to {}".format(
+            len(train_unsupervised_ground_truth_condition_paths),
+            TRAIN_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         TRAIN_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format(vkitti_condition),
-        train_unsupervised_ground_truth_condition_paths)
+        train_unsupervised_ground_truth_condition_paths,
+    )
 
-    '''
+    """
     Write testing paths for a condition to disk
-    '''
-    print('Writing {} testing image paths to {}'.format(
-        len(test_image_condition_paths),
-        TEST_IMAGE_FILEPATH.format(vkitti_condition)))
+    """
+    print(
+        "Writing {} testing image paths to {}".format(
+            len(test_image_condition_paths),
+            TEST_IMAGE_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
-        TEST_IMAGE_FILEPATH.format(vkitti_condition),
-        test_image_condition_paths)
+        TEST_IMAGE_FILEPATH.format(vkitti_condition), test_image_condition_paths
+    )
 
-    print('Writing {} testing sparse depth paths to {}'.format(
-        len(test_sparse_depth_condition_paths),
-        TEST_SPARSE_DEPTH_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing {} testing sparse depth paths to {}".format(
+            len(test_sparse_depth_condition_paths),
+            TEST_SPARSE_DEPTH_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         TEST_SPARSE_DEPTH_FILEPATH.format(vkitti_condition),
-        test_sparse_depth_condition_paths)
+        test_sparse_depth_condition_paths,
+    )
 
-    print('Writing {} testing intrinsics paths to {}'.format(
-        len(test_intrinsics_condition_paths),
-        TEST_INTRINSICS_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing {} testing intrinsics paths to {}".format(
+            len(test_intrinsics_condition_paths),
+            TEST_INTRINSICS_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         TEST_INTRINSICS_FILEPATH.format(vkitti_condition),
-        test_intrinsics_condition_paths)
+        test_intrinsics_condition_paths,
+    )
 
-    print('Writing {} testing groundtruth depth paths to {}'.format(
-        len(test_ground_truth_condition_paths),
-        TEST_GROUND_TRUTH_FILEPATH.format(vkitti_condition)))
+    print(
+        "Writing {} testing groundtruth depth paths to {}".format(
+            len(test_ground_truth_condition_paths),
+            TEST_GROUND_TRUTH_FILEPATH.format(vkitti_condition),
+        )
+    )
     data_utils.write_paths(
         TEST_GROUND_TRUTH_FILEPATH.format(vkitti_condition),
-        test_ground_truth_condition_paths)
+        test_ground_truth_condition_paths,
+    )
 
 
-'''
+"""
 Write all supervised training paths to disk
-'''
-print('Writing all {} supervised training image paths to {}'.format(
-    len(all_supervised_image_paths),
-    ALL_SUPERVISED_IMAGE_FILEPATH.format('all')))
+"""
+print(
+    "Writing all {} supervised training image paths to {}".format(
+        len(all_supervised_image_paths), ALL_SUPERVISED_IMAGE_FILEPATH.format("all")
+    )
+)
 data_utils.write_paths(
-    ALL_SUPERVISED_IMAGE_FILEPATH.format('all'),
-    all_supervised_image_paths)
+    ALL_SUPERVISED_IMAGE_FILEPATH.format("all"), all_supervised_image_paths
+)
 
-print('Writing all {} supervised training sparse depth paths to {}'.format(
-    len(all_supervised_sparse_depth_paths),
-    ALL_SUPERVISED_SPARSE_DEPTH_FILEPATH.format('all')))
+print(
+    "Writing all {} supervised training sparse depth paths to {}".format(
+        len(all_supervised_sparse_depth_paths),
+        ALL_SUPERVISED_SPARSE_DEPTH_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    ALL_SUPERVISED_SPARSE_DEPTH_FILEPATH.format('all'),
-    all_supervised_sparse_depth_paths)
+    ALL_SUPERVISED_SPARSE_DEPTH_FILEPATH.format("all"),
+    all_supervised_sparse_depth_paths,
+)
 
-print('Writing all {} supervised training intrinsics paths to {}'.format(
-    len(all_supervised_intrinsics_paths),
-    ALL_SUPERVISED_INTRINSICS_FILEPATH.format('all')))
+print(
+    "Writing all {} supervised training intrinsics paths to {}".format(
+        len(all_supervised_intrinsics_paths),
+        ALL_SUPERVISED_INTRINSICS_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    ALL_SUPERVISED_INTRINSICS_FILEPATH.format('all'),
-    all_supervised_intrinsics_paths)
+    ALL_SUPERVISED_INTRINSICS_FILEPATH.format("all"), all_supervised_intrinsics_paths
+)
 
-print('Writing all {} supervised training groundtruth depth paths to {}'.format(
-    len(all_supervised_ground_truth_paths),
-    ALL_SUPERVISED_GROUND_TRUTH_FILEPATH.format('all')))
+print(
+    "Writing all {} supervised training groundtruth depth paths to {}".format(
+        len(all_supervised_ground_truth_paths),
+        ALL_SUPERVISED_GROUND_TRUTH_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    ALL_SUPERVISED_GROUND_TRUTH_FILEPATH.format('all'),
-    all_supervised_ground_truth_paths)
+    ALL_SUPERVISED_GROUND_TRUTH_FILEPATH.format("all"),
+    all_supervised_ground_truth_paths,
+)
 
-'''
+"""
 Write supervised training paths to disk
-'''
-print('Writing {} supervised training image paths to {}'.format(
-    len(train_supervised_image_paths),
-    TRAIN_SUPERVISED_IMAGE_FILEPATH.format('all')))
+"""
+print(
+    "Writing {} supervised training image paths to {}".format(
+        len(train_supervised_image_paths), TRAIN_SUPERVISED_IMAGE_FILEPATH.format("all")
+    )
+)
 data_utils.write_paths(
-    TRAIN_SUPERVISED_IMAGE_FILEPATH.format('all'),
-    train_supervised_image_paths)
+    TRAIN_SUPERVISED_IMAGE_FILEPATH.format("all"), train_supervised_image_paths
+)
 
-print('Writing {} supervised training sparse depth paths to {}'.format(
-    len(train_supervised_sparse_depth_paths),
-    TRAIN_SUPERVISED_SPARSE_DEPTH_FILEPATH.format('all')))
+print(
+    "Writing {} supervised training sparse depth paths to {}".format(
+        len(train_supervised_sparse_depth_paths),
+        TRAIN_SUPERVISED_SPARSE_DEPTH_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    TRAIN_SUPERVISED_SPARSE_DEPTH_FILEPATH.format('all'),
-    train_supervised_sparse_depth_paths)
+    TRAIN_SUPERVISED_SPARSE_DEPTH_FILEPATH.format("all"),
+    train_supervised_sparse_depth_paths,
+)
 
-print('Writing {} supervised training intrinsics paths to {}'.format(
-    len(train_supervised_intrinsics_paths),
-    TRAIN_SUPERVISED_INTRINSICS_FILEPATH.format('all')))
+print(
+    "Writing {} supervised training intrinsics paths to {}".format(
+        len(train_supervised_intrinsics_paths),
+        TRAIN_SUPERVISED_INTRINSICS_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    TRAIN_SUPERVISED_INTRINSICS_FILEPATH.format('all'),
-    train_supervised_intrinsics_paths)
+    TRAIN_SUPERVISED_INTRINSICS_FILEPATH.format("all"),
+    train_supervised_intrinsics_paths,
+)
 
-print('Writing {} supervised training groundtruth depth paths to {}'.format(
-    len(train_supervised_ground_truth_paths),
-    TRAIN_SUPERVISED_GROUND_TRUTH_FILEPATH.format('all')))
+print(
+    "Writing {} supervised training groundtruth depth paths to {}".format(
+        len(train_supervised_ground_truth_paths),
+        TRAIN_SUPERVISED_GROUND_TRUTH_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    TRAIN_SUPERVISED_GROUND_TRUTH_FILEPATH.format('all'),
-    train_supervised_ground_truth_paths)
+    TRAIN_SUPERVISED_GROUND_TRUTH_FILEPATH.format("all"),
+    train_supervised_ground_truth_paths,
+)
 
-'''
+"""
 Write all unsupervised training paths to disk
-'''
-print('Writing all {} unsupervised training image paths to {}'.format(
-    len(all_unsupervised_images_paths),
-    ALL_UNSUPERVISED_IMAGES_FILEPATH.format('all')))
+"""
+print(
+    "Writing all {} unsupervised training image paths to {}".format(
+        len(all_unsupervised_images_paths),
+        ALL_UNSUPERVISED_IMAGES_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    ALL_UNSUPERVISED_IMAGES_FILEPATH.format('all'),
-    all_unsupervised_images_paths)
+    ALL_UNSUPERVISED_IMAGES_FILEPATH.format("all"), all_unsupervised_images_paths
+)
 
-print('Writing all {} unsupervised training sparse depth paths to {}'.format(
-    len(all_unsupervised_sparse_depth_paths),
-    ALL_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format('all')))
+print(
+    "Writing all {} unsupervised training sparse depth paths to {}".format(
+        len(all_unsupervised_sparse_depth_paths),
+        ALL_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    ALL_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format('all'),
-    all_unsupervised_sparse_depth_paths)
+    ALL_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format("all"),
+    all_unsupervised_sparse_depth_paths,
+)
 
-print('Writing all {} unsupervised training intrinsics paths to {}'.format(
-    len(all_unsupervised_intrinsics_paths),
-    ALL_UNSUPERVISED_INTRINSICS_FILEPATH.format('all')))
+print(
+    "Writing all {} unsupervised training intrinsics paths to {}".format(
+        len(all_unsupervised_intrinsics_paths),
+        ALL_UNSUPERVISED_INTRINSICS_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    ALL_UNSUPERVISED_INTRINSICS_FILEPATH.format('all'),
-    all_unsupervised_intrinsics_paths)
+    ALL_UNSUPERVISED_INTRINSICS_FILEPATH.format("all"),
+    all_unsupervised_intrinsics_paths,
+)
 
-print('Writing all {} unsupervised training groundtruth depth paths to {}'.format(
-    len(all_unsupervised_ground_truth_paths),
-    ALL_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format('all')))
+print(
+    "Writing all {} unsupervised training groundtruth depth paths to {}".format(
+        len(all_unsupervised_ground_truth_paths),
+        ALL_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    ALL_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format('all'),
-    all_unsupervised_ground_truth_paths)
+    ALL_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format("all"),
+    all_unsupervised_ground_truth_paths,
+)
 
-'''
+"""
 Write unsupervised training paths to disk
-'''
-print('Writing {} unsupervised training image paths to {}'.format(
-    len(train_unsupervised_images_paths),
-    TRAIN_UNSUPERVISED_IMAGES_FILEPATH.format('all')))
+"""
+print(
+    "Writing {} unsupervised training image paths to {}".format(
+        len(train_unsupervised_images_paths),
+        TRAIN_UNSUPERVISED_IMAGES_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    TRAIN_UNSUPERVISED_IMAGES_FILEPATH.format('all'),
-    train_unsupervised_images_paths)
+    TRAIN_UNSUPERVISED_IMAGES_FILEPATH.format("all"), train_unsupervised_images_paths
+)
 
-print('Writing {} unsupervised training sparse depth paths to {}'.format(
-    len(train_unsupervised_sparse_depth_paths),
-    TRAIN_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format('all')))
+print(
+    "Writing {} unsupervised training sparse depth paths to {}".format(
+        len(train_unsupervised_sparse_depth_paths),
+        TRAIN_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    TRAIN_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format('all'),
-    train_unsupervised_sparse_depth_paths)
+    TRAIN_UNSUPERVISED_SPARSE_DEPTH_FILEPATH.format("all"),
+    train_unsupervised_sparse_depth_paths,
+)
 
-print('Writing {} unsupervised training intrinsics paths to {}'.format(
-    len(train_unsupervised_intrinsics_paths),
-    TRAIN_UNSUPERVISED_INTRINSICS_FILEPATH.format('all')))
+print(
+    "Writing {} unsupervised training intrinsics paths to {}".format(
+        len(train_unsupervised_intrinsics_paths),
+        TRAIN_UNSUPERVISED_INTRINSICS_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    TRAIN_UNSUPERVISED_INTRINSICS_FILEPATH.format('all'),
-    train_unsupervised_intrinsics_paths)
+    TRAIN_UNSUPERVISED_INTRINSICS_FILEPATH.format("all"),
+    train_unsupervised_intrinsics_paths,
+)
 
-print('Writing {} unsupervised training groundtruth depth paths to {}'.format(
-    len(train_unsupervised_ground_truth_paths),
-    TRAIN_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format('all')))
+print(
+    "Writing {} unsupervised training groundtruth depth paths to {}".format(
+        len(train_unsupervised_ground_truth_paths),
+        TRAIN_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format("all"),
+    )
+)
 data_utils.write_paths(
-    TRAIN_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format('all'),
-    train_unsupervised_ground_truth_paths)
+    TRAIN_UNSUPERVISED_GROUND_TRUTH_FILEPATH.format("all"),
+    train_unsupervised_ground_truth_paths,
+)
 
-'''
+"""
 Write testing paths to disk
-'''
-print('Writing {} testing image paths to {}'.format(
-    len(test_image_paths),
-    TEST_IMAGE_FILEPATH.format('all')))
-data_utils.write_paths(
-    TEST_IMAGE_FILEPATH.format('all'),
-    test_image_paths)
+"""
+print(
+    "Writing {} testing image paths to {}".format(
+        len(test_image_paths), TEST_IMAGE_FILEPATH.format("all")
+    )
+)
+data_utils.write_paths(TEST_IMAGE_FILEPATH.format("all"), test_image_paths)
 
-print('Writing {} testing sparse depth paths to {}'.format(
-    len(test_sparse_depth_paths),
-    TEST_SPARSE_DEPTH_FILEPATH.format('all')))
+print(
+    "Writing {} testing sparse depth paths to {}".format(
+        len(test_sparse_depth_paths), TEST_SPARSE_DEPTH_FILEPATH.format("all")
+    )
+)
 data_utils.write_paths(
-    TEST_SPARSE_DEPTH_FILEPATH.format('all'),
-    test_sparse_depth_paths)
+    TEST_SPARSE_DEPTH_FILEPATH.format("all"), test_sparse_depth_paths
+)
 
-print('Writing {} testing intrinsics paths to {}'.format(
-    len(test_intrinsics_paths),
-    TEST_INTRINSICS_FILEPATH.format('all')))
-data_utils.write_paths(
-    TEST_INTRINSICS_FILEPATH.format('all'),
-    test_intrinsics_paths)
+print(
+    "Writing {} testing intrinsics paths to {}".format(
+        len(test_intrinsics_paths), TEST_INTRINSICS_FILEPATH.format("all")
+    )
+)
+data_utils.write_paths(TEST_INTRINSICS_FILEPATH.format("all"), test_intrinsics_paths)
 
-print('Writing {} testing groundtruth depth paths to {}'.format(
-    len(test_ground_truth_paths),
-    TEST_GROUND_TRUTH_FILEPATH.format('all')))
+print(
+    "Writing {} testing groundtruth depth paths to {}".format(
+        len(test_ground_truth_paths), TEST_GROUND_TRUTH_FILEPATH.format("all")
+    )
+)
 data_utils.write_paths(
-    TEST_GROUND_TRUTH_FILEPATH.format('all'),
-    test_ground_truth_paths)
+    TEST_GROUND_TRUTH_FILEPATH.format("all"), test_ground_truth_paths
+)
