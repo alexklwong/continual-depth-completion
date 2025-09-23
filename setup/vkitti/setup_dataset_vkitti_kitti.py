@@ -207,6 +207,8 @@ def process_frame(args):
         kitti_sparse_depth_paths, \
         output_dirpaths, \
         save_image_triplet, \
+        min_parallax_between_frames, \
+        max_parallax_between_frames, \
         paths_only = args
 
     # Load virtual KITTI groundtruth depth
@@ -251,12 +253,12 @@ def process_frame(args):
         # Check if we violate parallax
         parallax_flag = \
             parallax_flag or \
-            t_prev_to_curr > args.max_parallax_between_frames or \
-            t_prev_to_curr < args.min_parallax_between_frames
+            t_prev_to_curr > max_parallax_between_frames or \
+            t_prev_to_curr < min_parallax_between_frames
         parallax_flag = \
             parallax_flag or \
-            t_next_to_curr > args.max_parallax_between_frames or \
-            t_next_to_curr < args.min_parallax_between_frames
+            t_next_to_curr > max_parallax_between_frames or \
+            t_next_to_curr < min_parallax_between_frames
     if parallax_flag:
         print("Frame {} violates parallax check".format(vkitti_image0_path))
 
@@ -591,6 +593,8 @@ for vkitti_condition in args.conditions:
                     kitti_subset_sparse_depth_paths,
                     output_dirpaths,
                     save_image_triplet,
+                    args.min_parallax_between_frames,
+                    args.max_parallax_between_frames,
                     args.paths_only))
 
             with mp.Pool(args.n_thread) as pool:
