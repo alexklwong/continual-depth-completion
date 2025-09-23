@@ -195,9 +195,13 @@ def process_frame(args):
         list[str]: paths to vkitti ground truth
     '''
 
+    # TODO: Unpack extrinsics from args
     vkitti_image0_path, \
         vkitti_image1_path, \
         vkitti_image2_path, \
+        vkitti_extrinsic0, \
+        vkitti_extrinsic1, \
+        vkitti_extrinsic2, \
         vkitti_intrinsics, \
         vkitti_ground_truth_path, \
         kitti_sparse_depth_paths, \
@@ -228,7 +232,35 @@ def process_frame(args):
 
     imagec = None
 
+    # TODO: Do parallax check
+    # TODO: Update save_image_triplet as the and condition for both parallax check and the original save_image_triplet
+    parallax_flag = False
+
     if save_image_triplet:
+        # extrinsics1 is in world to camera --> invert to get camera to world
+        camera_to_world_prev = np.linalg.inv(vkitti_extrinsic1)
+        # To move from prev to curr, we do curr * inv(world to camera)
+        prev_to_curr = np.matmul(vkitti_extrinsic0, camera_to_world_prev)
+        t_prev_to_curr = np.linalg.norm(prev_to_curr[:3, 3])
+
+        # Get parallax for next to curr
+        camera_to_world_next = np.linalg.inv(vkitti_extrinsic2)
+        next_to_curr = np.matmul(vkitti_extrinsic0, camera_to_world_next)
+        t_next_to_curr = np.linalg.norm(next_to_curr[:3, 3])
+
+        # Check if we violate parallax
+        parallax_flag = \
+            parallax_flag or \
+            t_prev_to_curr > args.max_parallax_between_frames or \
+            t_prev_to_curr < args.min_parallax_between_frames
+        parallax_flag = \
+            parallax_flag or \
+            t_next_to_curr > args.max_parallax_between_frames or \
+            t_next_to_curr < args.min_parallax_between_frames
+    if parallax_flag:
+        print("Frame {} violates parallax check".format(vkitti_image0_path))
+
+    if save_image_triplet and not parallax_flag:
         vkitti_images_paths = \
             [os.path.join(vkitti_images_dirpath, os.path.basename(vkitti_image0_path))] * n_sample
 
@@ -328,6 +360,10 @@ parser.add_argument('--conditions',
     nargs='+', type=str, default=CONDITIONS, help='Different conditions in Virtual KITTI dataset')
 parser.add_argument('--temporal_window',
     type=int, default=3, help='Temporal window to use for image triplet')
+parser.add_argument('--min_parallax_between_frames',
+    type=float, default=0.1, help='Minimum allowed translation between frames')
+parser.add_argument('--max_parallax_between_frames',
+    type=float, default=5.0, help='Maximum allowed translation between frames')
 
 args = parser.parse_args()
 
@@ -425,8 +461,14 @@ for vkitti_condition in args.conditions:
         # Select Virtual KITTI intrinsics for sequence: data/virtual_kitti/vkitti_2.0.3_depth/Scene01/clone/intrinsic.txt
         vkitti_sequence_intrinsics_path = os.path.join(vkitti_sequence_dirpath, vkitti_condition, 'intrinsic.txt')
 
+        # Create extrinsics path
+        vkitti_sequence_extrinsics_path = os.path.join(vkitti_sequence_dirpath, vkitti_condition, 'extrinsic.txt')
+
         # Read intrinsics file: frame cameraID K[0,0] K[1,1] K[0,2] K[1,2]
         intrinsics = pd.read_csv(vkitti_sequence_intrinsics_path, delim_whitespace=True)
+
+        # Read extrinsics file with Panda
+        extrinsics = pd.read_csv(vkitti_sequence_extrinsics_path, delim_whitespace=True)
 
         # Construct output directory for rgb: data/virtual_kitti_derived/vkitti_2.0.3_depth/Scene01/clone/frames/rgb/
         output_sequence_image_dirpath = \
@@ -473,8 +515,10 @@ for vkitti_condition in args.conditions:
                 output_sequence_depth_dirpath, vkitti_camera_dirpath, 'ground_truth')
 
             # Get camera id
+            # Creat extrinsics camera object
             camera_id = int(vkitti_camera_dirpath[-1])
             intrinsics_camera = intrinsics.loc[intrinsics['cameraID'] == camera_id]
+            extrinsics_camera = extrinsics.loc[extrinsics['cameraID'] == camera_id]
 
             output_dirpaths = [
                 output_image_dirpath,
@@ -507,10 +551,26 @@ for vkitti_condition in args.conditions:
                     vkitti_image1_path = vkitti_sequence_image_filepaths[idx-1]
                     vkitti_image2_path = vkitti_sequence_image_filepaths[idx+1]
                     save_image_triplet = True
+
+                    # Extract extrinsics for camera id and frame idx, frame idx-1, frame idx+1
+                    vkitti_extrinsic0_params = extrinsics_camera.loc[extrinsics_camera['frame'] == idx]
+                    vkitti_extrinsic0_params = np.reshape(vkitti_extrinsic0_params.to_numpy(), -1)[2:]
+                    vkitti_extrinsic0 = vkitti_extrinsic0_params.astype(float).reshape(4, 4)
+
+                    vkitti_extrinsic1_params = extrinsics_camera.loc[extrinsics_camera['frame'] == idx-1]
+                    vkitti_extrinsic2_params = extrinsics_camera.loc[extrinsics_camera['frame'] == idx+1]
+                    vkitti_extrinsic1_params = np.reshape(vkitti_extrinsic1_params.to_numpy(), -1)[2:]
+                    vkitti_extrinsic2_params = np.reshape(vkitti_extrinsic2_params.to_numpy(), -1)[2:]
+                    vkitti_extrinsic1 = vkitti_extrinsic1_params.astype(float).reshape(4, 4)
+                    vkitti_extrinsic2 = vkitti_extrinsic2_params.astype(float).reshape(4, 4)
                 else:
                     vkitti_image1_path = None
                     vkitti_image2_path = None
                     save_image_triplet = False
+
+                    vkitti_extrinsic0 = None
+                    vkitti_extrinsic1 = None
+                    vkitti_extrinsic2 = None
 
                 vkitti_ground_truth_path = vkitti_sequence_depth_filepaths[idx]
 
@@ -518,10 +578,14 @@ for vkitti_condition in args.conditions:
                 kitti_subset_sparse_depth_paths = \
                     np.random.permutation(kitti_sparse_depth_paths)[0:args.n_sample_per_image]
 
+                # TODO: Pass extrinsics to the pool inputs
                 pool_inputs.append((
                     vkitti_image0_path,
                     vkitti_image1_path,
                     vkitti_image2_path,
+                    vkitti_extrinsic0,
+                    vkitti_extrinsic1,
+                    vkitti_extrinsic2,
                     vkitti_intrinsics,
                     vkitti_ground_truth_path,
                     kitti_subset_sparse_depth_paths,
