@@ -307,32 +307,35 @@ def interpolate_depth(depth_map, validity_map, log_space=False):
     '''
 
     assert depth_map.ndim == 2 and validity_map.ndim == 2
+    try:
+        rows, cols = depth_map.shape
+        data_row_idx, data_col_idx = np.where(validity_map)
+        depth_values = depth_map[data_row_idx, data_col_idx]
 
-    rows, cols = depth_map.shape
-    data_row_idx, data_col_idx = np.where(validity_map)
-    depth_values = depth_map[data_row_idx, data_col_idx]
+        # Perform linear interpolation in log space
+        if log_space:
+            depth_values = np.log(depth_values)
 
-    # Perform linear interpolation in log space
-    if log_space:
-        depth_values = np.log(depth_values)
+        interpolator = LinearNDInterpolator(
+            # points=Delaunay(np.stack([data_row_idx, data_col_idx], axis=1).astype(np.float32)),
+            points=np.stack([data_row_idx, data_col_idx], axis=1),
+            values=depth_values,
+            fill_value=0 if not log_space else np.log(1e-3))
 
-    interpolator = LinearNDInterpolator(
-        # points=Delaunay(np.stack([data_row_idx, data_col_idx], axis=1).astype(np.float32)),
-        points=np.stack([data_row_idx, data_col_idx], axis=1),
-        values=depth_values,
-        fill_value=0 if not log_space else np.log(1e-3))
+        query_row_idx, query_col_idx = np.meshgrid(
+            np.arange(rows), np.arange(cols), indexing='ij')
 
-    query_row_idx, query_col_idx = np.meshgrid(
-        np.arange(rows), np.arange(cols), indexing='ij')
+        query_coord = np.stack(
+            [query_row_idx.ravel(), query_col_idx.ravel()], axis=1)
 
-    query_coord = np.stack(
-        [query_row_idx.ravel(), query_col_idx.ravel()], axis=1)
+        Z = interpolator(query_coord).reshape([rows, cols])
 
-    Z = interpolator(query_coord).reshape([rows, cols])
-
-    if log_space:
-        Z = np.exp(Z)
-        Z[Z < 1e-1] = 0.0
+        if log_space:
+            Z = np.exp(Z)
+            Z[Z < 1e-1] = 0.0
+    except Exception:
+        print('Error encountered in interpolate_depth. Returning input depth map.')
+        return depth_map
 
     return Z
 

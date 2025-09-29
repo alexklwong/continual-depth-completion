@@ -2,7 +2,7 @@
 
 source bash/helper.sh
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=2
 
 python depth_completion/src/train_depth_completion.py \
 --train_image_paths training/void/unsupervised/void_train_image_1500.txt \
@@ -26,8 +26,8 @@ python depth_completion/src/train_depth_completion.py \
 --max_predict_depth 8.0 \
 --train_batch_size 12 \
 --train_crop_shapes 416 512 \
---learning_rates 1e-4 5e-5 \
---learning_schedule 20 60 \
+--learning_rates 1e-4 5e-5 2e-5 \
+--learning_schedule 20 60 80 \
 --augmentation_probabilities 1.0 \
 --augmentation_schedule -1 \
 --augmentation_random_brightness 0.50 1.50 \
@@ -42,11 +42,11 @@ python depth_completion/src/train_depth_completion.py \
 --augmentation_random_flip_type horizontal vertical \
 --augmentation_random_rotate_max 25 \
 --augmentation_random_crop_and_pad 0.90 1.00 \
---augmentation_random_resize_and_pad 0.60 1.00 \
+--augmentation_random_resize_and_pad 0.70 1.00 \
 --augmentation_random_resize_and_crop 1.00 1.10 \
 --augmentation_random_remove_patch_percent_range_image 1e-3 5e-3 \
 --augmentation_random_remove_patch_size_image 5 5 \
---augmentation_random_remove_patch_percent_range_depth 0.10 0.20 \
+--augmentation_random_remove_patch_percent_range_depth -1 -1 \
 --augmentation_random_remove_patch_size_depth 1 1 \
 --supervision_type unsupervised \
 --w_losses \
@@ -62,7 +62,7 @@ python depth_completion/src/train_depth_completion.py \
 --evaluation_protocols nyu_v2 void \
 --n_step_per_summary 5000 \
 --n_step_per_checkpoint 5000 \
---start_step_validation 5000 \
+--start_step_validation 200000 \
 --n_image_per_summary 8 \
 --restore_paths \
     pretrained_models_uncle/depth_completion/voiced/nyu_v2/voiced-nyu_v2.pth \
@@ -101,7 +101,7 @@ python depth_completion/src/train_depth_completion.py \
 --train_batch_size 12 \
 --train_crop_shapes 416 512 \
 --learning_rates 1e-4 5e-5 2e-5 \
---learning_schedule 3 6 9 \
+--learning_schedule 3 9 15 \
 --augmentation_probabilities 1.0 \
 --augmentation_schedule -1 \
 --augmentation_random_brightness 0.50 1.50 \
@@ -116,11 +116,11 @@ python depth_completion/src/train_depth_completion.py \
 --augmentation_random_flip_type horizontal vertical \
 --augmentation_random_rotate_max 25 \
 --augmentation_random_crop_and_pad 0.90 1.00 \
---augmentation_random_resize_and_pad 0.60 1.00 \
+--augmentation_random_resize_and_pad 0.70 1.00 \
 --augmentation_random_resize_and_crop 1.00 1.10 \
 --augmentation_random_remove_patch_percent_range_image 1e-3 5e-3 \
 --augmentation_random_remove_patch_size_image 5 5 \
---augmentation_random_remove_patch_percent_range_depth 0.10 0.20 \
+--augmentation_random_remove_patch_percent_range_depth -1 -1 \
 --augmentation_random_remove_patch_size_depth 1 1 \
 --supervision_type unsupervised \
 --w_losses \
@@ -136,7 +136,7 @@ python depth_completion/src/train_depth_completion.py \
 --evaluation_protocols nyu_v2 void scannet \
 --n_step_per_summary 5000 \
 --n_step_per_checkpoint 5000 \
---start_step_validation 5000 \
+--start_step_validation 200000 \
 --restore_paths \
     trained_models/depth_completion/finetune/voiced/voiced-nyu_v2-void/checkpoints_voiced_indoor-$best_step_void/voiced-$best_step_void.pth \
     trained_models/depth_completion/finetune/voiced/voiced-nyu_v2-void/checkpoints_voiced_indoor-$best_step_void/posenet-$best_step_void.pth \

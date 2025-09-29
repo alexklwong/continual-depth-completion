@@ -26,8 +26,8 @@ python depth_completion/src/train_depth_completion.py \
 --max_predict_depth 8.0 \
 --train_batch_size 12 \
 --train_crop_shapes 416 512 \
---learning_rates 5e-5 2e-5 \
---learning_schedule 20 60 \
+--learning_rates 2e-5 1e-5 \
+--learning_schedule 40 80 \
 --augmentation_probabilities 1.0 \
 --augmentation_schedule -1 \
 --augmentation_random_brightness 0.50 1.50 \
@@ -63,7 +63,7 @@ python depth_completion/src/train_depth_completion.py \
 --evaluation_protocols nyu_v2 void \
 --n_step_per_summary 5000 \
 --n_step_per_checkpoint 5000 \
---start_step_validation 5000 \
+--start_step_validation 200000 \
 --n_image_per_summary 8 \
 --restore_paths \
     pretrained_models_uncle/depth_completion/fusionnet/nyu_v2/fusionnet-nyu_v2.pth \
@@ -101,8 +101,8 @@ python depth_completion/src/train_depth_completion.py \
 --max_predict_depth 8.0 \
 --train_batch_size 12 \
 --train_crop_shapes 416 512 \
---learning_rates 5e-5 2e-5 \
---learning_schedule 3 9 \
+--learning_rates 2e-5 1e-5 \
+--learning_schedule 9 15 \
 --augmentation_probabilities 1.0 \
 --augmentation_schedule -1 \
 --augmentation_random_brightness 0.50 1.50 \
@@ -138,7 +138,7 @@ python depth_completion/src/train_depth_completion.py \
 --evaluation_protocols nyu_v2 void scannet \
 --n_step_per_summary 5000 \
 --n_step_per_checkpoint 5000 \
---start_step_validation 5000 \
+--start_step_validation 200000 \
 --restore_paths \
     trained_models/depth_completion/finetune/fusionnet/fusionnet-nyu_v2-void/checkpoints_fusionnet_indoor-$best_step_void/fusionnet-$best_step_void.pth \
     trained_models/depth_completion/finetune/fusionnet/fusionnet-nyu_v2-void/checkpoints_fusionnet_indoor-$best_step_void/posenet-$best_step_void.pth \
